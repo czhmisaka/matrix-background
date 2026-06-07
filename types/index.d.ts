@@ -291,6 +291,31 @@ export interface MatrixRainOptions {
   /** 叠加混乱度(0-1): 数字在过渡时快速变换,默认 0.5 */
   targetChaos?: number;
 
+  /**
+   * 目标位图出现方式
+   * - 'fade' (默认,向后兼容):线性透明度淡入,经典数字雨过渡
+   * - 'noise-converge': 0.5s 全屏噪点 → 1.5s 逐个锁定为图像 → 保持 → 2s 反向解锁融化
+   */
+  targetPhase?: 'fade' | 'noise-converge';
+  /** 噪声→收敛:全屏噪点时长(秒),默认 0.5 */
+  targetNoiseDuration?: number;
+  /** 噪声→收敛:逐个锁定时长(秒),默认 1.5 */
+  targetConvergeDuration?: number;
+  /** 噪声→收敛:目标区 cell 锁定顺序
+   * - 'random' (默认):随机顺序锁定,曲线平滑
+   * - 'topdown': 从顶行到末行顺序
+   * - 'bottomup': 从末行到顶行顺序
+   * - 'center': 从中心向外扩散
+   * - 'edge': 从边缘向中心收缩
+   * - 'leftright': 从左到右扫
+   * - 'rightleft': 从右到左扫
+   */
+  targetLockOrder?: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft';
+  /** 噪声→收敛:目标区 cell 锁定后字符稳定性 (0-1,默认 0.7)
+   * 1 = 字符完全不变(纯图像);0 = 字符每帧可换(类似 normal rain)
+   */
+  targetLockStability?: number;
+
   /** 变体(改主循环行为) */
   variant?: VariantName;
 
@@ -394,7 +419,20 @@ export interface MatrixRainInstance {
   setColorCurve(code: string | null): void;
 
   /** 设置目标位图(0-1 灰度, 长度 r * i) + 计时器自动重置 */
-  setTargetBitmap(bitmap: Float32Array | { cols: number; rows: number; data: Float32Array } | null, opts?: { fadeIn?: number; hold?: number; fadeOut?: number; chaos?: number; anchor?: 'topLeft'|'center'|'topRight'|'bottomLeft'|'bottomRight'; motion?: 'static'|'drift'|'bounce'|'float'; motionSpeed?: number }): void;
+  setTargetBitmap(bitmap: Float32Array | { cols: number; rows: number; data: Float32Array } | null, opts?: {
+    fadeIn?: number;
+    hold?: number;
+    fadeOut?: number;
+    chaos?: number;
+    anchor?: 'topLeft'|'center'|'topRight'|'bottomLeft'|'bottomRight';
+    motion?: 'static'|'drift'|'bounce'|'float';
+    motionSpeed?: number;
+    phase?: 'fade' | 'noise-converge';
+    noiseDuration?: number;
+    convergeDuration?: number;
+    lockOrder?: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft';
+    lockStability?: number;
+  }): void;
   /** 立即淑出(提前结束显示) */
   clearTargetBitmap(): void;
 
@@ -414,6 +452,27 @@ export interface MatrixRainInstance {
     phaseFunc?: string;
     charsetFunc?: string;
     colorCurve?: string;
+  };
+
+  /**
+   * 读取目标位图状态机当前快照(noise-converge 模式调试用)
+   * - phase: 'idle' | 'noise' | 'converge' | 'hold' | 'dissolve'
+   * - elapsed: 相对 targetStartTime 的墙钟秒数
+   * - lockedCount / totalTargets: 目标区已锁 cell 数 / 总数
+   */
+  getTargetState?(): {
+    active: boolean;
+    phase: 'idle' | 'noise' | 'converge' | 'hold' | 'dissolve';
+    elapsed: number;
+    lockedCount: number;
+    unlockedCount: number;
+    totalTargets: number;
+    lockOrder: string;
+    targetPhase: 'fade' | 'noise-converge';
+    noiseDuration: number;
+    convergeDuration: number;
+    lockStability: number;
+    targetDissolveStartTime: number;
   };
 
   /** 读取 clickBurst 当前状态(测试用) */

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a14">
+<title>@xietuier/matrix-rain · Demo 12 · Noise Converge</title>
+<meta name="description" content="噪声→收敛涌现动画:全屏噪点 → 逐个锁定为图像 → 保持 → 反向解锁融化。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="../dist/matrix-rain.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100vh; background: #0a0a14; color: #e8e6da; font-family: Inter, system-ui, sans-serif; }
+  body { padding: 32px; padding-bottom: 480px; }  /* 留出控制面板 */
+  h1 { font-family: "Fraunces", serif; font-style: italic; font-size: 32px; margin: 0 0 8px; }
+  h1 em { background: linear-gradient(95deg, rgb(255,92,124), rgb(255,184,76)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .sub { color: #aaa; font-size: 14px; margin-bottom: 24px; max-width: 800px; }
+  .crumbs { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .15em; color: rgba(200,196,184,.6); margin-bottom: 12px; text-transform: uppercase; }
+  .crumbs a { color: #00e5ff; text-decoration: none; }
+
+  /* 阶段指示器 */
+  .phase-indicator {
+    position: fixed; top: 32px; right: 32px; z-index: 100;
+    font-family: "JetBrains Mono", monospace; font-size: 12px;
+    background: rgba(8,8,18,.85); border: 1px solid rgba(255,92,124,.35);
+    padding: 8px 14px; border-radius: 6px; color: #fff;
+    backdrop-filter: blur(6px); min-width: 140px;
+  }
+  .phase-indicator .label { color: #aaa; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 4px; }
+  .phase-indicator .phase { color: #ff5c7c; font-size: 16px; font-weight: 600; }
+  .phase-indicator .time { color: #888; font-size: 10px; margin-top: 4px; }
+
+  /* 控制面板 */
+  .controls {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(8,8,18,.92); border-top: 1px solid rgba(255,92,124,.3);
+    padding: 20px 32px; backdrop-filter: blur(12px);
+    max-height: 440px; overflow-y: auto;
+  }
+  .controls h2 { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .15em; color: #ff5c7c; text-transform: uppercase; margin: 0 0 12px; }
+  .controls .row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .controls .row > label { color: #aaa; font-size: 12px; font-family: "JetBrains Mono", monospace; min-width: 140px; }
+  .controls .row > input[type=text] {
+    background: rgba(0,0,0,.4); border: 1px solid rgba(255,92,124,.3); border-radius: 4px;
+    color: #fff; padding: 6px 10px; font-family: "JetBrains Mono", monospace; font-size: 13px;
+    flex: 1; min-width: 200px; max-width: 360px;
+  }
+  .controls .row > input[type=range] { width: 160px; }
+  .controls .row > .val { color: #fff; font-family: "JetBrains Mono", monospace; font-size: 12px; min-width: 50px; }
+  .controls .row > button {
+    background: rgba(255,92,124,.12); color: #ff5c7c; border: 1px solid rgba(255,92,124,.35);
+    padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .controls .row > button:hover { background: rgba(255,92,124,.22); }
+  .controls .row > button.active { background: rgba(255,92,124,.32); color: #fff; }
+  .controls .group { padding: 12px 14px; background: rgba(0,0,0,.3); border-radius: 8px; margin-bottom: 12px; }
+  .controls .group h3 { margin: 0 0 8px; font-size: 11px; color: #ff5c7c; font-family: "JetBrains Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+
+  .lock-orders { display: flex; flex-wrap: wrap; gap: 6px; }
+  .lock-orders button { font-size: 11px; padding: 4px 10px; }
+
+  /* 日志 */
+  .log { margin-top: 8px; max-height: 60px; overflow-y: auto; font-family: "JetBrains Mono", monospace; font-size: 10px; color: #888; }
+  .log .e { padding: 1px 0; }
+  .log .e .tag { color: #ff5c7c; }
+
+  @media (max-width: 700px) {
+    .controls { padding: 12px 16px; max-height: 70vh; }
+    .controls .row { flex-direction: column; align-items: stretch; }
+  }
+</style>
+</head>
+<body>
+
+<div class="crumbs"><a href="../">@xietuier/matrix-rain</a> / 12 · Noise Converge</div>
+<h1>Noise <em>Converge</em></h1>
+<p class="sub">5 段状态机:<b>noise</b>(0.5s 全屏噪点)→ <b>converge</b>(1.5s 逐个锁定)→ <b>hold</b>(∞)→ <b>dissolve</b>(2s 反向解锁融化)→ <b>idle</b>。下面切换 7 种锁定顺序与调参实时观察。</p>
+
+<!-- 阶段指示器 -->
+<div class="phase-indicator" id="phase-indicator">
+  <div class="label">Current Phase</div>
+  <div class="phase" id="cur-phase">idle</div>
+  <div class="time" id="cur-time">t = 0.00s</div>
+</div>
+
+<!-- 控制面板 -->
+<div class="controls">
+  <h2>Noise → Converge Control Panel</h2>
+
+  <div class="group">
+    <h3>① 输入文本</h3>
+    <div class="row">
+      <label>target text</label>
+      <input type="text" id="input-text" value="MATRIX" maxlength="20">
+      <button id="btn-apply">应用</button>
+    </div>
+  </div>
+
+  <div class="group">
+    <h3>② 模式切换</h3>
+    <div class="row">
+      <label>targetPhase</label>
+      <button id="btn-fade" data-phase="fade">fade (传统淡入)</button>
+      <button id="btn-noise" data-phase="noise-converge" class="active">noise-converge (涌现)</button>
+    </div>
+  </div>
+
+  <div class="group">
+    <h3>③ 锁定顺序 (7 种)</h3>
+    <div class="row">
+      <label>targetLockOrder</label>
+      <div class="lock-orders" id="lock-orders">
+        <button data-order="random" class="active">random</button>
+        <button data-order="topdown">topdown</button>
+        <button data-order="bottomup">bottomup</button>
+        <button data-order="center">center</button>
+        <button data-order="edge">edge</button>
+        <button data-order="leftright">leftright</button>
+        <button data-order="rightleft">rightleft</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h3>④ 调参</h3>
+    <div class="row">
+      <label>noiseDuration</label>
+      <input type="range" id="slider-noise" min="0" max="3" step="0.1" value="0.5">
+      <span class="val" id="val-noise">0.5s</span>
+    </div>
+    <div class="row">
+      <label>convergeDuration</label>
+      <input type="range" id="slider-converge" min="0.1" max="5" step="0.1" value="1.5">
+      <span class="val" id="val-converge">1.5s</span>
+    </div>
+    <div class="row">
+      <label>lockStability</label>
+      <input type="range" id="slider-stability" min="0" max="1" step="0.05" value="0.7">
+      <span class="val" id="val-stability">0.70</span>
+    </div>
+  </div>
+
+  <div class="log" id="log"></div>
+</div>
+
+<script type="module">
+import { matrixRain, textToBitmap, mountFpsOverlay } from '../dist/index.js?v=12';
+
+// 启动 FPS overlay
+const fps = mountFpsOverlay();
+
+const log = (msg) => {
+  const el = document.getElementById('log');
+  const e = document.createElement('div');
+  e.className = 'e';
+  e.innerHTML = msg;
+  el.appendChild(e);
+  el.scrollTop = el.scrollHeight;
+};
+
+let currentPhase = 'fade';
+let currentLockOrder = 'random';
+let noiseDur = 0.5;
+let convergeDur = 1.5;
+let lockStability = 0.7;
+
+const rain = matrixRain({
+  theme: 'silicon-valley',
+  fontSize: 14,
+  // 初始为空:等待用户输入
+  onTargetFinish: () => {
+    log('<span class="tag">[target]</span> noise-converge 动画结束,onTargetFinish 触发');
+  },
+  onFrame: (info) => {
+    // 推断当前阶段
+    const elapsed = info.t;
+    let phase = 'idle';
+    if (info.fps > 0) {
+      // 通过读取 instance 的内部状态(只能推断)
+      phase = 'running';
+    }
+    document.getElementById('cur-time').textContent = `t = ${elapsed.toFixed(2)}s`;
+  }
+});
+
+// 暴露给 console 调试
+window.__rain = rain;
+
+const applyBitmap = (text) => {
+  const w = window.innerWidth, h = window.innerHeight;
+  const cols = Math.ceil(w / 14);
+  const rows = Math.ceil(h / 14);
+  const bm = textToBitmap(text, cols, rows);
+  rain.setTargetBitmap(bm, {
+    phase: currentPhase,
+    noiseDuration: noiseDur,
+    convergeDuration: convergeDur,
+    lockOrder: currentLockOrder,
+    lockStability: lockStability,
+    hold: Infinity,        // 默认永久
+    fadeOut: 2.0,
+    anchor: 'center'
+  });
+  log(`<span class="tag">[target]</span> set bitmap "${text}" phase=${currentPhase} order=${currentLockOrder}`);
+  // 重置阶段指示器
+  document.getElementById('cur-phase').textContent = 'noise';
+  setTimeout(() => {
+    if (currentPhase === 'noise-converge') {
+      document.getElementById('cur-phase').textContent = 'converge';
+      setTimeout(() => {
+        document.getElementById('cur-phase').textContent = 'hold';
+      }, (noiseDur + convergeDur) * 1000);
+    } else {
+      document.getElementById('cur-phase').textContent = 'fade-in';
+    }
+  }, noiseDur * 1000);
+};
+
+// 初始应用
+applyBitmap('MATRIX');
+
+document.getElementById('input-text').addEventListener('input', (e) => {
+  const text = e.target.value.trim() || ' ';
+  applyBitmap(text);
+});
+
+document.getElementById('btn-apply').addEventListener('click', () => {
+  const text = document.getElementById('input-text').value.trim() || ' ';
+  applyBitmap(text);
+});
+
+document.querySelectorAll('[data-phase]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-phase]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentPhase = btn.dataset.phase;
+    log(`<span class="tag">[mode]</span> phase = ${currentPhase}`);
+    const text = document.getElementById('input-text').value.trim() || ' ';
+    applyBitmap(text);
+  });
+});
+
+document.querySelectorAll('[data-order]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-order]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentLockOrder = btn.dataset.order;
+    log(`<span class="tag">[order]</span> lockOrder = ${currentLockOrder}`);
+    const text = document.getElementById('input-text').value.trim() || ' ';
+    applyBitmap(text);
+  });
+});
+
+const sliderNoise = document.getElementById('slider-noise');
+const sliderConverge = document.getElementById('slider-converge');
+const sliderStability = document.getElementById('slider-stability');
+const valNoise = document.getElementById('val-noise');
+const valConverge = document.getElementById('val-converge');
+const valStability = document.getElementById('val-stability');
+
+sliderNoise.addEventListener('input', (e) => {
+  noiseDur = parseFloat(e.target.value);
+  valNoise.textContent = `${noiseDur.toFixed(1)}s`;
+});
+sliderNoise.addEventListener('change', () => {
+  const text = document.getElementById('input-text').value.trim() || ' ';
+  applyBitmap(text);
+});
+
+sliderConverge.addEventListener('input', (e) => {
+  convergeDur = parseFloat(e.target.value);
+  valConverge.textContent = `${convergeDur.toFixed(1)}s`;
+});
+sliderConverge.addEventListener('change', () => {
+  const text = document.getElementById('input-text').value.trim() || ' ';
+  applyBitmap(text);
+});
+
+sliderStability.addEventListener('input', (e) => {
+  lockStability = parseFloat(e.target.value);
+  valStability.textContent = lockStability.toFixed(2);
+});
+sliderStability.addEventListener('change', () => {
+  const text = document.getElementById('input-text').value.trim() || ' ';
+  applyBitmap(text);
+});
+
+log('<span class="tag">[init]</span> noise-converge demo ready');
+log('<span class="tag">[init]</span> 默认 phase=noise-converge, order=random');
+</script>
+</body>
+</html>

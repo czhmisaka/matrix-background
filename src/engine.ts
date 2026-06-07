@@ -25,7 +25,7 @@ import type {
 } from '../types';
 import { VARIANT_DEFAULTS, themes, compileUserFunction, PaletteLUT, applyTP, type RGBALUT, ease, SAFE_GLOBALS } from './core';
 
-const DEFAULTS: Required<Omit<MatrixRainOptions, 'canvas' | 'container' | 'onReady' | 'theme' | 'variant' | 'charset' | 'coldPalette' | 'warmPalette' | 'flickerRates' | 'flickerSpeed' | 'lightCenter' | 'driftSpeed' | 'themeParams' | 'variantParams' | 'brightnessCurve' | 'flickerCurve' | 'phaseFunc' | 'charsetFunc' | 'coldThemeParams' | 'warmThemeParams' | 'hueRotateSpeed' | 'hueRotateAmount' | 'colorOverrides' | 'colorCurve' | 'targetBitmap' | 'targetCols' | 'targetRows' | 'targetAnchor' | 'targetMotion' | 'targetMotionSpeed' | 'targetFadeIn' | 'targetHold' | 'targetFadeOut' | 'targetChaos' | 'fixedTimeStep' | 'enableWhenReducedMotion' | 'coldFrom' | 'warmFrom' | 'onFrame' | 'onResize' | 'onThemeChange' | 'onTargetFinish' | 'clickBurst' | 'cursor'>> = {
+const DEFAULTS: Required<Omit<MatrixRainOptions, 'canvas' | 'container' | 'onReady' | 'theme' | 'variant' | 'charset' | 'coldPalette' | 'warmPalette' | 'flickerRates' | 'flickerSpeed' | 'lightCenter' | 'driftSpeed' | 'themeParams' | 'variantParams' | 'brightnessCurve' | 'flickerCurve' | 'phaseFunc' | 'charsetFunc' | 'coldThemeParams' | 'warmThemeParams' | 'hueRotateSpeed' | 'hueRotateAmount' | 'colorOverrides' | 'colorCurve' | 'targetBitmap' | 'targetCols' | 'targetRows' | 'targetAnchor' | 'targetMotion' | 'targetMotionSpeed' | 'targetFadeIn' | 'targetHold' | 'targetFadeOut' | 'targetChaos' | 'targetPhase' | 'targetNoiseDuration' | 'targetConvergeDuration' | 'targetLockOrder' | 'targetLockStability' | 'fixedTimeStep' | 'enableWhenReducedMotion' | 'coldFrom' | 'warmFrom' | 'onFrame' | 'onResize' | 'onThemeChange' | 'onTargetFinish' | 'clickBurst' | 'cursor'>> = {
   fontSize: 14,
   trailAlpha: 0.18,
   maxDPR: 2,
@@ -290,6 +290,13 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
   let targetHold = options.targetHold ?? Infinity;
   let targetFadeOut = Math.max(0.001, options.targetFadeOut ?? 2.0);
   let targetChaos = Math.max(0, Math.min(1, options.targetChaos ?? 0.5));
+  // 噪声→收敛模式(targetPhase='noise-converge')专用
+  let targetPhase: 'fade' | 'noise-converge' = options.targetPhase ?? 'fade';
+  let targetNoiseDuration = Math.max(0, options.targetNoiseDuration ?? 0.5);   // 全屏噪点时长(秒)
+  let targetConvergeDuration = Math.max(0.001, options.targetConvergeDuration ?? 1.5);  // 逐个锁定时长(秒)
+  let targetLockOrder: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft' = options.targetLockOrder ?? 'random';
+  let targetLockStability = Math.max(0, Math.min(1, options.targetLockStability ?? 0.7));  // 锁定后字符稳定性
+  let targetDissolveStartTime = -1;  // dissolve 阶段开始时间(-1 = 未开始)
   let targetStartFrame = 0;   // 启用时 f 值(保留用于 userFunc/调试)
   let targetStartTime = 0;    // 启用时 wallTime(秒) · 用于 dt-based 状态机
   let targetActive = targetBitmap !== null;
@@ -416,6 +423,11 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     speed?: number;
     yPos?: number;
     headBright?: number;
+    // 噪声→收敛模式专用(targetPhase='noise-converge')
+    locked?: boolean;       // 目标区 cell:当前是否锁定
+    lockTime?: number;      // 锁定时刻(墙钟,秒,相对 targetStartTime)
+    unlockTime?: number;    // 解锁时刻(dissolve 阶段设置)
+    lockedCh?: number;      // 锁定后使用的字符索引
   }
 
   // ==================== Lifecycle ====================
@@ -488,6 +500,110 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       b.push(row);
     }
     syncFrameCtxSize();
+    // noise-converge 模式:为每个目标区 cell 计算 lockTime + 初始化 locked
+    // 放在 buildGrid 末尾,因为网格大小/锚点依赖最新 r/i/bitmap
+    recomputeTargetLockTimes();
+  };
+
+  /**
+   * 为 noise-converge 模式预计算每个目标区 cell 的 lockTime + rank
+   * - lockTime ∈ [noiseDur, noiseDur + convergeDur],按 lockOrder 排布
+   * - rank ∈ [0, 1]:cell 在 lockOrder 中的位置(0=最先锁,1=最后锁)
+   * - cell.locked = false(全部初始未锁)
+   * - cell.unlockTime 留空(dissolve 阶段计算)
+   *
+   * 调用时机:
+   * 1. setTargetBitmap 设置新 bitmap 时
+   * 2. buildGrid(resize 触发)网格大小/锚点变化时
+   */
+  const resetAllCellLockState = () => {
+    for (let s = 0; s < i; s++) {
+      for (let h = 0; h < r; h++) {
+        const c = b[s][h];
+        c.locked = false;
+        c.lockTime = undefined;
+        c.unlockTime = undefined;
+        c.lockedCh = undefined;
+      }
+    }
+    targetDissolveStartTime = -1;
+  };
+
+  const recomputeTargetLockTimes = () => {
+    if (!targetBitmap || !targetActive) return;
+    if (targetPhase !== 'noise-converge') return;
+    // 先清空所有 cell 旧 lock 状态(防 buildGrid 后旧 cell 残留 locked=true)
+    resetAllCellLockState();
+    // 计算锚点偏移(与 drawInner 中逻辑一致)
+    let ox = 0, oy = 0;
+    if (targetAnchor === 'center') { ox = (r - targetCols) >> 1; oy = (i - targetRows) >> 1; }
+    else if (targetAnchor === 'topRight') { ox = r - targetCols; oy = 0; }
+    else if (targetAnchor === 'bottomLeft') { ox = 0; oy = i - targetRows; }
+    else if (targetAnchor === 'bottomRight') { ox = r - targetCols; oy = i - targetRows; }
+
+    // 收集目标区 cell(bx, by, s, h)
+    type TC = { h: number; s: number; bx: number; by: number; g: number; rank: number };
+    const targets: TC[] = [];
+    for (let s = 0; s < i; s++) {
+      for (let h = 0; h < r; h++) {
+        const bx = h - ox, by = s - oy;
+        if (bx >= 0 && bx < targetCols && by >= 0 && by < targetRows) {
+          const g = targetBitmap[by * targetCols + bx];
+          if (g > 0) {
+            targets.push({ h, s, bx, by, g, rank: 0 });
+          }
+        }
+      }
+    }
+    if (targets.length === 0) return;
+    const tCols = targetCols, tRows = targetRows;
+    const tCenterX = (tCols - 1) / 2, tCenterY = (tRows - 1) / 2;
+    // 计算 rank(0-1,0=最先锁)
+    for (const t of targets) {
+      let rank: number;
+      switch (targetLockOrder) {
+        case 'topdown':
+          rank = t.by / Math.max(1, tRows - 1);
+          break;
+        case 'bottomup':
+          rank = 1 - t.by / Math.max(1, tRows - 1);
+          break;
+        case 'leftright':
+          rank = t.bx / Math.max(1, tCols - 1);
+          break;
+        case 'rightleft':
+          rank = 1 - t.bx / Math.max(1, tCols - 1);
+          break;
+        case 'center': {
+          const dx = t.bx - tCenterX, dy = t.by - tCenterY;
+          rank = Math.sqrt(dx * dx + dy * dy) / Math.max(1, Math.sqrt(tCenterX * tCenterX + tCenterY * tCenterY));
+          break;
+        }
+        case 'edge': {
+          const dx = t.bx - tCenterX, dy = t.by - tCenterY;
+          rank = 1 - Math.sqrt(dx * dx + dy * dy) / Math.max(1, Math.sqrt(tCenterX * tCenterX + tCenterY * tCenterY));
+          break;
+        }
+        case 'random':
+        default:
+          // 每个 cell 一个独立随机 rank(噪声感)
+          rank = Math.random();
+          break;
+      }
+      t.rank = Math.max(0, Math.min(1, rank));
+    }
+    // 写入 cell 状态
+    const noiseStart = targetNoiseDuration;
+    const convergeSpan = targetConvergeDuration;
+    for (const t of targets) {
+      const c = b[t.s][t.h];
+      c.locked = false;
+      c.lockTime = noiseStart + t.rank * convergeSpan;
+      c.unlockTime = undefined;
+      c.lockedCh = undefined;
+    }
+    // 重置 dissolve 起始时间(下一次进入 dissolve 时重算)
+    targetDissolveStartTime = -1;
   };
 
   const onResize = () => {
@@ -546,6 +662,151 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
   const syncFrameCtxSize = () => {
     __frameCtx.W = r;
     __frameCtx.H = i;
+  };
+
+  // ==================== noise-converge 状态机:applyTargetBitmapPhase ====================
+  // 每帧共享状态:目标区 cell 的 lockTime / unlockTime 状态机
+  // 5 段:noise → converge → hold → dissolve → idle
+  // 调用入口:drawClassic / drawAvalanche / drawRipple 在 cell brightness 计算之后
+  // 返回值:{ l, ch, skipCharset, finished } - null 表示非 noise-converge 模式(走原路径)
+
+  /**
+   * 推导锚点偏移(每帧调一次,然后所有 cell 共享)
+   * 性能优化:避免每个 cell 重算 if 链
+   */
+  let __cachedAnchorOx = 0, __cachedAnchorOy = 0;
+  let __cachedAnchorValid = false;
+  const computeTargetOrigin = (): { ox: number; oy: number } => {
+    if (__cachedAnchorValid) return { ox: __cachedAnchorOx, oy: __cachedAnchorOy };
+    let ox = 0, oy = 0;
+    if (targetAnchor === 'center') { ox = (r - targetCols) >> 1; oy = (i - targetRows) >> 1; }
+    else if (targetAnchor === 'topRight') { ox = r - targetCols; oy = 0; }
+    else if (targetAnchor === 'bottomLeft') { ox = 0; oy = i - targetRows; }
+    else if (targetAnchor === 'bottomRight') { ox = r - targetCols; oy = i - targetRows; }
+    __cachedAnchorOx = ox; __cachedAnchorOy = oy; __cachedAnchorValid = true;
+    return { ox, oy };
+  };
+  const invalidateTargetAnchor = () => { __cachedAnchorValid = false; };
+
+  /**
+   * 每帧调一次(在 cell 循环前):处理 dissolve 阶段进入与结束判定
+   * - 检测首次进入 dissolve 时刻,为所有已锁 cell 计算 unlockTime
+   * - 检测 dissolve 完成时刻,清理 targetBitmap + 触发 onTargetFinish
+   */
+  const updateTargetBitmapPhaseGlobal = () => {
+    invalidateTargetAnchor();
+    if (!targetBitmap || !targetActive || targetPhase !== 'noise-converge') return;
+    const elapsed = wallTime - targetStartTime;
+    const dissolveStart = targetNoiseDuration + targetConvergeDuration + targetHold;
+    // 进入 dissolve 阶段:为所有已锁 cell 设置 unlockTime(倒序 rank → 1-rank)
+    // 注:用 1e-9 epsilon 容忍 wallTime 累积浮点误差(180×1/60 = 2.999...942)
+    if (targetDissolveStartTime < 0 && elapsed + 1e-9 >= dissolveStart) {
+      targetDissolveStartTime = dissolveStart;
+      for (let s = 0; s < i; s++) {
+        for (let h = 0; h < r; h++) {
+          const c = b[s][h];
+          if (c.locked && c.lockTime !== undefined && c.unlockTime === undefined) {
+            const rank = (c.lockTime - targetNoiseDuration) / targetConvergeDuration;
+            c.unlockTime = targetDissolveStartTime + (1 - rank) * targetFadeOut;
+          }
+        }
+      }
+    }
+    // dissolve 完成判定
+    if (targetDissolveStartTime >= 0 && elapsed + 1e-9 >= targetDissolveStartTime + targetFadeOut) {
+      targetActive = false;
+      targetBitmap = null;
+      if (!targetFinishFired) {
+        targetFinishFired = true;
+        fireOnTargetFinish();
+      }
+    }
+  };
+
+  /**
+   * 单 cell 阶段处理(在 cell 循环中调)
+   * 输入:c(单元格)· h/s(网格坐标)· l(变体原始亮度)
+   * 输出:{ l, ch, skipCharset } 或 null(非 noise-converge 模式)
+   * - skipCharset = true:此 cell 由 phase 完全接管,跳过 normal flicker/charset 更新
+   * - skipCharset = false:此 cell 让 normal flicker/charset 接管 ch 更新(非目标区 hold/dissolve)
+   */
+  const applyTargetBitmapPhase = (c: Cell, h: number, s: number, l: number): { l: number; ch: number; skipCharset: boolean } | null => {
+    if (!targetBitmap || !targetActive || targetPhase !== 'noise-converge') return null;
+    const elapsed = wallTime - targetStartTime;
+    const noiseStart = targetNoiseDuration;
+    const convergeSpan = targetConvergeDuration;
+    const noiseAndConverge = noiseStart + convergeSpan;
+    // 1e-9 epsilon:容忍 wallTime 累积浮点误差(60/180/...×1/60 可能 < 整数)
+    const EPS = 1e-9;
+
+    // Phase 1: noise(全屏 chaos,即使变体也算 noise)
+    if (elapsed + EPS < noiseStart) {
+      return {
+        l: Math.random(),
+        ch: Math.floor(Math.random() * charset.length),
+        skipCharset: true
+      };
+    }
+
+    // 锚点快速拒绝
+    const { ox, oy } = computeTargetOrigin();
+    const bx = h - ox, by = s - oy;
+    if (bx < 0 || bx >= targetCols || by < 0 || by >= targetRows) {
+      // 非目标区
+      const convergeElapsed = elapsed - noiseStart;
+      if (convergeElapsed + EPS < convergeSpan) {
+        // Phase 2 blend:noise → rain
+        const rainFactor = convergeElapsed / convergeSpan;
+        const noiseL = Math.random();
+        return {
+          l: noiseL * (1 - rainFactor) + l * rainFactor,
+          ch: c.ch,  // 字符走 normal flicker 路径
+          skipCharset: false
+        };
+      }
+      // Phase 3 (hold) / Phase 4 (dissolve):normal rain
+      return { l, ch: c.ch, skipCharset: false };
+    }
+    const g = targetBitmap[by * targetCols + bx];
+    if (g <= 0) {
+      // 目标区但 g=0(透明位),按非目标区处理
+      const convergeElapsed = elapsed - noiseStart;
+      if (convergeElapsed + EPS < convergeSpan) {
+        const rainFactor = convergeElapsed / convergeSpan;
+        const noiseL = Math.random();
+        return { l: noiseL * (1 - rainFactor) + l * rainFactor, ch: c.ch, skipCharset: false };
+      }
+      return { l, ch: c.ch, skipCharset: false };
+    }
+
+    // 目标区 cell:lock state machine
+    if (c.locked && c.unlockTime !== undefined && elapsed + EPS >= c.unlockTime) {
+      // 解锁 → 切到 noise(此 cell 后续不再重新锁定,因 unlockTime 已生效)
+      c.locked = false;
+      c.lockedCh = undefined;
+    }
+    // 只在 dissolve 阶段前(没有 unlockTime)才允许锁定,避免 dissolve 中解锁后立即被重新锁
+    if (!c.locked && c.unlockTime === undefined && c.lockTime !== undefined && elapsed + EPS >= c.lockTime) {
+      c.locked = true;
+      c.lockedCh = Math.floor(Math.random() * charset.length);
+    }
+    if (c.locked) {
+      // 字符稳定性:stability=1 不变;stability=0 每帧可换
+      if (Math.random() > targetLockStability) {
+        c.lockedCh = Math.floor(Math.random() * charset.length);
+      }
+      return {
+        l: Math.max(0, Math.min(1, g * 0.7)),
+        ch: c.lockedCh!,
+        skipCharset: true
+      };
+    }
+    // 未锁(noise/converge 早期):noise 行为
+    return {
+      l: Math.random(),
+      ch: Math.floor(Math.random() * charset.length),
+      skipCharset: true
+    };
   };
 
   /**
@@ -727,6 +988,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     // 同步 __frameCtx 的 f(给 userFunc 用)
     __frameCtx.f = f;
     __frameCtx.t = wallTime;
+    // noise-converge 模式:每帧调一次全局状态(dissolve 进入/完成判定)
+    updateTargetBitmapPhaseGlobal();
     for (let s = 0; s < i; s++) {
       const y = s * ef * 1.1 + ef * 0.55;
       for (let h = 0; h < r; h++) {
@@ -757,77 +1020,91 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         if (Math.random() < cfg.sparkProbability) l = 1;
         c.bright = l;
 
-        // 目标位图覆盖(文字/图片) · 颜色不变,只改亮度
+        // 目标位图覆盖(文字/图片)
+        let skipCharset = false;
         if (targetBitmap && targetActive) {
-          let ox = 0, oy = 0;
-          if (targetAnchor === 'center') {
-            ox = (r - targetCols) >> 1;
-            oy = (i - targetRows) >> 1;
-          } else if (targetAnchor === 'topRight') {
-            ox = r - targetCols; oy = 0;
-          } else if (targetAnchor === 'bottomLeft') {
-            ox = 0; oy = i - targetRows;
-          } else if (targetAnchor === 'bottomRight') {
-            ox = r - targetCols; oy = i - targetRows;
-          }
-          if (targetMotion === 'drift') {
-            const period = (r + targetCols) / Math.max(0.1, targetMotionSpeed);
-            const t = wallTime - targetStartTime;
-            const phase = (t % period) / period;
-            ox = Math.floor(ox + phase * (r + targetCols)) - targetCols;
-          } else if (targetMotion === 'bounce') {
-            const period = (2 * (r - targetCols)) / Math.max(0.1, targetMotionSpeed);
-            const t = wallTime - targetStartTime;
-            const phase = (t % period) / period;
-            const d2 = phase < 0.5 ? phase * 2 : 2 - phase * 2;
-            ox = Math.floor(d2 * (r - targetCols));
-          } else if (targetMotion === 'float') {
-            const t = wallTime - targetStartTime;
-            oy = Math.floor(oy + Math.sin(t * targetMotionSpeed * 2) * 3);
-          }
-          const bx = h - ox;
-          const by = s - oy;
-          if (bx >= 0 && bx < targetCols && by >= 0 && by < targetRows) {
-            const g = targetBitmap[by * targetCols + bx];
-            if (g > 0) {
-              const elapsed = wallTime - targetStartTime;
-              let vis = 1;
-              if (elapsed < targetFadeIn) vis = elapsed / targetFadeIn;
-              else if (elapsed > targetFadeIn + targetHold) vis = Math.max(0, 1 - (elapsed - targetFadeIn - targetHold) / targetFadeOut);
-              if (elapsed > targetFadeIn + targetHold + targetFadeOut) {
-                targetActive = false;
-                targetBitmap = null;
-                if (!targetFinishFired) {
-                  targetFinishFired = true;
-                  fireOnTargetFinish();
-                }
-              } else {
-                const chaosFactor = (1 - vis) * targetChaos;
-                l = Math.max(0, Math.min(1, l + g * 0.7 * vis));
-                if (chaosFactor > 0 && Math.random() < chaosFactor) {
-                  c.ch = Math.floor(Math.random() * charset.length);
+          if (targetPhase === 'noise-converge') {
+            // noise-converge 模式:5 段状态机(共享函数)
+            const result = applyTargetBitmapPhase(c, h, s, l);
+            if (result) {
+              l = result.l;
+              c.ch = result.ch;
+              skipCharset = result.skipCharset;
+            }
+          } else {
+            // 'fade' 模式:线性透明度淡入(向后兼容)
+            let ox = 0, oy = 0;
+            if (targetAnchor === 'center') {
+              ox = (r - targetCols) >> 1;
+              oy = (i - targetRows) >> 1;
+            } else if (targetAnchor === 'topRight') {
+              ox = r - targetCols; oy = 0;
+            } else if (targetAnchor === 'bottomLeft') {
+              ox = 0; oy = i - targetRows;
+            } else if (targetAnchor === 'bottomRight') {
+              ox = r - targetCols; oy = i - targetRows;
+            }
+            if (targetMotion === 'drift') {
+              const period = (r + targetCols) / Math.max(0.1, targetMotionSpeed);
+              const t = wallTime - targetStartTime;
+              const phase = (t % period) / period;
+              ox = Math.floor(ox + phase * (r + targetCols)) - targetCols;
+            } else if (targetMotion === 'bounce') {
+              const period = (2 * (r - targetCols)) / Math.max(0.1, targetMotionSpeed);
+              const t = wallTime - targetStartTime;
+              const phase = (t % period) / period;
+              const d2 = phase < 0.5 ? phase * 2 : 2 - phase * 2;
+              ox = Math.floor(d2 * (r - targetCols));
+            } else if (targetMotion === 'float') {
+              const t = wallTime - targetStartTime;
+              oy = Math.floor(oy + Math.sin(t * targetMotionSpeed * 2) * 3);
+            }
+            const bx = h - ox;
+            const by = s - oy;
+            if (bx >= 0 && bx < targetCols && by >= 0 && by < targetRows) {
+              const g = targetBitmap[by * targetCols + bx];
+              if (g > 0) {
+                const elapsed = wallTime - targetStartTime;
+                let vis = 1;
+                if (elapsed < targetFadeIn) vis = elapsed / targetFadeIn;
+                else if (elapsed > targetFadeIn + targetHold) vis = Math.max(0, 1 - (elapsed - targetFadeIn - targetHold) / targetFadeOut);
+                if (elapsed > targetFadeIn + targetHold + targetFadeOut) {
+                  targetActive = false;
+                  targetBitmap = null;
+                  if (!targetFinishFired) {
+                    targetFinishFired = true;
+                    fireOnTargetFinish();
+                  }
+                } else {
+                  const chaosFactor = (1 - vis) * targetChaos;
+                  l = Math.max(0, Math.min(1, l + g * 0.7 * vis));
+                  if (chaosFactor > 0 && Math.random() < chaosFactor) {
+                    c.ch = Math.floor(Math.random() * charset.length);
+                  }
                 }
               }
             }
           }
         }
 
-        // 闪烁 / 字符更新
-        let F: number;
-        if (userFuncs.flickerCurve) {
-          __frameCtx.h = h; __frameCtx.s = s; __frameCtx.phase = c.phase;
-          __frameCtx.L = l; __frameCtx.ch = c.ch; __frameCtx.r = Math.random();
-          F = Number(userFuncs.flickerCurve(__frameCtx)) || 0;
-        } else {
-          F = l >= 0.66 ? flicker.high : l >= 0.33 ? flicker.mid : l >= 0.05 ? flicker.low : flicker.dark;
-        }
-        if (Math.random() < F) c.ch = Math.floor(Math.random() * charset.length);
-        if (vp.chUpdateProb > 0 && Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
-        if (userFuncs.charsetFunc) {
-          __frameCtx.h = h; __frameCtx.s = s; __frameCtx.phase = c.phase;
-          __frameCtx.L = l; __frameCtx.ch = c.ch; __frameCtx.r = Math.random();
-          const u = Number(userFuncs.charsetFunc(__frameCtx));
-          if (!isNaN(u)) c.ch = Math.max(0, Math.min(charset.length - 1, Math.floor(u)));
+        // 闪烁 / 字符更新(noise-converge 接管时跳过)
+        if (!skipCharset) {
+          let F: number;
+          if (userFuncs.flickerCurve) {
+            __frameCtx.h = h; __frameCtx.s = s; __frameCtx.phase = c.phase;
+            __frameCtx.L = l; __frameCtx.ch = c.ch; __frameCtx.r = Math.random();
+            F = Number(userFuncs.flickerCurve(__frameCtx)) || 0;
+          } else {
+            F = l >= 0.66 ? flicker.high : l >= 0.33 ? flicker.mid : l >= 0.05 ? flicker.low : flicker.dark;
+          }
+          if (Math.random() < F) c.ch = Math.floor(Math.random() * charset.length);
+          if (vp.chUpdateProb > 0 && Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
+          if (userFuncs.charsetFunc) {
+            __frameCtx.h = h; __frameCtx.s = s; __frameCtx.phase = c.phase;
+            __frameCtx.L = l; __frameCtx.ch = c.ch; __frameCtx.r = Math.random();
+            const u = Number(userFuncs.charsetFunc(__frameCtx));
+            if (!isNaN(u)) c.ch = Math.max(0, Math.min(charset.length - 1, Math.floor(u)));
+          }
         }
 
         drawInner(c, h, s, y, l, M, p, coldFinal, warmFinal, totalHue);
@@ -840,6 +1117,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     __frameCtx.f = f;
     __frameCtx.t = wallTime;
     const yPosSpeed = vp.avalancheSpeed;
+    // noise-converge 模式:每帧调一次全局状态
+    updateTargetBitmapPhaseGlobal();
     for (let s = 0; s < i; s++) {
       for (let h = 0; h < r; h++) {
         const c = b[s][h];
@@ -848,10 +1127,21 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         if (c.yPos! > i) c.yPos = 0;
 
         const distFromHead = Math.abs(s - Math.floor(c.yPos!));
-        const l = Math.max(0, Math.min(1, (c.headBright! - Math.pow(distFromHead, vp.headFalloff)) / 8));
+        let l = Math.max(0, Math.min(1, (c.headBright! - Math.pow(distFromHead, vp.headFalloff)) / 8));
         c.bright = l;
 
-        if (Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
+        // 噪声→收敛模式
+        let skipCharset = false;
+        if (targetBitmap && targetActive && targetPhase === 'noise-converge') {
+          const result = applyTargetBitmapPhase(c, h, s, l);
+          if (result) {
+            l = result.l;
+            c.ch = result.ch;
+            skipCharset = result.skipCharset;
+          }
+        }
+
+        if (!skipCharset && Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
         if (l < 0.02) continue;  // 走老路径的 continue,仅 brightness 计算
 
         const d = Math.max(0, Math.min(1, c.warmth));
@@ -888,16 +1178,29 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     const totalHue = dynamicHue + dynamicColorHue;
     __frameCtx.f = f;
     __frameCtx.t = wallTime;
+    // noise-converge 模式:每帧调一次全局状态
+    updateTargetBitmapPhaseGlobal();
     for (let s = 0; s < i; s++) {
       const y = s * ef * 1.1 + ef * 0.55;
       for (let h = 0; h < r; h++) {
         const c = b[s][h];
         c.phase += (vp.phaseStep + Math.random() * vp.phaseJitter) * (cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT) * lastDt * 60;
         const W = Math.sin(c.phase) * vp.sinWeightA + 0.5;
-        const l = Math.max(0, Math.min(1, W));
+        let l = Math.max(0, Math.min(1, W));
         c.bright = l;
 
-        if (Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
+        // 噪声→收敛模式
+        let skipCharset = false;
+        if (targetBitmap && targetActive && targetPhase === 'noise-converge') {
+          const result = applyTargetBitmapPhase(c, h, s, l);
+          if (result) {
+            l = result.l;
+            c.ch = result.ch;
+            skipCharset = result.skipCharset;
+          }
+        }
+
+        if (!skipCharset && Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
         if (l < 0.02) continue;
 
         // 走简化路径(无 colorOverride 文档提及的 ripple 路径,但保留兼容)
@@ -1001,7 +1304,20 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       try { colorCurve = compileUserFunction(code); diagnostics.colorCurve = undefined; }
       catch (e: any) { diagnostics.colorCurve = e.message; console.warn('[matrix-rain] colorCurve:', e.message); colorCurve = null; }
     },
-    setTargetBitmap(bitmap: Float32Array | { cols: number; rows: number; data: Float32Array } | null, opts?: { fadeIn?: number; hold?: number; fadeOut?: number; chaos?: number; anchor?: 'topLeft'|'center'|'topRight'|'bottomLeft'|'bottomRight'; motion?: 'static'|'drift'|'bounce'|'float'; motionSpeed?: number }) {
+    setTargetBitmap(bitmap: Float32Array | { cols: number; rows: number; data: Float32Array } | null, opts?: {
+      fadeIn?: number;
+      hold?: number;
+      fadeOut?: number;
+      chaos?: number;
+      anchor?: 'topLeft'|'center'|'topRight'|'bottomLeft'|'bottomRight';
+      motion?: 'static'|'drift'|'bounce'|'float';
+      motionSpeed?: number;
+      phase?: 'fade' | 'noise-converge';
+      noiseDuration?: number;
+      convergeDuration?: number;
+      lockOrder?: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft';
+      lockStability?: number;
+    }) {
       // **兼容**两种传参:直接 Float32Array 或 BitmapSource 包装对象
       const data: Float32Array | null = bitmap === null
         ? null
@@ -1024,10 +1340,22 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       if (opts?.anchor !== undefined) targetAnchor = opts.anchor;
       if (opts?.motion !== undefined) targetMotion = opts.motion;
       if (opts?.motionSpeed !== undefined) targetMotionSpeed = opts.motionSpeed;
+      // 噪声→收敛模式选项
+      if (opts?.phase !== undefined) targetPhase = opts.phase;
+      if (opts?.noiseDuration !== undefined) targetNoiseDuration = Math.max(0, opts.noiseDuration);
+      if (opts?.convergeDuration !== undefined) targetConvergeDuration = Math.max(0.001, opts.convergeDuration);
+      if (opts?.lockOrder !== undefined) targetLockOrder = opts.lockOrder;
+      if (opts?.lockStability !== undefined) targetLockStability = Math.max(0, Math.min(1, opts.lockStability));
       if (data) {
         targetStartFrame = f;
         targetStartTime = wallTime;   // dt-based 状态机起点
         targetActive = true;
+        // 重置所有 cell 的 locked/unlockTime 状态(防跨调用累积)
+        resetAllCellLockState();
+        // 预计算 lockTime(noise-converge 模式)
+        if (targetPhase === 'noise-converge') {
+          recomputeTargetLockTimes();
+        }
       } else {
         targetActive = false;
       }
@@ -1035,6 +1363,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     clearTargetBitmap() {
       targetBitmap = null;
       targetActive = false;
+      // 清理所有 cell 的 lock 状态(noise-converge 模式)
+      resetAllCellLockState();
       // 主动 clear 也触发 finish
       if (!targetFinishFired) {
         targetFinishFired = true;
@@ -1086,6 +1416,68 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     getFPS() {
       return Math.round(fps);
     },
+    /**
+     * 读取目标位图状态机当前快照(用于 demo 调试 + 单元测试)
+     * - phase: 'idle' | 'noise' | 'converge' | 'hold' | 'dissolve'
+     * - elapsed: 相对 targetStartTime 的墙钟秒数
+     * - lockedCount / totalTargets: 目标区已锁 cell 数 / 总数
+     * - lockOrder / targetPhase / noiseDuration / convergeDuration / lockStability
+     */
+    getTargetState(): {
+      active: boolean;
+      phase: 'idle' | 'noise' | 'converge' | 'hold' | 'dissolve';
+      elapsed: number;
+      lockedCount: number;
+      unlockedCount: number;
+      totalTargets: number;
+      lockOrder: string;
+      targetPhase: 'fade' | 'noise-converge';
+      noiseDuration: number;
+      convergeDuration: number;
+      lockStability: number;
+      targetDissolveStartTime: number;
+    } {
+      let lockedCount = 0;
+      let totalTargets = 0;
+      if (targetBitmap && targetActive) {
+        const { ox, oy } = computeTargetOrigin();
+        for (let s = 0; s < i; s++) {
+          for (let h = 0; h < r; h++) {
+            const bx = h - ox, by = s - oy;
+            if (bx >= 0 && bx < targetCols && by >= 0 && by < targetRows) {
+              const g = targetBitmap[by * targetCols + bx];
+              if (g > 0) {
+                totalTargets++;
+                if (b[s][h].locked) lockedCount++;
+              }
+            }
+          }
+        }
+      }
+      const elapsed = wallTime - targetStartTime;
+      const EPS = 1e-9;
+      let phase: 'idle' | 'noise' | 'converge' | 'hold' | 'dissolve' = 'idle';
+      if (targetBitmap && targetActive && targetPhase === 'noise-converge') {
+        if (elapsed + EPS < targetNoiseDuration) phase = 'noise';
+        else if (elapsed + EPS < targetNoiseDuration + targetConvergeDuration) phase = 'converge';
+        else if (targetDissolveStartTime < 0) phase = 'hold';
+        else phase = 'dissolve';
+      }
+      return {
+        active: !!(targetBitmap && targetActive),
+        phase,
+        elapsed,
+        lockedCount,
+        unlockedCount: totalTargets - lockedCount,
+        totalTargets,
+        lockOrder: targetLockOrder,
+        targetPhase,
+        noiseDuration: targetNoiseDuration,
+        convergeDuration: targetConvergeDuration,
+        lockStability: targetLockStability,
+        targetDissolveStartTime
+      };
+    },
     getOptions(): MatrixRainOptions {
       return {
         fontSize: cfg.fontSize,
@@ -1118,6 +1510,11 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         targetHold,
         targetFadeOut,
         targetChaos,
+        targetPhase,
+        targetNoiseDuration,
+        targetConvergeDuration,
+        targetLockOrder,
+        targetLockStability,
         clickBurst: clickBurstCfg.radius > 0 ? { ...clickBurstCfg } : false,
         cursor: (canvas.style.cursor || undefined) as CursorOption
       };
