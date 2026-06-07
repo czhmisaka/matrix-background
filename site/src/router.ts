@@ -8,6 +8,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/demos/themes', name: 'demo-themes', component: () => import('./pages/DemoThemes.vue') },
   { path: '/demos/noise-converge', name: 'demo-noise', component: () => import('./pages/DemoNoiseConverge.vue') },
   { path: '/demos/blog', name: 'demo-blog', component: () => import('./pages/DemoBlog.vue') },
+  { path: '/demos/ai-tune', name: 'demo-ai-tune', component: () => import('./pages/AITunePage.vue') },
   { path: '/tutorial', name: 'tutorial', component: () => import('./pages/TutorialPage.vue') },
   { path: '/playground', name: 'playground', component: () => import('./pages/PlaygroundPage.vue') },
   { path: '/blog', name: 'blog', component: () => import('./pages/BlogPage.vue') },

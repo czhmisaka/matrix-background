@@ -23,6 +23,9 @@
         <DemoCard to="/demos/blog" tag="Real Scenario"
                   title="博客背景" subtitle="canvas 全屏 + 文章前景 + 实时调参面板"
                   bitmap-text="blog" />
+        <DemoCard to="/demos/ai-tune" tag="AI"
+                  title="🪄 AI 调参" subtitle="自然语言改背景,LLM 自动改配置 · 6 预设 + 3 模式"
+                  bitmap-text="ai" />
         <DemoCard to="/playground" tag="Playground"
                   title="实时调参" subtitle="改 theme / fontSize / 各参数,canvas 立即更新"
                   bitmap-text="play" />
