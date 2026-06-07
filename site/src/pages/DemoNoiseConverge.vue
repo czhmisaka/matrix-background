@@ -8,11 +8,11 @@
       </header>
 
       <div class="stage">
-        <canvas ref="canvasRef"></canvas>
-        <div class="phase-indicator">
+        <canvas ref="canvasRef" aria-hidden="true"></canvas>
+        <div class="phase-indicator" role="group" aria-label="涌现动画状态">
           <div class="label">Current Phase</div>
-          <div class="phase" :data-phase="phase">{{ phase }}</div>
-          <div class="time">t = {{ elapsed.toFixed(2) }}s · {{ lockedCount }}/{{ totalTargets }} locked</div>
+          <div class="phase" :data-phase="phase" role="status" aria-live="polite" :aria-label="`当前阶段 ${phase}`">{{ phase }}</div>
+          <div class="time" aria-hidden="true">t = {{ elapsed.toFixed(2) }}s · {{ lockedCount }}/{{ totalTargets }} locked</div>
         </div>
       </div>
 
@@ -22,13 +22,15 @@
         <div class="group">
           <h3>① 输入文本</h3>
           <div class="row">
-            <label>target text</label>
+            <label for="dnoise-input">target text</label>
             <input
+              id="dnoise-input"
               type="text"
               v-model="inputText"
               @input="onTextInput"
               maxlength="20"
               placeholder="MATRIX"
+              aria-label="目标文本(将涌现的内容)"
             >
             <button class="btn btn-sm" @click="applyBitmap(inputText)">应用</button>
           </div>
@@ -66,19 +68,31 @@
         <div class="group">
           <h3>④ 调参</h3>
           <div class="row">
-            <label>noiseDuration</label>
-            <input type="range" min="0" max="3" step="0.1" v-model.number="noiseDur" @input="onSliderInput" @change="applyBitmap(inputText)">
-            <span class="val">{{ noiseDur.toFixed(1) }}s</span>
+            <label for="dnoise-noiseDur">noiseDuration</label>
+            <input id="dnoise-noiseDur" type="range" min="0" max="3" step="0.1" v-model.number="noiseDur" @input="onSliderInput" @change="applyBitmap(inputText)"
+                   aria-label="全屏噪点时长(秒)"
+                   :aria-valuemin="0" :aria-valuemax="3"
+                   :aria-valuenow="noiseDur"
+                   :aria-valuetext="`${noiseDur.toFixed(1)} 秒`">
+            <span class="val" aria-hidden="true">{{ noiseDur.toFixed(1) }}s</span>
           </div>
           <div class="row">
-            <label>convergeDuration</label>
-            <input type="range" min="0.1" max="5" step="0.1" v-model.number="convergeDur" @input="onSliderInput" @change="applyBitmap(inputText)">
-            <span class="val">{{ convergeDur.toFixed(1) }}s</span>
+            <label for="dnoise-convergeDur">convergeDuration</label>
+            <input id="dnoise-convergeDur" type="range" min="0.1" max="5" step="0.1" v-model.number="convergeDur" @input="onSliderInput" @change="applyBitmap(inputText)"
+                   aria-label="逐 cell 锁定时长(秒)"
+                   :aria-valuemin="0.1" :aria-valuemax="5"
+                   :aria-valuenow="convergeDur"
+                   :aria-valuetext="`${convergeDur.toFixed(1)} 秒`">
+            <span class="val" aria-hidden="true">{{ convergeDur.toFixed(1) }}s</span>
           </div>
           <div class="row">
-            <label>lockStability</label>
-            <input type="range" min="0" max="1" step="0.05" v-model.number="lockStability" @input="onSliderInput" @change="applyBitmap(inputText)">
-            <span class="val">{{ lockStability.toFixed(2) }}</span>
+            <label for="dnoise-lockStab">lockStability</label>
+            <input id="dnoise-lockStab" type="range" min="0" max="1" step="0.05" v-model.number="lockStability" @input="onSliderInput" @change="applyBitmap(inputText)"
+                   aria-label="锁定后字符稳定性"
+                   :aria-valuemin="0" :aria-valuemax="1"
+                   :aria-valuenow="lockStability"
+                   :aria-valuetext="lockStability.toFixed(2)">
+            <span class="val" aria-hidden="true">{{ lockStability.toFixed(2) }}</span>
           </div>
         </div>
 

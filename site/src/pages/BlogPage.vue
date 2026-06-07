@@ -9,16 +9,27 @@
 
       <div class="post-list">
         <article v-for="post in posts" :key="post.slug" class="post-card" :class="{ expanded: expanded === post.slug }">
-          <header class="post-header" @click="toggle(post.slug)">
+          <button
+            type="button"
+            class="post-header"
+            :aria-expanded="expanded === post.slug"
+            :aria-controls="`post-body-${post.slug}`"
+            @click="toggle(post.slug)"
+          >
             <div class="post-meta">
               <span class="post-date">{{ post.date }}</span>
               <span class="post-tag">{{ post.tag }}</span>
             </div>
             <h2>{{ post.title }}</h2>
             <p class="post-excerpt">{{ post.excerpt }}</p>
-            <span class="post-toggle">{{ expanded === post.slug ? '− Collapse' : '+ Expand' }}</span>
-          </header>
-          <div v-if="expanded === post.slug" class="post-body" v-html="post.body"></div>
+            <span class="post-toggle" aria-hidden="true">{{ expanded === post.slug ? '− Collapse' : '+ Expand' }}</span>
+          </button>
+          <div
+            v-if="expanded === post.slug"
+            :id="`post-body-${post.slug}`"
+            class="post-body"
+            v-html="post.body"
+          ></div>
         </article>
       </div>
     </div>
@@ -96,9 +107,16 @@ const posts = [
 .post-card.expanded { border-color: var(--accent); }
 
 .post-header {
+  display: block;
+  width: 100%;
   padding: 28px 32px;
   cursor: pointer;
   user-select: none;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
 }
 .post-meta {
   display: flex;

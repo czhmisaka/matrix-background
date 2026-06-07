@@ -4,14 +4,19 @@
 
     <section class="themes-strip">
       <div class="container">
-        <div class="strip-grid">
-          <div v-for="t in themes" :key="t" class="strip-cell"
-               :class="{ active: current === t }"
-               :style="{ '--swatch': accent(t) }"
-               @click="setTheme(t)">
-            <span class="strip-dot"></span>
+        <div class="strip-grid" role="group" aria-label="主题切换">
+          <button
+            v-for="t in themes" :key="t"
+            type="button"
+            class="strip-cell"
+            :class="{ active: current === t }"
+            :style="{ '--swatch': accent(t) }"
+            :aria-pressed="current === t"
+            :aria-label="`切换到主题 ${label(t)}`"
+            @click="setTheme(t)">
+            <span class="strip-dot" aria-hidden="true"></span>
             <span class="strip-label">{{ label(t) }}</span>
-          </div>
+          </button>
         </div>
       </div>
     </section>
@@ -25,32 +30,32 @@
         <div class="features-grid">
           <div class="feature">
             <span class="feature-num">01</span>
-            <h4>5 主题</h4>
+            <h3>5 主题</h3>
             <p>冷暖双板拼色,可独立调亮 / 饱和 / 色相,支持冷暖双主题混搭。</p>
           </div>
           <div class="feature">
             <span class="feature-num">02</span>
-            <h4>4 变体</h4>
+            <h3>4 变体</h3>
             <p>classic / avalanche / ripple / ascii — 字符运动、密度、闪烁各不同。</p>
           </div>
           <div class="feature">
             <span class="feature-num">03</span>
-            <h4>Web Component</h4>
+            <h3>Web Component</h3>
             <p>任何框架可直接用 <code>&lt;matrix-rain&gt;</code> 标签挂载,Vue/React 都能识别。</p>
           </div>
           <div class="feature">
             <span class="feature-num">04</span>
-            <h4>噪声 → 收敛</h4>
+            <h3>噪声 → 收敛</h3>
             <p>5 阶段状态机:全屏噪点 → 逐 cell 锁定 → 保持 → 反向解锁融化。</p>
           </div>
           <div class="feature">
             <span class="feature-num">05</span>
-            <h4>事件驱动</h4>
+            <h3>事件驱动</h3>
             <p>onFrame / onResize / onThemeChange / onTargetFinish,4 个事件全覆盖。</p>
           </div>
           <div class="feature">
             <span class="feature-num">06</span>
-            <h4>SSR 友好</h4>
+            <h3>SSR 友好</h3>
             <p>核心逻辑零 DOM 依赖,Node/Edge/Worker 中可安全 import,主入口仅客户端使用。</p>
           </div>
         </div>
@@ -101,6 +106,9 @@ const { current, setTheme, themes, accent, label } = useTheme();
   color: var(--text-muted);
   cursor: pointer;
   transition: all 160ms ease;
+  text-align: left;
+  font-family: var(--font-mono);
+  width: 100%;
 }
 .strip-cell:hover { color: var(--text); border-color: var(--border-strong); }
 .strip-cell.active { color: var(--text); border-color: var(--swatch); }
@@ -136,10 +144,13 @@ const { current, setTheme, themes, accent, label } = useTheme();
   margin-bottom: 16px;
   letter-spacing: 0.1em;
 }
-.feature h4 {
+.feature h3 {
   font-size: 22px;
   margin: 0 0 8px;
   font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 .feature p {
   color: var(--text-muted);

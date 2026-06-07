@@ -8,9 +8,10 @@
       </header>
 
       <div class="docs-layout">
-        <nav class="side-nav">
+        <nav class="side-nav" aria-label="本页章节">
           <a v-for="s in sections" :key="s.id"
              :href="`#${s.id}`"
+             :aria-current="activeSection === s.id ? 'location' : undefined"
              :class="{ active: activeSection === s.id }"
              @click="activeSection = s.id"
           >{{ s.title }}</a>

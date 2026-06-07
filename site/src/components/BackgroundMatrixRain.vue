@@ -1,6 +1,6 @@
 <template>
   <div class="bg-matrix-rain">
-    <canvas ref="canvasRef" class="bg-canvas"></canvas>
+    <canvas ref="canvasRef" class="bg-canvas" aria-hidden="true"></canvas>
     <div v-if="$slots.overlay" class="bg-overlay">
       <slot name="overlay" />
     </div>

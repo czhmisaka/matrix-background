@@ -6,12 +6,13 @@
         <span class="brand-name">matrix-rain</span>
       </RouterLink>
 
-      <nav class="nav-links" :class="{ open: mobileOpen }">
-        <RouterLink to="/demos" @click="mobileOpen = false">Demos</RouterLink>
-        <RouterLink to="/tutorial" @click="mobileOpen = false">Tutorial</RouterLink>
-        <RouterLink to="/playground" @click="mobileOpen = false">Playground</RouterLink>
-        <RouterLink to="/blog" @click="mobileOpen = false">Blog</RouterLink>
-        <RouterLink to="/docs" @click="mobileOpen = false">Docs</RouterLink>
+      <nav class="nav-links" :class="{ open: mobileOpen }" aria-label="主导航">
+        <RouterLink
+          v-for="l in links" :key="l.to"
+          :to="l.to"
+          :aria-current="isActive(l.to) ? 'page' : undefined"
+          @click="mobileOpen = false"
+        >{{ l.label }}</RouterLink>
         <a href="https://www.npmjs.com/package/@xietuier/matrix-rain" target="_blank" rel="noopener" class="nav-cta">npm ↗</a>
       </nav>
 
@@ -23,8 +24,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { useRoute } from 'vue-router';
 const mobileOpen = ref(false);
+const route = useRoute();
+const links = [
+  { to: '/demos',      label: 'Demos' },
+  { to: '/tutorial',   label: 'Tutorial' },
+  { to: '/playground', label: 'Playground' },
+  { to: '/blog',       label: 'Blog' },
+  { to: '/docs',       label: 'Docs' }
+];
+function isActive(to: string) {
+  return route.path === to || route.path.startsWith(to + '/');
+}
 </script>
 
 <style scoped>
@@ -79,7 +92,8 @@ const mobileOpen = ref(false);
   padding: 4px 0;
 }
 .nav-links a:hover { color: var(--text); }
-.nav-links a.router-link-active { color: var(--accent); }
+.nav-links a.router-link-active,
+.nav-links a[aria-current="page"] { color: var(--accent); }
 .nav-links a.router-link-active::after {
   content: '';
   position: absolute;

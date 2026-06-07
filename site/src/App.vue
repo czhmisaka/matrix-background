@@ -1,6 +1,7 @@
 <template>
+  <a href="#main" class="skip-link">跳到主要内容</a>
   <NavBar />
-  <main>
+  <main id="main" tabindex="-1">
     <RouterView />
   </main>
   <FooterBar />
@@ -13,4 +14,6 @@ import FooterBar from './components/FooterBar.vue';
 
 <style scoped>
 main { min-height: calc(100vh - var(--nav-h) - 240px); }
+main:focus { outline: none; }
+main:focus-visible { outline: none; }
 </style>

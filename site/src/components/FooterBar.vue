@@ -9,24 +9,24 @@
           </div>
           <p class="footer-tagline">Canvas 2D 渲染的 Matrix 数字雨背景库<br>5 主题 · 4 变体 · Web Component · 29 KB gzip</p>
         </div>
-        <div class="footer-col">
-          <h5>Explore</h5>
+        <nav class="footer-col" aria-label="页脚导航">
+          <h2 class="footer-heading">Explore</h2>
           <ul>
             <li><RouterLink to="/demos">Demos</RouterLink></li>
             <li><RouterLink to="/tutorial">Tutorial</RouterLink></li>
             <li><RouterLink to="/playground">Playground</RouterLink></li>
             <li><RouterLink to="/legacy">Legacy</RouterLink></li>
           </ul>
-        </div>
+        </nav>
         <div class="footer-col">
-          <h5>Reference</h5>
+          <h2 class="footer-heading">Reference</h2>
           <ul>
             <li><RouterLink to="/docs">API Docs</RouterLink></li>
             <li><RouterLink to="/blog">Blog</RouterLink></li>
           </ul>
         </div>
         <div class="footer-col">
-          <h5>Resources</h5>
+          <h2 class="footer-heading">Resources</h2>
           <ul>
             <li><a href="https://www.npmjs.com/package/@xietuier/matrix-rain" target="_blank" rel="noopener">npm</a></li>
             <li><a href="https://github.com/xietuier/matrix-rain" target="_blank" rel="noopener">GitHub</a></li>
@@ -76,7 +76,8 @@
   line-height: 1.6;
   margin: 0;
 }
-.footer-col h5 {
+.footer-col h5,
+.footer-col .footer-heading {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
@@ -84,6 +85,12 @@
   text-transform: uppercase;
   color: var(--text-faint);
   margin: 0 0 var(--gap-4);
+}
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); white-space: nowrap; border: 0;
 }
 .footer-col ul { list-style: none; padding: 0; margin: 0; }
 .footer-col li { margin-bottom: 10px; }

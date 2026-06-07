@@ -13,15 +13,16 @@
       </header>
 
       <div class="pg-grid">
-        <aside class="params">
+        <aside class="params" aria-label="画布参数">
+          <h2 class="sr-only">画布参数</h2>
           <h3>基础参数</h3>
           <label>Theme
-            <select v-model="params.theme">
+            <select v-model="params.theme" aria-label="主题">
               <option v-for="t in themes" :key="t" :value="t">{{ t }}</option>
             </select>
           </label>
           <label>Variant
-            <select v-model="params.variant">
+            <select v-model="params.variant" aria-label="变体">
               <option value="classic">classic</option>
               <option value="avalanche">avalanche</option>
               <option value="ripple">ripple</option>
@@ -29,41 +30,71 @@
             </select>
           </label>
           <label>Font Size <span class="cv">{{ params.fontSize }}px</span>
-            <input type="range" min="10" max="28" v-model.number="params.fontSize">
+            <input type="range" min="10" max="28" v-model.number="params.fontSize"
+                   aria-label="字符网格宽度(像素)"
+                   :aria-valuemin="10" :aria-valuemax="28"
+                   :aria-valuenow="params.fontSize"
+                   :aria-valuetext="`${params.fontSize} 像素`">
           </label>
           <label>Trail Alpha <span class="cv">{{ params.trailAlpha.toFixed(2) }}</span>
-            <input type="range" min="0.05" max="0.5" step="0.01" v-model.number="params.trailAlpha">
+            <input type="range" min="0.05" max="0.5" step="0.01" v-model.number="params.trailAlpha"
+                   aria-label="残影透明度"
+                   :aria-valuemin="0.05" :aria-valuemax="0.5"
+                   :aria-valuenow="params.trailAlpha"
+                   :aria-valuetext="params.trailAlpha.toFixed(2)">
           </label>
           <label>Max DPR <span class="cv">{{ params.maxDPR.toFixed(1) }}</span>
-            <input type="range" min="1" max="3" step="0.5" v-model.number="params.maxDPR">
+            <input type="range" min="1" max="3" step="0.5" v-model.number="params.maxDPR"
+                   aria-label="设备像素比上限"
+                   :aria-valuemin="1" :aria-valuemax="3"
+                   :aria-valuenow="params.maxDPR"
+                   :aria-valuetext="`${params.maxDPR.toFixed(1)} 倍`">
           </label>
           <label>Brightness <span class="cv">{{ params.brightness.toFixed(2) }}</span>
-            <input type="range" min="0.5" max="2" step="0.05" v-model.number="params.brightness">
+            <input type="range" min="0.5" max="2" step="0.05" v-model.number="params.brightness"
+                   aria-label="主题亮度"
+                   :aria-valuemin="0.5" :aria-valuemax="2"
+                   :aria-valuenow="params.brightness"
+                   :aria-valuetext="params.brightness.toFixed(2)">
           </label>
 
           <hr>
 
           <h3>Target · 涌现</h3>
           <label>Phase
-            <select v-model="params.targetPhase">
+            <select v-model="params.targetPhase" aria-label="目标位图出现方式">
               <option value="fade">fade (传统淡入)</option>
               <option value="noise-converge">noise-converge (涌现)</option>
             </select>
           </label>
           <label v-if="params.targetPhase === 'noise-converge'">Noise Dur <span class="cv">{{ params.targetNoiseDuration.toFixed(1) }}s</span>
-            <input type="range" min="0" max="2" step="0.1" v-model.number="params.targetNoiseDuration">
+            <input type="range" min="0" max="2" step="0.1" v-model.number="params.targetNoiseDuration"
+                   aria-label="全屏噪点时长(秒)"
+                   :aria-valuemin="0" :aria-valuemax="2"
+                   :aria-valuenow="params.targetNoiseDuration"
+                   :aria-valuetext="`${params.targetNoiseDuration.toFixed(1)} 秒`">
           </label>
           <label v-if="params.targetPhase === 'noise-converge'">Converge Dur <span class="cv">{{ params.targetConvergeDuration.toFixed(1) }}s</span>
-            <input type="range" min="0.5" max="4" step="0.1" v-model.number="params.targetConvergeDuration">
+            <input type="range" min="0.5" max="4" step="0.1" v-model.number="params.targetConvergeDuration"
+                   aria-label="逐 cell 锁定时长(秒)"
+                   :aria-valuemin="0.5" :aria-valuemax="4"
+                   :aria-valuenow="params.targetConvergeDuration"
+                   :aria-valuetext="`${params.targetConvergeDuration.toFixed(1)} 秒`">
           </label>
           <label v-if="params.targetPhase === 'noise-converge'">Lock Stability <span class="cv">{{ params.targetLockStability.toFixed(2) }}</span>
-            <input type="range" min="0" max="1" step="0.05" v-model.number="params.targetLockStability">
+            <input type="range" min="0" max="1" step="0.05" v-model.number="params.targetLockStability"
+                   aria-label="锁定后字符稳定性"
+                   :aria-valuemin="0" :aria-valuemax="1"
+                   :aria-valuenow="params.targetLockStability"
+                   :aria-valuetext="params.targetLockStability.toFixed(2)">
           </label>
-          <div v-if="params.targetPhase === 'noise-converge'" class="lock-orders">
+          <div v-if="params.targetPhase === 'noise-converge'" class="lock-orders" role="group" aria-label="锁定顺序">
             <span class="lock-label">Lock Order:</span>
             <button
               v-for="o in lockOrders" :key="o"
+              type="button"
               :class="['btn', 'btn-sm', { active: params.targetLockOrder === o }]"
+              :aria-pressed="params.targetLockOrder === o"
               @click="setLockOrder(o)"
             >{{ o }}</button>
           </div>
@@ -72,17 +103,21 @@
 
           <h3>Target · 文本</h3>
           <label>Target Text
-            <input type="text" v-model="targetText" maxlength="20" placeholder="MATRIX">
+            <input type="text" v-model="targetText" maxlength="20" placeholder="MATRIX" aria-label="目标文本(将涌现的内容)">
           </label>
-          <button class="btn btn-block" @click="regenerate">应用</button>
+          <button class="btn btn-block" type="button" @click="regenerate">应用</button>
         </aside>
 
         <div class="canvas-area">
           <div class="canvas-wrap">
-            <canvas ref="canvasRef"></canvas>
-            <div class="overlay-info">
-              <span class="info-pill" :data-phase="phase">{{ phase }}</span>
-              <span class="info-pill mono">{{ elapsed.toFixed(2) }}s</span>
+            <canvas ref="canvasRef" aria-hidden="true"></canvas>
+            <div class="overlay-info" role="group" aria-label="涌现动画状态">
+              <span class="info-pill"
+                    :data-phase="phase"
+                    role="status"
+                    aria-live="polite"
+                    :aria-label="`当前阶段 ${phase}`">{{ phase }}</span>
+              <span class="info-pill mono" aria-hidden="true">{{ elapsed.toFixed(2) }}s</span>
             </div>
           </div>
         </div>
@@ -90,7 +125,7 @@
 
       <section class="code-output">
         <h3>代码</h3>
-        <pre><code>{{ codeString }}</code></pre>
+        <pre tabindex="0" aria-label="当前 matrixRain 调用代码"><code>{{ codeString }}</code></pre>
         <p class="hint">点击「复制代码」可一键复制当前调用。改任一参数,代码块会实时刷新。</p>
       </section>
     </div>
@@ -311,6 +346,13 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
   color: var(--text-faint);
   margin: 0 0 12px;
+  font-weight: 500;
+}
+.params h2.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); white-space: nowrap; border: 0;
 }
 .params h3:not(:first-of-type) { margin-top: 24px; }
 .params label {

@@ -1,15 +1,17 @@
 <template>
-  <div class="theme-switcher" role="group" aria-label="theme switcher">
+  <div class="theme-switcher" role="group" aria-label="主题切换">
     <button
       v-for="t in themes"
       :key="t"
+      type="button"
       :class="['ts-btn', { active: current === t }]"
       :style="{ '--swatch': accent(t) }"
       :aria-pressed="current === t"
+      :aria-label="`切换到主题 ${label(t)}`"
       :title="label(t)"
       @click="setTheme(t)"
     >
-      <span class="ts-dot"></span>
+      <span class="ts-dot" aria-hidden="true"></span>
       <span class="ts-name">{{ shortLabel(t) }}</span>
     </button>
   </div>

@@ -9,7 +9,7 @@
 
       <div class="layout">
         <div class="canvas-wrap">
-          <canvas ref="canvasRef"></canvas>
+          <canvas ref="canvasRef" aria-hidden="true"></canvas>
           <div class="canvas-overlay">
             <div class="overlay-pair">
               <span class="overlay-tag" :style="{ '--c': accentOf(coldFrom) }">{{ coldFrom }}</span>
@@ -20,23 +20,25 @@
         </div>
 
         <aside class="control-panel">
-          <h3>手动选择</h3>
+          <h2>手动选择</h2>
           <label>Cold From
-            <select v-model="coldFrom">
+            <select v-model="coldFrom" aria-label="冷色主题">
               <option v-for="t in themes" :key="t" :value="t">{{ t }}</option>
             </select>
           </label>
           <label>Warm From
-            <select v-model="warmFrom">
+            <select v-model="warmFrom" aria-label="暖色主题">
               <option v-for="t in themes" :key="t" :value="t">{{ t }}</option>
             </select>
           </label>
 
-          <h3 class="mt-32">推荐组合</h3>
+          <h2 class="mt-32">推荐组合</h2>
           <div class="presets">
             <button
               v-for="p in presets" :key="p.name"
+              type="button"
               :class="['preset', { active: coldFrom === p.cold && warmFrom === p.warm }]"
+              :aria-pressed="coldFrom === p.cold && warmFrom === p.warm"
               @click="applyPreset(p)"
             >
               <span class="preset-name">{{ p.name }}</span>
@@ -48,8 +50,8 @@
             </button>
           </div>
 
-          <h3 class="mt-32">代码</h3>
-          <pre class="code"><code>matrixRain({{ '{' }}
+          <h2 class="mt-32">代码</h2>
+          <pre class="code" tabindex="0" aria-label="当前 matrixRain 调用代码"><code>matrixRain({{ '{' }}
   canvas: ...,
   theme: {{ '{' }} coldFrom: '{{ coldFrom }}', warmFrom: '{{ warmFrom }}' {{ '}' }}
 {{ '}' }});</code></pre>
@@ -168,7 +170,7 @@ function applyPreset(p: { cold: ThemeName; warm: ThemeName }) {
   border-radius: var(--radius);
   padding: 24px;
 }
-.control-panel h3 { font-size: 16px; margin: 0 0 12px; }
+.control-panel h3, .control-panel h2 { font-size: 16px; margin: 0 0 12px; font-weight: 500; }
 .mt-32 { margin-top: 32px !important; }
 .presets { display: flex; flex-direction: column; gap: 8px; }
 .preset {

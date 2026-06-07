@@ -1,6 +1,6 @@
 <template>
   <section class="hero">
-    <canvas ref="canvasRef" class="hero-canvas"></canvas>
+    <canvas ref="canvasRef" class="hero-canvas" aria-hidden="true"></canvas>
     <div class="hero-overlay">
       <div class="container">
         <h1>给做 <em class="grad">UI</em> 的人<br>5 行代码一个<br><em class="grad">会呼吸</em>的背景</h1>
@@ -72,8 +72,11 @@ function regenerate() {
 
 onMounted(() => {
   setTimeout(regenerate, 250);
-  // 每 8s 重新涌现一次
-  setInterval(regenerate, 8000);
+  // 每 8s 重新涌现一次,但用户启用 reduced-motion 时跳过循环(前庭无障碍)
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduce) {
+    setInterval(regenerate, 8000);
+  }
 });
 
 watch(theme, (t) => {

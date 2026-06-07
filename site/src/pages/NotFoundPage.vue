@@ -1,6 +1,6 @@
 <template>
   <div class="not-found">
-    <BackgroundMatrixRain text="404" />
+    <BackgroundMatrixRain text="404" aria-hidden="true" />
 
     <div class="nf-content">
       <div class="nf-badge">

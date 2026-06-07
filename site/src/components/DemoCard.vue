@@ -1,12 +1,12 @@
 <template>
   <router-link :to="to" class="demo-card">
     <div class="demo-card-canvas-wrap">
-      <canvas ref="canvasRef" class="demo-card-canvas"></canvas>
-      <div class="demo-card-shimmer"></div>
+      <canvas ref="canvasRef" class="demo-card-canvas" aria-hidden="true"></canvas>
+      <div class="demo-card-shimmer" aria-hidden="true"></div>
     </div>
     <div class="demo-card-body">
       <span class="demo-card-tag">{{ tag }}</span>
-      <h3>{{ title }}</h3>
+      <h2 class="demo-card-title">{{ title }}</h2>
       <p>{{ subtitle }}</p>
       <span class="demo-card-cta">Try it →</span>
     </div>
@@ -134,9 +134,13 @@ watch(theme, (t) => inst?.setTheme(t));
   color: var(--accent);
   margin-bottom: 4px;
 }
-.demo-card h3 {
+.demo-card h3,
+.demo-card .demo-card-title {
   font-size: 20px;
   margin: 0 0 4px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 .demo-card p {
   color: var(--text-muted);
@@ -149,7 +153,7 @@ watch(theme, (t) => inst?.setTheme(t));
   margin-top: 12px;
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   letter-spacing: 0.04em;
   transition: color 160ms ease;
 }
