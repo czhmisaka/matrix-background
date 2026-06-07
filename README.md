@@ -123,6 +123,87 @@ rain.resume();
 rain.destroy();  // 释放 rAF、事件、DOM
 ```
 
+### 静态工具 · `MatrixRain` 命名空间
+
+页面级批量管理(路由切换、SPA 卸载、HMR 兜底):
+
+```ts
+import { MatrixRain } from '@xietuier/matrix-rain';
+
+// 销毁全部活跃实例
+const n = MatrixRain.destroyAll();
+
+// 只销毁指定容器内的实例
+MatrixRain.destroyAll(document.getElementById('modal'));
+
+// 当前活跃实例数(调试 / 性能监控)
+console.log(MatrixRain.activeCount);
+```
+
+`MatrixRain.destroyAll()` 走 DOM `.matrix-rain-wrapper` 反查,即使丢了实例引用也能兜底停掉 rAF。
+
+---
+
+## 🧬 4 层动态量模型(ABCD)
+
+每一个动态量(亮度 / 闪烁 / 相位 / 字符 / 颜色)都有 **4 种描述方式**,从最简单到最自由:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  D  预设 (Presets)        一键加载 · 8 个内置                   │
+│     │  点击 → 自动填到 A 层文本框                              │
+│     ▼                                                          │
+│  C  控制点 LUT            16 个滑块拖动 · 64 步采样 → 查找表      │
+│     │  拖动 / 调值 → 生成 JS 代码                              │
+│     ▼                                                          │
+│  B  波形组合 (Waves)      3 个 channel × 6 基波 × 4 算符         │
+│     │  sin*0.5 + square*0.3 + noise*0.2                       │
+│     ▼                                                          │
+│  A  沙箱代码 (Sandbox)    自由 JS 表达式 · 黑名单 + 步数限制     │
+│     │  return 0.5 + 0.5 * sin(t * 3)                          │
+│     ▼                                                          │
+│  ─────────────► 引擎逐帧调用 (60Hz · t∈[0,∞))                  │
+└────────────────────────────────────────────────────────────────┘
+```
+
+| 层 | 模块 | 适合 | 例子 |
+|---|---|---|---|
+| **D** 预设 | `curves/presets.ts` | 一键出效果 | `linear` / `easeIn` / `pulse` / `heartbeat` / `chaos` 共 8 个 |
+| **C** LUT | `curves/lut.ts` | 设计师手画 | 拖 16 控制点,自动生成线性采样表 |
+| **B** 波形 | `curves/waves.ts` | 数据驱动 | `[sin*0.5, square*0.3, noise*0.2]` + `combine: sum` |
+| **A** 沙箱 | `curves/sandbox.ts` | 自由表达 | `ease.outBack(t % 1) * noise(t * 4)` |
+
+**4 个动态量共享同一 4 层模型:**
+
+- 亮度曲线 `brightnessCurve` — 头部亮度的时序形状
+- 闪烁曲线 `flickerCurve` — 闪烁概率的时序形状
+- 相位函数 `phaseFunc` — 每个字符相位推进速度
+- 字符函数 `charsetFunc` — 当前字符索引
+- 颜色曲线 `colorCurve` — HSL 色相时序偏移
+
+> **冷暖独立 + 注入点 + 时间旋转** = 颜色这条 4 层模型之外的额外控制(见上文"颜色动态控制"表)。
+
+**5 个沙箱变量 + 9 个沙箱函数**(都可在 A 层自由组合):
+
+| 类别 | 名称 | 类型 | 用途 |
+|---|---|---|---|
+| 上下文 | `t` | `number` | 全局时间(秒) |
+| 上下文 | `phase` | `number` | 当前字符相位(0-1) |
+| 上下文 | `h, s, r, f` | `number` | 行/列/亮度/闪烁 |
+| 上下文 | `W, H, L, ch` | `number` | 网格宽/高/层级/字符索引 |
+| 工具 | `sin / cos / tan` | `fn` | 三角函数 |
+| 工具 | `noise(x)` | `fn` | 哈希确定性噪声(可调种子) |
+| 工具 | `clamp / lerp` | `fn` | 限幅 / 线性插值 |
+| 工具 | `ease.*` | `obj` | 13 种缓动:`inQuad` / `outCubic` / `inOutSine` / `outBack` / `inOutExpo` / `outCirc` … |
+| 常量 | `PI / E` | `number` | 数学常量 |
+
+**安全保证**(防 XSS / 死循环):
+
+- 词级黑名单:`window` / `document` / `eval` / `fetch` / `setTimeout` / `Proxy` / `import` 等 50+ 关键词
+- 白名单全局:`Math` / `Number` / `String` / `Boolean` / `Array` 冻结对象,只暴露安全方法
+- 步数上限 10000 · 字符串上限 5KB · 返回值必须 `string | number`
+- 编译失败静默 fallback,运行期不抛
+
 ---
 
 ## 🎨 主题预览

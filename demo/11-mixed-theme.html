@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a14">
+<title>@xietuier/matrix-rain · Demo 11 · Mixed Theme</title>
+<meta name="description" content="主题混合:coldFrom / warmFrom 自由拼色 + 4 种组合对比。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="../dist/matrix-rain.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100vh; background: #0a0a14; color: #e8e6da; font-family: Inter, system-ui, sans-serif; }
+  body { padding: 32px; }
+  h1 { font-family: "Fraunces", serif; font-style: italic; font-size: 32px; margin: 0 0 8px; }
+  h1 em { background: linear-gradient(95deg, rgb(0,229,255), rgb(255,92,124)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .sub { color: #aaa; font-size: 14px; margin-bottom: 24px; }
+  .crumbs { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .15em; color: rgba(200,196,184,.6); margin-bottom: 12px; text-transform: uppercase; }
+  .crumbs a { color: #00e5ff; text-decoration: none; }
+
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; max-width: 1100px; }
+  .card { padding: 0; border: 1px solid rgba(124,92,255,.25); border-radius: 12px; overflow: hidden; background: rgba(16,16,26,.65); backdrop-filter: blur(6px); position: relative; min-height: 280px; }
+  .card .label { position: absolute; top: 12px; left: 12px; z-index: 10; font-family: "JetBrains Mono", monospace; font-size: 11px; padding: 6px 10px; background: rgba(8,8,18,.85); border: 1px solid rgba(124,92,255,.4); border-radius: 6px; color: #fff; letter-spacing: .05em; }
+  .card .label .from { color: #00e5ff; }
+  .card .label .arrow { color: #888; margin: 0 4px; }
+  .card .label .to { color: #ff5c7c; }
+  .card .desc { position: absolute; bottom: 12px; left: 12px; right: 12px; z-index: 10; font-size: 12px; color: #aaa; padding: 6px 10px; background: rgba(8,8,18,.65); border-radius: 4px; }
+  .card .preview-canvas { position: absolute; inset: 0; }
+
+  .code-block { margin-top: 24px; padding: 16px; background: rgba(0,0,0,.4); border: 1px solid rgba(0,229,255,.2); border-radius: 8px; max-width: 1100px; font-family: "JetBrains Mono", monospace; font-size: 12px; color: #e8e6da; overflow-x: auto; }
+  .code-block .k { color: #00e5ff; }
+  .code-block .s { color: #a3e635; }
+  .code-block .c { color: #888; }
+
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="crumbs"><a href="../">@xietuier/matrix-rain</a> / 11 · Mixed Theme</div>
+<h1>Mixed <em>Theme</em></h1>
+<p class="sub">用 <code>coldFrom</code> / <code>warmFrom</code> 从 5 个 builtin 主题自由拼色 · 2^5 = 25 种组合</p>
+
+<div class="grid" id="grid">
+  <!-- 4 卡片 JS 动态生成 -->
+</div>
+
+<div class="code-block">
+  <span class="c">// 用法 1: 顶层 coldFrom / warmFrom 字段(推荐)</span><br>
+  matrixRain({ <span class="k">coldFrom</span>: <span class="s">'cyber-blue'</span>, <span class="k">warmFrom</span>: <span class="s">'lava-red'</span> });<br>
+  <br>
+  <span class="c">// 用法 2: theme 对象写法</span><br>
+  matrixRain({ <span class="k">theme</span>: { <span class="k">coldFrom</span>: <span class="s">'matrix-green'</span>, <span class="k">warmFrom</span>: <span class="s">'silicon-valley'</span> } });<br>
+  <br>
+  <span class="c">// 拼色后,setTheme('matrix-green') 会切回纯色,丢拼色信息</span>
+</div>
+
+<script type="module">
+import { matrixRain, themes } from '../dist/index.js?v=11';
+
+const combinations = [
+  { cold: 'cyber-blue',  warm: 'lava-red',     desc: '赛博冷蓝 × 熔岩红橙' },
+  { cold: 'matrix-green', warm: 'lava-red',    desc: '黑客绿 × 熔岩红橙' },
+  { cold: 'cyber-blue',  warm: 'silicon-valley', desc: '赛博冷蓝 × 硅谷青蓝(温)' },
+  { cold: 'pure-mono',   warm: 'lava-red',     desc: '冷灰 × 熔岩(戏剧性反差)' }
+];
+
+const grid = document.getElementById('grid');
+const allInstances = [];
+
+combinations.forEach((c) => {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="label">
+      <span class="from">${c.cold}</span><span class="arrow">→</span><span class="to">${c.warm}</span>
+    </div>
+    <div class="preview-canvas" data-cold="${c.cold}" data-warm="${c.warm}"></div>
+    <div class="desc">${c.desc}</div>
+  `;
+  grid.appendChild(card);
+  const container = card.querySelector('.preview-canvas');
+  const rain = matrixRain({
+    coldFrom: c.cold,
+    warmFrom: c.warm,
+    fontSize: 12,
+    container
+  });
+  allInstances.push(rain);
+});
+
+// 暴露给 console 调试 + 主题切换演示
+window.__rains = allInstances;
+window.__themes = themes;
+console.log('[11-mixed-theme] 4 个混合主题实例已启动');
+console.log('主题列表:', Object.keys(themes));
+console.log('window.__rains[0].getOptions() 查看当前实例配置');
+</script>
+</body>
+</html>
