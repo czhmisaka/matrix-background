@@ -1244,7 +1244,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       if (ro) ro.disconnect();
       canvas.removeEventListener('click', onCanvasClick);
       if (wrapper) wrapper.remove();
-      else canvas.remove();
+      // 用户传入的 canvas 不删 —— 只解除事件监听(上面已经做了);
+      // 误删会导致消费者(Vue/React 等)重建实例时丢失原 canvas 节点。
       // 调试钩:从活跃集合移除
       if (typeof window !== 'undefined') __debugInstances.delete(instance as DebugInstance);
     },
