@@ -2,25 +2,99 @@
  * @xietuier/matrix-rain · 用户函数沙箱
  *
  * 安全运行用户输入的 JS 表达式,防止 XSS 和死循环。
- * 4 个驱动量(brightnessCurve / flickerCurve / phaseFunc / charsetFunc)都用这个评估。
+ * 5 个驱动量(brightnessCurve / flickerCurve / phaseFunc / charsetFunc / colorCurve)都用这个评估。
  *
- * 风险控制:
- *   1. 黑名单: window / document / globalThis / self / eval / Function / import / require / fetch
- *   2. 步数限制: 10000 步内必须返回(用 Proxy 计数)
- *   3. 字符串大小: 最大 5KB
- *   4. 超时: 用 PerformanceObserver 不可行,改用步数限制
- *   5. try/catch 容错,失败时返回 fallback
+ * v0.2.0 加固:
+ *   1. 词级黑名单(用 \b 边界匹配,避免 'allocation' 误中 'location')
+ *   2. 白名单安全全局:Math/Number/String/Boolean/Array 经冻结对象只暴露白名单方法
+ *   3. 禁用 this / arguments / new Function(编译期 + 词级检测)
+ *   4. 步数限制 10000 步
+ *   5. 字符串大小 5KB
+ *   6. 类型守卫:返回必须 string|number,否则 throw
+ *   7. 'use strict': 隐式 undefined this,阻止 with 等
  */
 
 const MAX_STEPS = 10000;
 const MAX_STR = 5 * 1024;
+
+/** 词级黑名单 —— 用 \b 边界匹配,避免子串误中 */
 const BLACKLIST = [
+  // 全局对象 / DOM
   'window', 'document', 'globalThis', 'self', 'top', 'parent', 'frames',
-  'eval', 'Function', 'import', 'require', 'fetch', 'XMLHttpRequest',
-  'WebSocket', 'localStorage', 'sessionStorage', 'indexedDB',
-  'navigator', 'location', 'history', 'postMessage', 'onmessage'
+  'navigator', 'location', 'history', 'postMessage', 'onmessage',
+  // 存储
+  'localStorage', 'sessionStorage', 'indexedDB',
+  // 动态执行 / 加载
+  'eval', 'Function', 'import', 'require',
+  // 网络
+  'fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'WebRTC',
+  // 定时器(可被串成 setTimeout(1, ...))
+  'setTimeout', 'setInterval', 'setImmediate', 'queueMicrotask',
+  'requestAnimationFrame', 'requestIdleCallback',
+  // 进程 / Worker
+  'process', 'Worker', 'SharedWorker', 'ServiceWorker',
+  // 元编程(可绕过 Proxy/边界)
+  'Proxy', 'Reflect', 'Symbol', 'Promise',
+  // 标准库(可建 String/Array/Object 间接逃逸)
+  'Object', 'JSON', 'Date', 'RegExp', 'Error', 'TypeError', 'RangeError',
+  'Map', 'Set', 'WeakMap', 'WeakSet', 'ArrayBuffer', 'DataView',
+  'Uint8Array', 'Int8Array', 'Uint16Array', 'Int16Array',
+  'Uint32Array', 'Int32Array', 'Float32Array', 'Float64Array',
+  'BigInt64Array', 'BigUint64Array',
+  // console(可泄露)
+  'console', 'alert', 'confirm', 'prompt',
+  // 关键字 / this / arguments
+  'this', 'arguments', 'with', 'debugger'
 ];
 
+/** 词级黑名单(运行时检测) */
+const RUNTIME_BLOCKS = ['this', 'arguments', 'Function', 'eval', 'import', 'require'];
+
+/** 词级正则: 匹配整词 */
+const wordRegex = (w: string): RegExp => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+
+/** 安全 Math: 白名单静态方法 + 常量(冻结对象) */
+const SAFE_MATH = Object.freeze({
+  // 三角
+  sin: Math.sin, cos: Math.cos, tan: Math.tan,
+  asin: Math.asin, acos: Math.acos, atan: Math.atan, atan2: Math.atan2,
+  sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh,
+  // 幂 / 对数 / 根
+  pow: Math.pow, sqrt: Math.sqrt, cbrt: Math.cbrt, hypot: Math.hypot,
+  exp: Math.exp, log: Math.log, log2: Math.log2, log10: Math.log10,
+  // 取整 / 取值
+  abs: Math.abs, sign: Math.sign, floor: Math.floor, ceil: Math.ceil,
+  round: Math.round, trunc: Math.trunc, min: Math.min, max: Math.max,
+  // 随机
+  random: Math.random,
+  // 常量
+  PI: Math.PI, E: Math.E
+} as const);
+
+/** 安全 Number 静态 */
+const SAFE_NUMBER = Object.freeze({
+  isFinite: Number.isFinite, isNaN: Number.isNaN, isInteger: Number.isInteger,
+  isSafeInteger: Number.isSafeInteger, parseFloat: Number.parseFloat, parseInt: Number.parseInt,
+  MAX_SAFE_INTEGER: Number.MAX_SAFE_INTEGER, MIN_SAFE_INTEGER: Number.MIN_SAFE_INTEGER,
+  MAX_VALUE: Number.MAX_VALUE, MIN_VALUE: Number.MIN_VALUE,
+  EPSILON: Number.EPSILON
+} as const);
+
+/** 安全 String 静态 */
+const SAFE_STRING = Object.freeze({
+  fromCharCode: String.fromCharCode, fromCodePoint: String.fromCodePoint,
+  raw: String.raw
+} as const);
+
+/** 安全 Boolean 静态(实际只有构造函数) */
+const SAFE_BOOLEAN = Object.freeze({} as const);
+
+/** 安全 Array 静态 */
+const SAFE_ARRAY = Object.freeze({
+  isArray: Array.isArray, from: Array.from, of: Array.of
+} as const);
+
+/** 沙箱内上下文:user 可见的字段 */
 export interface SandboxContext {
   /** 当前时间(秒, 高精度) */
   t: number;
@@ -78,9 +152,20 @@ export interface SandboxContext {
     outBack: (t: number) => number;
     inOutBack: (t: number) => number;
   };
+  /** 安全 Math 白名单(只读) */
+  Math: typeof SAFE_MATH;
+  /** 安全 Number 白名单(只读) */
+  Number: typeof SAFE_NUMBER;
+  /** 安全 String 白名单(只读) */
+  String: typeof SAFE_STRING;
+  /** 安全 Boolean 白名单(只读) */
+  Boolean: typeof SAFE_BOOLEAN;
+  /** 安全 Array 白名单(只读) */
+  Array: typeof SAFE_ARRAY;
 }
 
-const ease = {
+/** 缓动函数(模块级导出,SSR 友好) */
+export const ease = {
   inQuad: (t: number) => t * t,
   outQuad: (t: number) => t * (2 - t),
   inOutQuad: (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t),
@@ -125,23 +210,55 @@ const noise = (x: number): number => {
   return s - Math.floor(s);
 };
 
+/** 词级安全检查: 命中黑名单则返回首个命中词 */
+const checkBlacklist = (code: string): string | null => {
+  for (const bad of BLACKLIST) {
+    const re = wordRegex(bad);
+    if (re.test(code)) return bad;
+  }
+  return null;
+};
+
+/** 运行时黑名单检测(this/arguments/Function/eval/import/require) */
+const checkRuntime = (code: string): string | null => {
+  for (const bad of RUNTIME_BLOCKS) {
+    const re = wordRegex(bad);
+    if (re.test(code)) return bad;
+  }
+  return null;
+};
+
 /** 安全编译 + 评估。code 是表达式体,fn(ctx) → number|string */
 export const compileUserFunction = (code: string): ((ctx: SandboxContext) => number | string) => {
   if (typeof code !== 'string') return () => 0;
-  if (code.length > MAX_STR) return () => 0;
-  // 黑名单
-  for (const bad of BLACKLIST) {
-    if (code.includes(bad)) {
-      throw new Error(`禁用词: ${bad}`);
-    }
+  if (code.length > MAX_STR) {
+    console.warn(`[matrix-rain] sandbox: code too long (${code.length} > ${MAX_STR})`);
+    return () => 0;
   }
-  // 编译为 fn
+  // 词级黑名单
+  const bad = checkBlacklist(code);
+  if (bad) throw new Error(`沙箱禁用词: ${bad}`);
+  // 运行时硬禁
+  const runtimeBad = checkRuntime(code);
+  if (runtimeBad) throw new Error(`沙箱禁用词: ${runtimeBad}`);
+
+  // 编译为 fn(加 'use strict' 强制 this=undefined)
   let fn: Function;
   try {
     fn = new Function(
       't', 'phase', 'h', 's', 'r', 'f', 'W', 'H', 'L', 'ch',
       'sin', 'cos', 'tan', 'noise', 'PI', 'E', 'clamp', 'lerp', 'ease',
-      `return (function() {\nlet __steps = 0;\nconst __check = () => { if (++__steps > ${MAX_STEPS}) throw new Error('exceeded 10000 steps'); };\n${code}\n})();`
+      'Math', 'Number', 'String', 'Boolean', 'Array',
+      `'use strict';
+let __ret = (function() {
+  let __steps = 0;
+  const __check = () => { if (++__steps > ${MAX_STEPS}) throw new Error('exceeded ${MAX_STEPS} steps'); };
+  ${code}
+})();
+if (typeof __ret !== 'number' && typeof __ret !== 'string') {
+  throw new Error('userFunc must return number or string, got ' + typeof __ret);
+}
+return __ret;`
     );
   } catch (e: any) {
     throw new Error(`编译错误: ${e.message}`);
@@ -154,7 +271,8 @@ export const compileUserFunction = (code: string): ((ctx: SandboxContext) => num
         Math.PI, Math.E,
         (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v)),
         (a: number, b: number, t: number) => a + (b - a) * t,
-        ease
+        ease,
+        SAFE_MATH, SAFE_NUMBER, SAFE_STRING, SAFE_BOOLEAN, SAFE_ARRAY
       );
     } catch (e) {
       return 0;
@@ -166,17 +284,28 @@ export const compileUserFunction = (code: string): ((ctx: SandboxContext) => num
 export const validateUserFunction = (code: string): { ok: boolean; error?: string } => {
   if (typeof code !== 'string') return { ok: false, error: 'not a string' };
   if (code.length > MAX_STR) return { ok: false, error: `> 5KB (${code.length})` };
-  for (const bad of BLACKLIST) {
-    if (code.includes(bad)) return { ok: false, error: `禁用: ${bad}` };
-  }
+  const bad = checkBlacklist(code);
+  if (bad) return { ok: false, error: `禁用: ${bad}` };
+  const runtimeBad = checkRuntime(code);
+  if (runtimeBad) return { ok: false, error: `禁用: ${runtimeBad}` };
   try {
     new Function(
       't', 'phase', 'h', 's', 'r', 'f', 'W', 'H', 'L', 'ch',
       'sin', 'cos', 'tan', 'noise', 'PI', 'E', 'clamp', 'lerp', 'ease',
-      code
+      'Math', 'Number', 'String', 'Boolean', 'Array',
+      `'use strict';\n${code}`
     );
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e.message };
   }
 };
+
+/** 暴露安全全局白名单(测试/外部引用) */
+export const SAFE_GLOBALS = {
+  Math: SAFE_MATH,
+  Number: SAFE_NUMBER,
+  String: SAFE_STRING,
+  Boolean: SAFE_BOOLEAN,
+  Array: SAFE_ARRAY
+} as const;

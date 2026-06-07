@@ -17,31 +17,30 @@
  *
  *   // 查活跃实例数(调试用):
  *   console.log(MatrixRain.activeCount);
+ *
+ * SSR 友好:
+ *   import { themes, textToBitmap, PRESETS } from '@xietuier/matrix-rain/core';
+ *   // 无 DOM 依赖,可在 Node / Edge / Worker 中安全 import
  */
 
-import { matrixRain as _matrixRain } from './engine';
-import type { MatrixRainInstance, MatrixRainOptions } from '../types';
-export { matrixRain } from './engine';
-export { themes } from './themes';
-export { VARIANT_DEFAULTS } from './variant-defaults';
+// ==================== 非 DOM 部分(SSR 友好)====================
+export * from './core';
+
+// ==================== DOM 部分 ====================
+export { matrixRain as matrixRainInternal } from './engine';
+import { matrixRain } from './engine';
+export { matrixRain };
 export { textToBitmap, imageToBitmap, fileToImage } from './bitmap';
-export { PRESETS } from './curves/presets';
-export { WAVE_TYPES, COMBINE_MODES, channelsToCode, evalWave, evalChannels } from './curves/waves';
-export { LUT_RESOLUTION, CONTROL_POINTS, buildLUT, sampleLUT, controlPointsToCode, DEFAULT_CONTROL_POINTS } from './curves/lut';
-export { compileUserFunction, validateUserFunction } from './curves/sandbox';
-export type { Preset, WaveType, CombineMode, WaveChannel, SandboxContext } from './curves/presets';
 export type { BitmapSource } from './bitmap';
-export type {
-  MatrixRainOptions,
-  MatrixRainInstance,
-  Palette,
-  RGBA,
-  ThemeName,
-  VariantName,
-  ThemeFactory,
-  ThemeParams,
-  VariantParams
-} from '../types';
+
+// ==================== Web Component ====================
+// 用法: import { MatrixRainElement } from '@xietuier/matrix-rain';
+// 然后 <matrix-rain theme="cyber-blue"></matrix-rain> 自动注册 + 启动
+// 子路径入口: '@xietuier/matrix-rain/element' 也可拿到
+export { MatrixRainElement } from './matrix-rain-element';
+export { mountFpsOverlay, type FpsOverlayHandle } from './fps-overlay';
+
+import type { MatrixRainInstance } from '../types';
 
 /**
  * 全局命名空间 · 静态工具方法
@@ -80,5 +79,5 @@ export const MatrixRain = {
   }
 };
 
-import { matrixRain } from './engine';
+// ==================== 默认导出 ====================
 export default matrixRain;

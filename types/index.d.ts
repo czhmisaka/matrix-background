@@ -83,6 +83,64 @@ export interface ThemeResult extends ThemeParams {
   warm: HSLPalette;
 }
 
+/** 颜色注入支持函数式:基于 brightness level + 网格坐标生成颜色 */
+export type ColorOverrideFn = (
+  /** brightness level 0-9 */
+  level: number,
+  /** 网格列 */
+  h: number,
+  /** 网格行 */
+  s: number,
+  /** 单元格引用(c.ch / c.warmth / c.bright) */
+  cell: { ch: number; warmth: number; bright: number; phase: number }
+) => [number, number, number] | null | undefined;
+
+/** 颜色注入:对象或函数 */
+export type ColorOverrides =
+  | Partial<Record<0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9, [number, number, number]>>
+  | ColorOverrideFn;
+
+/** 点击爆闪配置 */
+export interface ClickBurstOptions {
+  /** 爆闪半径(网格单位,默认 6) */
+  radius?: number;
+  /** 爆闪强度(0-1,默认 0.8) */
+  intensity?: number;
+  /** 自定义颜色(默认继承当前主题暖色) */
+  color?: [number, number, number];
+  /** 单次爆闪持续时间(秒,默认 0.6) */
+  duration?: number;
+  /** 是否自动衰减(默认 true) */
+  decay?: boolean;
+}
+
+/** 鼠标光标配置 */
+export type CursorOption = 'none' | 'crosshair' | 'pointer' | 'default' | false;
+
+/** 帧事件信息 */
+export interface FrameInfo {
+  /** 帧号(自启动) */
+  f: number;
+  /** 累计墙钟时间(秒) */
+  t: number;
+  /** 上一帧 dt(秒) */
+  dt: number;
+  /** 当前 FPS(平滑) */
+  fps: number;
+}
+
+/** 尺寸事件信息 */
+export interface SizeInfo {
+  /** viewport 宽(像素) */
+  w: number;
+  /** viewport 高(像素) */
+  h: number;
+  /** 网格列数 */
+  cols: number;
+  /** 网格行数 */
+  rows: number;
+}
+
 /** 用户可调的完整配置 */
 export interface MatrixRainOptions {
   /** 字符网格宽度(像素),默认 14。越大越疏 */
@@ -102,6 +160,22 @@ export interface MatrixRainOptions {
 
   /** 暖色板(温度感侧),10 档 */
   warmPalette?: Palette;
+
+  /**
+   * 主题预设(从 builtin 主题模板构造)
+   * - 传 ThemeName:走标准主题
+   * - 传 { coldFrom, warmFrom }:从两个主题"拼色"(冷色板来自 coldFrom,暖色板来自 warmFrom)
+   */
+  theme?: ThemeName | { coldFrom: ThemeName; warmFrom: ThemeName };
+
+  /**
+   * 冷色板直接复用 builtin 主题(无须自己手填 HSL)
+   * 例: matrixRain({ coldFrom: 'cyber-blue' })
+   * 等价于 matrixRain({ theme: { coldFrom: 'cyber-blue', warmFrom: 'silicon-valley' } })
+   */
+  coldFrom?: ThemeName;
+  /** 暖色板直接复用 builtin 主题 */
+  warmFrom?: ThemeName;
 
   /** 温度光心位置 0-1,默认 { x: 0.7, y: 0.3 } */
   lightCenter?: { x: number; y: number };
@@ -129,11 +203,23 @@ export interface MatrixRainOptions {
    */
   targetFPS?: number;
 
+  /**
+   * 固定时间步长模式,默认 false。
+   * true = 每帧 dt 强制 1/60(确定性,适合 SSR/headless 测试);
+   * false(默认)= 用 rAF 时间戳算真实 dt(帧率自适应)。
+   * 注:此选项在测试、benchmark 或需要严格 60fps 模拟时开启。
+   */
+  fixedTimeStep?: boolean;
+
+  /**
+   * 忽略系统 prefers-reduced-motion,强制开启动画,默认 false。
+   * 默认行为:用户系统开启"减少动画"时,实例自动 pause(可访问性 + 省电)。
+   * 传 true 则忽略系统设置,继续动画(用户内容偏好优先)。
+   */
+  enableWhenReducedMotion?: boolean;
+
   /** 爆闪到最亮档的概率,默认 0.003 */
   sparkProbability?: number;
-
-  /** 主题预设，传这个会覆盖 coldPalette + warmPalette */
-  theme?: ThemeName;
 
   /** 主题参数覆盖(覆盖主题自带) */
   themeParams?: Partial<ThemeParams>;
@@ -148,8 +234,13 @@ export interface MatrixRainOptions {
   /** 时间驱动色相旋转范围(度, 默认 360) */
   hueRotateAmount?: number;
 
-  /** 颜色注入: { brightnessLevel: [r, g, b] } 覆盖特定亮度档颜色 */
-  colorOverrides?: Record<number, [number, number, number]>;
+  /**
+   * 颜色注入:
+   * - Record<0-9, [r,g,b]>:覆盖特定亮度档
+   * - (level, h, s, cell) => [r,g,b]:函数式,基于位置/字符/温度动态生成
+   *   返回 null 跳过该 cell(走默认 LUT)
+   */
+  colorOverrides?: ColorOverrides;
 
   /** 变体调参(覆盖变体默认) */
   variantParams?: Partial<VariantParams>;
@@ -211,10 +302,36 @@ export interface MatrixRainOptions {
 
   /** 启动后回调 */
   onReady?: (instance: MatrixRainInstance) => void;
+
+  /** 帧事件(30Hz 节流) */
+  onFrame?: (info: FrameInfo) => void;
+  /** resize 事件(200ms debounce) */
+  onResize?: (size: SizeInfo) => void;
+  /** 主题切换事件 */
+  onThemeChange?: (newTheme: ThemeName) => void;
+  /** 目标位图淑出完成事件 */
+  onTargetFinish?: () => void;
+
+  /** 点击爆闪:点击 canvas 触发指定半径的临时高亮 */
+  clickBurst?: boolean | ClickBurstOptions;
+  /** 鼠标光标配置 */
+  cursor?: CursorOption;
 }
 
 /** 主题预设工厂(用户也可以在外部 import 复用) */
 export type ThemeFactory = () => ThemeResult;
+
+/** 实例序列化快照(SSR hydration / 保存恢复用) */
+export interface MatrixRainSnapshot {
+  /** 协议版本 */
+  v: 1;
+  /** 完整配置 */
+  options: MatrixRainOptions;
+  /** 当前主题(若是拼色主题,记录源) */
+  theme: ThemeName;
+  /** 拼色主题源(若适用) */
+  mixedFrom?: { coldFrom: ThemeName; warmFrom: ThemeName };
+}
 
 /** 实例句柄 */
 export interface MatrixRainInstance {
@@ -227,8 +344,12 @@ export interface MatrixRainInstance {
   /** 恢复动画 */
   resume(): void;
 
-  /** 动态更新主题 */
-  setTheme(name: ThemeName): void;
+  /**
+   * 动态更新主题
+   * @param name 主题名(从 ThemeName 枚举)
+   * @param options.keepPaletteParams 传 true 时保留 ctp/wtp 自定义;默认 false 重置为新主题的 tp
+   */
+  setTheme(name: ThemeName, options?: { keepPaletteParams?: boolean }): void;
 
   /** 动态更新色板(高级) */
   setPalettes(cold: Palette, warm: Palette): void;
@@ -255,7 +376,7 @@ export interface MatrixRainInstance {
   setHueRotate(speed: number, amount?: number): void;
 
   /** 热更新颜色注入(传 null 清除) */
-  setColorOverrides(overrides: Record<number, [number, number, number]> | null): void;
+  setColorOverrides(overrides: ColorOverrides | null): void;
 
   /** 动态调变体参数(phase/sin 振幅/avalanche 速度等) */
   setVariantParams(params: Partial<VariantParams>): void;
@@ -279,6 +400,38 @@ export interface MatrixRainInstance {
 
   /** 读取当前 fps */
   getFPS(): number;
+
+  /** 读取当前生效配置快照(主题 + 变体 + 全部参数) */
+  getOptions(): MatrixRainOptions;
+
+  /** 导出 JSON 字符串(用于 SSR hydration / 持久化) */
+  serialize(): string;
+
+  /** 读取最近一次 userFunc 编译错误 */
+  getDiagnostics(): {
+    brightnessCurve?: string;
+    flickerCurve?: string;
+    phaseFunc?: string;
+    charsetFunc?: string;
+    colorCurve?: string;
+  };
+
+  /** 读取 clickBurst 当前状态(测试用) */
+  getClickBurstState?(): { active: boolean; x: number; y: number; t: number };
+}
+
+/** 环境检测结果 */
+export interface EnvironmentInfo {
+  /** 是否移动端 */
+  isMobile: boolean;
+  /** 偏好暗色模式 */
+  isDarkMode: boolean;
+  /** 推荐字号(移动端 16) */
+  recommendedFontSize: number;
+  /** 推荐 targetFPS(移动端 30) */
+  recommendedTargetFPS: number;
+  /** 推荐 brightness 乘数(暗色模式 1.1) */
+  recommendedBrightness: number;
 }
 
 /** 默认主题导出 */
@@ -287,3 +440,15 @@ export const themes: Record<ThemeName, ThemeFactory>;
 /** 主导出 */
 export default function matrixRain(options?: MatrixRainOptions): MatrixRainInstance;
 export { matrixRain };
+
+/** 命名空间:静态工具 */
+export const MatrixRain: {
+  /** 销毁所有活跃实例 */
+  destroyAll(container?: HTMLElement): number;
+  /** 当前活跃实例数 */
+  readonly activeCount: number;
+  /** 从 snapshot 还原一个实例(SSR hydration) */
+  fromSnapshot(json: string | MatrixRainSnapshot, options?: { canvas?: HTMLCanvasElement; container?: HTMLElement }): MatrixRainInstance;
+  /** 环境检测 */
+  detect(): EnvironmentInfo;
+};

@@ -29,6 +29,8 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "unpkg": "./dist/index.umd.js",
+  "jsdelivr": "./dist/index.umd.js",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -40,7 +42,20 @@
       "types": "./dist/themes.d.ts",
       "import": "./dist/themes.js",
       "require": "./dist/themes.cjs"
-    }
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js",
+      "require": "./dist/core.cjs"
+    },
+    "./element": {
+      "types": "./dist/element.d.ts",
+      "import": "./dist/element.js",
+      "require": "./dist/element.cjs"
+    },
+    "./script": "./dist/index.iife.js",
+    "./iife": "./dist/index.iife.js",
+    "./umd": "./dist/index.umd.js"
   },
   "files": [
     "dist",
@@ -54,7 +69,14 @@
     "build": "tsup && cp src/matrix-rain.css dist/matrix-rain.css",
     "dev": "tsup --watch",
     "type-check": "tsc --noEmit",
-    "test": "node test/smoke.mjs",
+    "test": "node test/smoke.mjs && node test/leak.mjs && node test/frame-rate.mjs && node test/events.mjs && node test/sandbox.mjs",
+    "test:smoke": "node test/smoke.mjs",
+    "test:leak": "node test/leak.mjs",
+    "test:frame-rate": "node test/frame-rate.mjs",
+    "test:events": "node test/events.mjs",
+    "test:sandbox": "node test/sandbox.mjs",
+    "test:esm": "node test/esm-load.mjs",
+    "test:usability": "node test/usability.mjs",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {

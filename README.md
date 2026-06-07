@@ -197,6 +197,49 @@ watch(() => props.theme, t => instance.value?.setTheme(t));
 </html>
 ```
 
+### 纯 HTML · IIFE(无需构建,直接 `<script src>`)
+
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain@0.1.0/dist/matrix-rain.css">
+</head>
+<body>
+  <main>你的内容</main>
+  <script src="https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain@0.1.0/dist/index.iife.js"></script>
+  <script>
+    // window.MatrixRain 全局变量:{ matrixRain, themes, MatrixRain, ... }
+    window.MatrixRain.matrixRain({ theme: 'cyber-blue' });
+  </script>
+</body>
+</html>
+```
+
+### Web Component(`<matrix-rain>`)
+
+零 JS,直接 HTML 标签:
+
+```html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain@0.1.0/dist/matrix-rain.css">
+<script type="module" src="https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain@0.1.0/dist/element.js"></script>
+
+<matrix-rain theme="cyber-blue" font-size="18" charset="01"></matrix-rain>
+<matrix-rain theme="matrix-green" variant="avalanche"></matrix-rain>
+<matrix-rain theme="lava-red" variant="ripple"></matrix-rain>
+```
+
+观察属性:`theme` / `variant` / `font-size` / `charset` 改了即热更新。
+编程 API:
+
+```js
+const el = document.querySelector('matrix-rain');
+el.setAttribute('theme', 'matrix-green');  // 热更新
+el.fps;                                    // 当前 FPS
+el.instance;                               // 原生 MatrixRainInstance
+el.destroy();                              // 销毁
+```
+
 ### Next.js(App Router)
 
 ```tsx
@@ -292,10 +335,15 @@ export default function MatrixBg() {
 | 字段 | 类型 | 默认 | 说明 |
 |---|---|---|---|
 | `targetBitmap` | `Float32Array` | `null` | 目标位图(文字/图片转换的灰度 0-1,长度 r×i) |
-| `targetFadeIn` | `number` | `0.5` | 淑入时长(秒) |
+| `targetFadeIn` | `number` | `0.5` | 渐入时长(秒) |
 | `targetHold` | `number` | `3.0` | 保持时长(秒)· `Infinity`=永久 |
-| `targetFadeOut` | `number` | `2.0` | 淑出时长(秒) |
-| `targetChaos` | `number 0-1` | `0.5` | 淑入淑出时字符混乱度 |
+| `targetFadeOut` | `number` | `2.0` | 渐出时长(秒) |
+| `targetChaos` | `number 0-1` | `0.5` | 渐入渐出时字符混乱度 |
+| `targetCols` | `number` | `0` (= grid cols) | 位图宽(列数)· 纯 `Float32Array` 时需传;`BitmapSource` 对象从 `.cols` 自动取 |
+| `targetRows` | `number` | `0` (= grid rows) | 位图高(行数)· 同上 |
+| `targetAnchor` | `Anchor` | `'center'` | `'topLeft'` / `'center'` / `'topRight'` / `'bottomLeft'` / `'bottomRight'` |
+| `targetMotion` | `Motion` | `'static'` | `'static'` / `'drift'`(横向漂) / `'bounce'`(反弹) / `'float'`(浮动) |
+| `targetMotionSpeed` | `number` | `0.3` | 运动速度(网格/秒) |
 
 **容器 / 回调**
 
@@ -385,6 +433,76 @@ rain.clearTargetBitmap();
 | 4K 屏 | `maxDPR: 1`(默认已限 2) |
 | 隐藏时省电 | `document.addEventListener('visibilitychange', () => document.hidden ? rain.pause() : rain.resume())` |
 | 无障碍 | CSS 已内置 `prefers-reduced-motion` 处理 |
+
+---
+
+## 🌐 CDN
+
+零构建、零依赖,在任何静态页面里直接用。锁定版本号以防破坏性升级。
+
+### jsDelivr
+
+```html
+<!-- 1. 样式 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain@0.1.0/dist/matrix-rain.css">
+
+<!-- 2a. ES Module(推荐,支持 tree-shake) -->
+<script type="module">
+  import { matrixRain } from 'https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain@0.1.0/dist/index.js';
+  matrixRain({ theme: 'silicon-valley' });
+</script>
+
+<!-- 2b. IIFE(全局 window.MatrixRain,免 import) -->
+<script src="https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain@0.1.0/dist/index.iife.js"></script>
+<script>window.MatrixRain.matrixRain({ theme: 'cyber-blue' });</script>
+
+<!-- 2c. Web Component(<matrix-rain> 标签) -->
+<script type="module" src="https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain@0.1.0/dist/element.js"></script>
+<matrix-rain theme="matrix-green" variant="avalanche"></matrix-rain>
+```
+
+### unpkg
+
+把 `cdn.jsdelivr.net` 换成 `unpkg.com` 即可:
+
+```html
+<link rel="stylesheet" href="https://unpkg.com/@xietuier/matrix-rain@0.1.0/dist/matrix-rain.css">
+<script type="module">
+  import { matrixRain } from 'https://unpkg.com/@xietuier/matrix-rain@0.1.0/dist/index.js';
+</script>
+```
+
+### 子路径导入(SSR 友好)
+
+```js
+// 浏览器主包
+import { matrixRain } from '@xietuier/matrix-rain';
+// 浏览器:Web Component 标签
+import '@xietuier/matrix-rain/element';
+// 浏览器:独立 FPS 角标 overlay
+import { mountFpsOverlay } from '@xietuier/matrix-rain/fps-overlay';
+// 服务端:无 DOM 依赖,可在 Node/Edge/Worker 跑
+import { themes, textToBitmap, PRESETS, compileUserFunction } from '@xietuier/matrix-rain/core';
+```
+
+---
+
+## 🐛 DevTools 调试
+
+```js
+// 浏览器控制台:
+// 全局调试对象
+window.__matrixRainDebug.instances  // → [{id, theme, variant, fps}, ...]
+window.__matrixRainDebug.count      // → 当前实例数
+window.__matrixRainDebug.avgFps     // → 平均 FPS
+window.__matrixRainDebug.destroyAll() // 销毁全部
+```
+
+GUI 面板见 `demo/99-debug.html`,启动即看到:
+
+- 活跃实例 / 聚合 FPS / 创建/销毁计数 / DOM wrapper 数
+- 每实例的 ID / 主题 / 变体 / 实时 FPS
+- 一键新增/销毁
 
 ---
 
