@@ -1,0 +1,606 @@
+# @xietuier/matrix-rain · 路由 / 跳转 / 链接 / 交互 全面审查
+
+- 审查日期:**2026-06-07**
+- 审查范围:`demo/` 全部 11 个文件(9 个官方 demo + `cdn.html` + `personal/` 子目录)+ `index.html` 主页 + `README.md`
+- 部署现状:nginx :8080,`/` → 项目根,`/demo/` 与 `/dist/` 都可访问,`try_files $uri $uri/ /demo/00-index.html`(死链会被静默甩回 00-index)
+- 审查维度:**6 维度**(路由命名 / 跳转链接 / 交互 / 资源 / 可达性 / 偏好一致性)
+- 输出:可执行 P0/P1/P2 finding + 修复 checklist
+
+---
+
+## 总览
+
+| 维度 | 评分 (1-5) | 主要风险 |
+|---|---|---|
+| 1. 路由命名 & 顺序 | ★★★★☆ (4) | 序号断档 (缺 01-06, 跳过 13-98),`10-element` 与 `10-events` 同号不同名 |
+| 2. 跳转链接审计 | ★★☆☆☆ (2) | **`?tab=api` 死链** + `cdn.html` 无任何入口 + 多个 demo 缺"返回总览" |
+| 3. 交互组件 | ★★★☆☆ (3) | **`textToBitmap` API 用错 (P0)** + `themes` 未导入 (P0) + `setInterval` 永驻 bug + 死代码 `let phase` |
+| 4. 资源加载 & 路径 | ★★★★☆ (4) | 字体 Google Fonts CDN(违背"完全本地部署"偏好),`v=3` 缓存版本号不一致 |
+| 5. 可达性 & 错误处理 | ★★★☆☆ (3) | 11 个 demo 仅 1 个用了 `aria-label`,4 个 demo 无"重置"按钮 |
+| 6. 与用户偏好的一致性 | ★★★☆☆ (3) | 主页 + 4 个 demo 引外部 Google Fonts,违反项目偏好 |
+
+**整体评分:3.1 / 5**
+
+### 风险分布
+
+- **P0(必须修,影响功能)**: 3 个
+- **P1(影响体验,应修)**: 7 个
+- **P2(优化项)**: 5 个
+
+---
+
+## 维度 1:路由命名 & 顺序合理性
+
+### 1.1 命名现状
+
+| 文件 | 序号 | 实际角色 | 排序位置 |
+|---|---|---|---|
+| `00-index.html` | 00 | 总览/Hub | ✓ 最前 |
+| `07-tutorial.html` | 07 | 12 tab 单页教程(产品入口) | ✓ 第 1 |
+| `08-ai-tune.html` | 08 | AI 调参 Playground | ✓ 第 2 |
+| `09-blog.html` | 09 | 开发日志 | ✓ 第 3 |
+| `10-element.html` | **10** | Web Component 多实例 demo | **冲突** |
+| `10-events.html` | **10** | 4 个事件回调 demo | **冲突** |
+| `11-mixed-theme.html` | 11 | 主题拼色 | ✓ |
+| `12-noise-converge.html` | 12 | 噪声→收敛涌现 | ✓ |
+| `99-debug.html` | 99 | Debug 面板 | ✓ 最后 |
+| `cdn.html` | 无序号 | CDN 用法示例 | 排序无定义 |
+| `personal/04-landing.html` | 04 | 蟹腿儿个人页(子目录) | ⚠ 与 `02-themes` 序号重叠 |
+| `personal/05-blog.html` | 05 | 蟹腿儿个人博客(子目录) | ⚠ 与 `03-variants` 序号重叠 |
+| `_archive/01-basic.html` | 01 | 归档(最简 demo) | ⚠ 被 00-index 跳过 |
+| `_archive/02-themes.html` | 02 | 归档(5 主题对比) | ⚠ |
+| `_archive/03-variants.html` | 03 | 归档(4 变体对比) | ⚠ |
+| `_archive/06-playground.html` | 06 | 归档(参数 Playground) | ⚠ |
+
+### 1.2 Findings
+
+- **[P1] 10- 同号双 demo**
+  `10-element.html` 和 `10-events.html` 共享序号前缀。Linux 默认字典序(0-9 → A-Z → a-z)下,`10-element` 会排在 `10-events` **前面**——但因为 00-index 卡片里两个都没列(见 1.3),用户从 hub 跳不到任何一个,只能靠"个人页底部"或搜文件名。
+  **建议**:重命名 `10-element.html` → `11-element.html` + `10-events.html` 保持,或者改 `10-events` → `10a-events`,并在 README 写明。
+
+- **[P1] 序号断档 (缺 01-06)**
+  实际保留在 `demo/` 根目录的只有 `00 / 07-12 / 99`,而 01-03、06 都在 `_archive/`(详见 `personal/README.md` 与归档 README)。
+  从排序看是"历史删除",但 README 没明说,新人会困惑。
+  **建议**:在 `demo/_archive/README.md`(目前没有)加 1 段说明,或把 01-03 重命名为 `91-93` 突出"归档"语义。
+
+- **[P2] `cdn.html` 无序**
+  没有 `cdn` 前缀数字,在 ls / finder 排序里会跑到 `99-debug` 之后(首字母 d 比 t 大),与"CDN 是入门向 demo"的预期相反。
+  **建议**:重命名为 `06-cdn.html`(与 `06-playground` 同位,概念上是"集成"),或保留但加 `→` 前缀。
+
+- **[P2] `_archive/` 子目录无 README**
+  `demo/personal/README.md` 解释了 personal 目录,但 `_archive/` 没有任何说明;git log 之外无法判断"为什么归档"。
+  **建议**:加 `demo/_archive/README.md`,列出每个文件被取代的时间点和替代者(如 `01-basic` → `07-tutorial#intro`)。
+
+- **[P2] `personal/` 被 hub 列出**
+  `00-index.html:98-110` 列出 `personal/04-landing.html` 和 `05-blog.html`,但 `personal/README.md:14-16` 明确写"这两个页面**不应该**跟 matrix-rain.xietuier.ai 一起部署"。
+  矛盾点:hub 卡片加了它们 → 部署上来就出现在 hub → 违反 README。
+  **建议**:从 `00-index.html` 移除 personal 卡片,或在该卡片加 `target="_blank"` + 跨域部署到 `czhmisaka.xietuier.ai`。
+
+### 1.3 总览页面"是否列出全部 demo"
+
+| Demo | 00-index 列出? | 跳到 demo 的入口 |
+|---|---|---|
+| 07-tutorial | ✓ | 直接 + 4 个 `?tab=` 子卡片 |
+| 08-ai-tune | ✓ | 直接卡片 |
+| 09-blog | ✓ | 直接卡片 |
+| 10-element | ✗ | **无入口** |
+| 10-events | ✗ | **无入口** |
+| 11-mixed-theme | ✗ | **无入口** |
+| 12-noise-converge | ✗ | **无入口** |
+| 99-debug | ✗ | **无入口** |
+| cdn.html | ✗ | **无入口** |
+| _archive/* | ✗ | (预期外链) |
+
+**P1**:**6 个 demo 完全没有 hub 入口**。用户只能记住文件名直接 URL 访问,违反"00-index 是导航中心"的角色定位。
+
+---
+
+## 维度 2:跳转链接审计
+
+### 2.1 内部 demo 跳转
+
+逐文件扫描后,所有 `<a href="...">` 走查如下(已 grep 验证文件存在):
+
+**有效跳转 ✓**
+
+| 来源 | 目标 | 行号 |
+|---|---|---|
+| 00-index | `07-tutorial.html` | 81 |
+| 00-index | `08-ai-tune.html` | 87 |
+| 00-index | `personal/04-landing.html` | 98 |
+| 00-index | `personal/05-blog.html` | 104 |
+| 00-index | `07-tutorial.html?tab=themes` | 115 |
+| 00-index | `07-tutorial.html?tab=variants` | 121 |
+| 00-index | `07-tutorial.html?tab=playground` | 127 |
+| 00-index | `?tab=api` **(无效)** | 133 |
+| 00-index | `09-blog.html` | 144 |
+| 07-tutorial | `08-ai-tune.html` | 542 |
+| 07-tutorial | `09-blog.html` | 543 |
+| 08-ai-tune | `07-tutorial.html?tab=playground` | 832 |
+| 09-blog | `00-index.html` | 82 |
+| 09-blog | `07-tutorial.html?tab=playground` | 83 |
+| 09-blog | `07-tutorial.html?tab=quickstart` | 107 |
+| 09-blog | `07-tutorial.html?tab=variants` | 156 |
+| 09-blog | `08-ai-tune.html` | 171 |
+| index.html | `07-tutorial.html?tab=*` (5 处) | 291,292,295,308,311,376,383 |
+| 10-12, 99, cdn | `../` (主页) | 多处 |
+
+### 2.2 Findings
+
+- **[P0] `00-index.html:133` 死链 `?tab=api`**
+  `07-tutorial.html` 中**没有** `data-pane="api"` 的 tab,只有 `api-options` 和 `api-methods`。`07-tutorial.html:1527-1533` 的 URL 处理代码会判定 `?tab=api` 无效,落到默认 `intro` tab,无报错但**用户看到的不是预期内容**。
+  nginx 的 `try_files` 兜底**不会**救这种"参数无效"——它只能救"路径不存在"。
+  **修复**:把 133 行改为 `href="07-tutorial.html?tab=api-options"`(配置项更接近 hub 卡片描述"API 完整文档")。
+
+- **[P1] 5 个 demo 缺"返回总览"链接**
+  扫描所有 demo 后,以下文件**没有任何"← All Demos"或类似返回 hub 的链接**:
+  - `10-element.html`
+  - `10-events.html`
+  - `11-mixed-theme.html`
+  - `12-noise-converge.html`
+  - `99-debug.html`
+  - `cdn.html`
+
+  对照:00-index, 07-tutorial, 08-ai-tune, 09-blog, personal/04-landing, personal/05-blog **都有**返回链接(`← 主页` / `← All Demos` / nav-links 等)。
+  **修复**:在上述 6 个 demo 的 header / `.crumbs` 区域加 `<a href="00-index.html">All Demos</a>`(或写一个统一的"demo shell"片段)。
+
+- **[P1] 00-index 跳 personal 子目录但没明确标注"个人内容"**
+  `00-index.html:98-110` 把 `personal/04-landing.html` 和 `personal/05-blog.html` 跟官方 demo 同级排列,且 card 描述只写"实战",没说"这是蟹腿儿个人站案例"。
+  `personal/README.md:14-16` 已明确"不应该跟 matrix-rain.xietuier.ai 一起部署"。
+  **修复**:card 副标题加 "· 蟹腿儿个人内容案例",或加 visual badge("个人")。
+
+- **[P1] 多个 demo `?v=N` 缓存版本号不一致**
+  - 00-index, 07-tutorial, 09-blog, personal/* → `?v=3`
+  - 08-ai-tune → `?v=17`
+  - 10-element, 10-events → `?v=10`
+  - 11-mixed-theme → `?v=11`
+  - 12-noise-converge → `?v=12`
+  - 99-debug → `?v=99`
+  - cdn.html → `?v=1`
+  - _archive/* → `?v=3`
+
+  `?v=3` 占多数但已被多个 demo 偏离;新部署的 dist 文件用同一个版本号,浏览器**仍会缓存**旧 ESM 模块(在 import 路径完全一致时)。
+  **建议**:统一为 `?v={package.json#version}`(当前 `0.1.0`),或改用内容 hash。
+
+- **[P2] 07-tutorial.html:1377 链接到 `../README.md`**
+  链接存在,但 nginx 默认不会做 `text/markdown` MIME 协商,部分浏览器会触发下载或展示纯文本。
+  **修复**:加 `type="text/plain"` 或换为 GitHub 上的 README 链接。
+
+- **[P2] 多个 `href="#"` 死按钮(landing 页)**
+  `personal/04-landing.html:49-50, 59-60` 有 7 个 `href="#"` 用于"产品/方案/文档/定价/立即体验/看看能干啥"按钮。landing 页是"实战展示",但**点哪个都跳到页面顶部**,给产品方演示时会被 catch。
+  **建议**:加 `aria-disabled` + 灰显,或至少改成 `href="#!"` 区分"占位"。
+
+### 2.3 跨页面锚点 / 深链
+
+- 唯一跨页深链路径是 `07-tutorial.html?tab=xxx`,经验证 7 个 tab 值(`intro / install / quickstart / themes / variants / react / vue / next / cdn / api-options / api-methods / playground / landing / blog`)中 14 个 `data-tab` 全部对应**已存在的** `data-pane`。
+- 唯一无效:如 2.2 [P0] 所述,`?tab=api`。
+
+### 2.4 外部链接
+
+| URL | 出现位置 | 评估 |
+|---|---|---|
+| `https://github.com/xietuier/matrix-rain` | 00-index:69,150; 09-blog:188,193 | ✓ 项目主页(合理) |
+| `https://github.com/czhmisaka/matrix-rain` | 07-tutorial:1377 | ⚠ **仓库名不一致**(xietuier vs czhmisaka),可疑 |
+| `https://www.npmjs.com/package/@xietuier/matrix-rain` | 09-blog:193 | ✓ |
+| `https://cdn.jsdelivr.net/npm/...` | 07-tutorial:627,819 (代码示例);README 多处 | ⚠ 仅在 07-tutorial "CDN 集成" tab 是教学示例,合理 |
+| `https://fonts.googleapis.com` | 00-index:11; 09-blog:16; index.html:16; 07-tutorial.html; 10-events; 11-mixed-theme; 12-noise-converge | ❌ **违背项目偏好**(详见 维度 6) |
+| `https://fonts.gstatic.com` | 00-index:10; 09-blog:15; index.html:15 | ❌ 同上 |
+| `https://api.minimax.io/v1` | 08-ai-tune:951 | ✓ 文档提示(用户自填 baseUrl) |
+| `https://api.openai.com/v1` | 08-ai-tune:952 | ✓ 同上 |
+
+- **[P1] 07-tutorial.html:1377 GitHub 链接指向 `czhmisaka/matrix-rain`,其它 3 处都指向 `xietuier/matrix-rain`**
+  这是两个不同仓库命名:hub 卡片用 `xietuier`,tutorial 页脚用 `czhmisaka`。**用户从 hub 点"GitHub"和从 tutorial 点"GitHub"会到不同 repo**。
+  **修复**:统一为 `https://github.com/czhmisaka/matrix-rain`(按 README 标识的 owner 决定)。
+
+---
+
+## 维度 3:交互组件合理性
+
+### 3.1 严重 API 误用(影响功能)
+
+- **[P0] `10-events.html:135` 调错 `textToBitmap` 签名**
+  代码:
+  ```js
+  const bm = textToBitmap('OK!', { cols: 8, rows: 4, font: '16px monospace' });
+  ```
+  当前 `src/bitmap.ts:25-30` 签名是 `textToBitmap(text, cols, rows, _gridCharPx?)` ——**位置参数**。第 2 个参数 `{ cols, rows, font }` 会被当作 `cols` (8),整个对象当作 `rows`。
+  实际行为:`if (!cols || cols <= 0) cols = 80; if (!rows || rows <= 0) rows = 30;` —— 对象 truthy → `cols=8, rows=NaN-ish object`, `canvas.width=8, canvas.height=NaN`,**后续 measureText / fillText 全部异常**。
+  点击 "set target bitmap" 按钮不会出期望的 8×4 位图,而是 8×30(自动回退),且 console 会有 NaN warning。
+  对照:`07-tutorial:2178`, `08-ai-tune:1647`, `12-noise-converge:194` 都用新签名 `textToBitmap(text, cols, rows)` —— **10-events 单独落后一版**。
+  **修复**:把 135 行改为 `const bm = textToBitmap('OK!', 8, 4);`。
+
+- **[P0] `10-events.html:130` 引用未导入的 `themes` 变量**
+  代码:
+  ```js
+  rain.setTheme(themes[themeIdx]);  // line 130
+  ```
+  但 import 只拿了 `matrixRain, textToBitmap`,**没导入 `themes`**(`10-events.html:72`)。
+  点击 "cycle theme" 按钮 → `ReferenceError: themes is not defined` → 整个按钮 handler 抛错,onclick 失效。
+  **修复**:72 行改为 `import { matrixRain, textToBitmap, themes } from '../dist/index.js?v=10';`。
+
+### 3.2 其他交互 bug
+
+- **[P1] `10-events.html:148-152` `setInterval` 永驻 + `clearInterval(this)` 死代码**
+  ```js
+  setInterval(() => {
+    resizeCounter++;
+    window.dispatchEvent(new Event('resize'));
+    if (resizeCounter > 3) clearInterval(this);  // eslint
+  }, 8000);
+  ```
+  1. `clearInterval(this)` 在箭头函数里 `this` 是 window,`clearInterval(window)` 是 no-op,interval **永远不结束**
+  2. 8 秒 1 次的 fake resize 会在 3 次后**继续每 8 秒**触发 1 次 onResize,日志会被打爆
+  3. `eslint` 注释说明原作者也知道这里有问题,只是留着没改
+  **修复**:把 `this` 替换成外部 `setInterval` 的返回值:
+  ```js
+  const t = setInterval(() => { ... if (counter > 3) clearInterval(t); }, 8000);
+  ```
+  或用 `setTimeout` 递归 + 1 次性触发。
+
+- **[P1] `12-noise-converge.html:175-184` onFrame 是死代码**
+  ```js
+  onFrame: (info) => {
+    const elapsed = info.t;
+    let phase = 'idle';
+    if (info.fps > 0) {
+      phase = 'running';  // 永远 = 'running' 或 'idle',跟 target phase 无关
+    }
+    document.getElementById('cur-time').textContent = `t = ${elapsed.toFixed(2)}s`;
+  }
+  ```
+  `let phase` 赋值后从未被读,实际是 noop。**阶段指示器 (`#cur-phase`) 的 `noise → converge → hold` 状态机全靠 `setTimeout` 模拟**(`applyBitmap` 里的 3 个嵌套 setTimeout),跟 instance 内部状态完全脱钩。
+  如果 `noiseDuration=0` 或 `convergeDuration=5`,模拟时间会**和实际动画严重不符**,用户看到 "converge" 时画面还在 noise 阶段。
+  **修复**:instance 应暴露 `getPhase()`,onFrame 读真值;或至少把 setTimeout 改成"读 instance 阶段"。
+
+- **[P1] `12-noise-converge.html:223-226` 输入框无 debounce**
+  ```js
+  document.getElementById('input-text').addEventListener('input', (e) => {
+    const text = e.target.value.trim() || ' ';
+    applyBitmap(text);  // 每键击都重算整图 + 重启 5 段状态机
+  });
+  ```
+  `textToBitmap(text, cols, rows)` 在大屏 cols≈100,rows≈50 时,**每键击重算 5000 像素灰度**。打"MATRIX" 5 字母触发 5 次完整 rebuild。
+  **修复**:用 `requestAnimationFrame` + 50ms debounce,或 on `change`(blur) 才触发。
+
+- **[P1] `12-noise-converge.html:224` 空格 / 空字符串处理**
+  ```js
+  const text = e.target.value.trim() || ' ';
+  ```
+  空串 → 单空格 → `textToBitmap(' ')` 返回 0 高亮的位图,效果上是"全暗 0.5s noise 然后瞬间 fade"。看起来像"什么都没发生",但日志写 `[target] set bitmap " " phase=noise-converge order=random`,**用户会困惑**。
+  中文字符 / emoji / 多行 `\n` 都被 `textToBitmap` 的 `split('\n')` 走了多行分支,但 UI 没提示"当前是 1 行还是多行"。
+  **修复**:空 input 显式禁用"应用"按钮,或加 placeholder "至少 1 字符"。
+
+- **[P1] `12-noise-converge.html:152` `mountFpsOverlay` 多次启动风险**
+  `00-index.html:164-165` 在 `pagehide` / `beforeunload` 调 `MatrixRain.destroyAll()`,但 12 页**不调**,FPS overlay 跨页跳时不会被清理,可能会"叠加显示"(每进新页就追加 1 个 FPS 角标)。
+  **修复**:12 页加同款 pagehide 监听,或在 mountFpsOverlay 内部做"singleton guard"。
+
+- **[P2] `10-element.html:115-117` `__bulkTheme` 无重置反馈**
+  ```js
+  window.__bulkTheme = (theme) => {
+    document.querySelectorAll('matrix-rain').forEach(el => el.setAttribute('theme', theme));
+  };
+  ```
+  10 个 cell 同时换主题,但**没有任何"已应用"反馈**(toast / log)。如果 setAttribute 失败,用户看不出来。
+  **修复**:返回 `Promise.all(...)` 或加 1 行 console.log。
+
+- **[P2] `99-debug.html:115-120` 替换 `window.matrixRain`**
+  ```js
+  const originalMatrixRain = matrixRain;
+  window.matrixRain = (...args) => wrap(originalMatrixRain(...args));
+  window.MatrixRain = { matrixRain: window.matrixRain };
+  ```
+  覆盖了 `matrixRain` 全局函数(用于 console 调试),但 `addOne(theme)` 调的是 `originalMatrixRain`,**两者计数不同步**——`wrap` 多调 1 次 `created++`,`addOne` 又多调 1 次,GUI 显示 created = 实际 + 1。
+  **修复**:`addOne` 也走 `wrap`,或干掉 wrap 单独维护计数。
+
+### 3.3 FPS overlay / 主题切换器
+
+- **FPS overlay 使用情况**(已 grep `mountFpsOverlay`):
+  - `10-element.html:126` ✓
+  - `99-debug.html:148` ✓
+  - `12-noise-converge.html:151` ✓
+  - 其他 demo:✗
+
+  **[P1]** 6 个 demo(00, 07, 08, 09, 10-events, 11)没有 FPS overlay。用户偏好"性能透明",但只有 3/9 demo 显示。
+  **建议**:在 matrixRain 工厂函数里默认开 overlay(用 `localStorage` 记住"用户主动关过"),或加个 `?fps=1` URL 参数。
+
+- **主题切换器**:
+  - `00-index` 没有"切换主题"按钮(只是把 theme 写死传给 matrixRain)
+  - `07-tutorial` 在 `data-tab="playground"` 有完整主题切换
+  - `08-ai-tune` 通过 AI prompt 切
+  - `10-element` 有 bulk theme select
+  - `11-mixed-theme` 没有切换器(只展示 4 个固定组合)
+  - `12-noise-converge` 没有切换器(只默认 `silicon-valley`)
+
+  **[P2]** 各 demo 的主题切换 API 不一致(有的用 `setTheme` 有的 `setAttribute` 有的用 `coldFrom`/`warmFrom` 拼色)。短期合理,但应在 README / types 里给"切主题"的"推荐做法"。
+
+### 3.4 "重置" 按钮一致性
+
+| Demo | 是否有 reset |
+|---|---|
+| 00-index | ✗(本身是 hub) |
+| 07-tutorial | ✗(无 reset,但有 tab 切换) |
+| 08-ai-tune | ✗(用 AI 调参) |
+| 09-blog | ✗(只读) |
+| 10-element | ✗(有"Destroy All" 算半个) |
+| 10-events | ✗ |
+| 11-mixed-theme | ✗ |
+| 12-noise-converge | ✗(改文本就是重置) |
+| 99-debug | ✓ (`destroyAll` 按钮) |
+| cdn.html | ✓ (`destroyAll` 按钮) |
+| _archive/06-playground | ✗(用 `destroy + 重启`) |
+
+**[P2]** 9 个 demo 里 7 个没有显式"重置"按钮,行为也不一致。
+
+---
+
+## 维度 4:资源加载 & 路径
+
+### 4.1 dist/ 引用
+
+所有 demo 都用 `<link rel="stylesheet" href="../dist/matrix-rain.css">`(根目录 demo) 或 `../../dist/...`(personal/),路径全部正确(已逐文件 grep 验证文件存在)。
+
+ESM 入口全部是 `../dist/index.js?v=N`,`cdn.html` 是 `../dist/index.iife.js?v=1`,都存在。
+
+### 4.2 Findings
+
+- **[P1] 字体 Google Fonts CDN 出现 6 个 demo + 主页**
+  涉及文件:
+  - `index.html:14-16`
+  - `demo/00-index.html:9-11`
+  - `demo/07-tutorial.html`(8 行 missing,只有 .css 引用,无字体引入 — 部分 OK)
+  - `demo/09-blog.html:14-16`
+  - `demo/10-events.html:9` (`<link rel="preconnect">` 没有 css2 引入)
+  - `demo/11-mixed-theme.html:9`
+  - `demo/12-noise-converge.html:9`
+
+  **7 个文件** 拉了 3 个字体(Inter / Fraunces / JetBrains Mono)。
+  用户偏好 "完全本地部署,少用 CDN"。**这一条严重违反**。
+  **修复**:
+  1. 把 3 个 woff2 文件本地化(放到 `dist/fonts/` 或 `assets/fonts/`)
+  2. 把 `<link rel="preconnect">` / `css2` 改为 `<link rel="stylesheet" href="../dist/fonts/inter.css">`
+  3. CSS 降级 `font-family: "Inter", system-ui, sans-serif;`(已有 `system-ui` 兜底,只是默认走了 Inter)
+  实际上,所有 demo CSS 已经写了 `font-family: Inter, system-ui, sans-serif`,**删掉 Google Fonts 链接,降级到 system-ui 对 demo 实际表现几乎无差**(Fraunces italic 退到 serif,会丢点味道,但功能上无损)。
+  **建议**:在 `dist/fonts/` 加 3 个 woff2 + 自托管 CSS;或者直接全降级 system-ui。
+
+- **[P2] 缓存版本号不一致**(详见 2.2 [P1])
+
+- **[P2] 12-noise-converge 注释 `// 初始为空:等待用户输入` 与代码不一致**
+  `12-noise-converge.html:171` 注释说"初始为空",但 221 行 `applyBitmap('MATRIX')` 立即初始化,跟注释矛盾。新读者会困惑。
+
+---
+
+## 维度 5:可达性 & 错误处理
+
+### 5.1 ARIA & 对比度
+
+- 已 grep `aria-` 关键词,只有 4 处:
+  - `07-tutorial.html:527` `aria-label="菜单"` ✓
+  - `08-ai-tune.html:844` `aria-live="polite"` ✓
+  - `08-ai-tune.html:868/893/899` `aria-hidden="true"`(装饰性 SVG)✓
+
+  **[P1]** 9 个 demo 主体交互元素(按钮/输入框/select)基本**全部没有 `aria-label`**。
+  - `00-index`:card 是 `<a>` 包裹,有可见文字,部分 OK
+  - `12-noise-converge`:slider/input/button 全是 `<label>` 关联,基本 OK
+  - `08-ai-tune`:`ai-overlay-toggle` 等用 `title` 而非 `aria-label`
+  - 视觉障碍用户主要靠 AT,但 AT 不读 `title`
+
+- **[P2] 颜色对比度**:
+  - 在 `#0a0a14` 背景上:
+    - `#aaa` (10-events `.sub`, 12-noise-converge `.sub`, 11-mixed-theme `.sub`):  对比度约 **6.8:1** ✓
+    - `rgba(200,196,184,.6)` (多处 muted text): 实际亮度约 `#a09c8e`,对比度约 **5.0:1** ✓
+    - `rgba(200,196,184,.5)` (01 .brand .ver): 约 **4.2:1**,**接近 4.5:1 边界** ⚠
+    - `#888` (10-events `.small`, 11-mixed-theme `.desc`): 约 **4.7:1** ✓ (勉强)
+    - `rgba(200,196,184,.4)` (07-tutorial .sidebar-footer): 约 **3.5:1** ❌ **不达 WCAG AA**
+
+  大部分合规,只有 `.sidebar-footer` 那行需要加透明度从 .4 → .5。
+
+### 5.2 浏览器行为
+
+- **[P2] Back / Forward 行为**
+  - 07-tutorial 用 `history.replaceState` 改 `?tab=xxx`,back 会回到**主页**而不是上一个 tab,体验奇怪但功能上 OK
+  - 12-noise-converge 不改 URL,back 直接离开
+  - 各 demo `MatrixRain.destroyAll()` 监听 `pagehide` / `beforeunload` ✓(已 grep)
+
+- **[P2] 表单 state 持久化**
+  - `08-ai-tune` ✓ 用 `localStorage` 存 LLM config(`matrix-rain-llm-config-v1`)
+  - `12-noise-converge` ✗ 滑块/输入文本/选中按钮都不持久化,刷新就丢
+  - 其它 ✗
+  - 主题切换也不持久化(刷新会回到默认 `silicon-valley`)
+
+- **[P2] URL 不反映状态**
+  - 00-index 卡片 `?tab=themes` 跳到 07-tutorial,07 内部 `replaceState` 更新 URL
+  - 12 的 `currentPhase / currentLockOrder / noiseDur / convergeDur / lockStability` **5 个变量都不在 URL**,分享链接无法还原状态
+  - 11 / 10-element 同样
+
+### 5.3 错误处理
+
+- **[P1] `12-noise-converge.html:194` 无效 cols/rows**
+  ```js
+  const cols = Math.ceil(w / 14);
+  const rows = Math.ceil(h / 14);
+  ```
+  如果 `w=0` 或 `h=0`(窗口最小化),`cols=0, rows=0`,`textToBitmap` 内部 `if (!cols) cols=80; if (!rows) rows=30;` 兜底,但 `setTargetBitmap` 会用错误尺寸调用,可能报 `cols*rows != data.length` 校验错误。
+  **修复**:加 `if (w < 1 || h < 1) return;`
+
+- **[P2] `99-debug.html:163-168` innerHTML 拼接 i.theme/i.variant**
+  虽然内容受 `__matrixRainDebug` 控制(内部),但理论上 XSS vector。如果 instance.theme 由用户输入(目前是 enum),低危。
+
+- **[P2] Resize debounce**:`src/` 已有(参见 10-events 文档 `200ms debounce`),demo 端不重复实现 ✓。
+
+---
+
+## 维度 6:与用户偏好的不一致
+
+> 用户偏好(从 `~/.claude/projects/.../memory/MEMORY.md` 读取):
+> - 完全本地部署,少用 CDN
+> - 文档/demos 用本地 dist/ 资源,不引外部 CDN
+> - 已有的 CDN 示例保留(向后兼容),但新增示例必须展示本地用法
+
+### 6.1 Findings
+
+- **[P1] 字体 Google Fonts CDN 违反"完全本地部署"**(详见 4.2)
+  涉及 7 个文件,跨 demo + 主页。最严重。
+  唯一可豁免:07-tutorial.html 第 808-830 tab(`data-pane="cdn"`)里**代码示例**写的 `https://cdn.jsdelivr.net/...` —— 这是教学用途,在受控环境(`<pre><code>`)内,合理。
+
+- **[P2] `cdn.html` 命名暗示"主推 CDN 路径"**
+  文件名直接叫 `cdn.html`,跟 `personal/README.md` 中"已展示本地用法为主"的偏好倾向冲突。
+  当前 `cdn.html` 实际**是 IIFE 用法示例**(不是真正的 CDN,引的还是 `../dist/index.iife.js`),命名有误导。
+  **建议**:重命名 `cdn.html` → `01-iife.html` 或 `iife.html`,或加一段顶部 banner 注明"本 demo **仍引本地 dist/**,CDN 用法见 07-tutorial#cdn 集成 tab"。
+
+- **[P2] `00-index.html:160` 引本地,11-mixed-theme 引本地 — 但 8-9-10 等都不显示"已本地化"标注**
+  没有任何 demo 标注"✓ 本地运行",用户视觉上无法区分哪些用了 CDN 哪些没用。
+  **建议**:在每个 demo 底部 footer 加一行 "📦 本地资源,无 CDN 调用",或者在 navbar 加个 "LOCAL ONLY" badge。
+
+---
+
+## 修复建议 Checklist(按优先级)
+
+### P0 — 立即修,影响功能
+
+- [ ] **修 `10-events.html:135` 调错 `textToBitmap` 签名**
+  改 `{ cols: 8, rows: 4, font: '16px monospace' }` → `8, 4`
+  文件:`demo/10-events.html:135`
+
+- [ ] **修 `10-events.html:130` `themes` 未导入**
+  在 72 行 import 加 `themes`
+  文件:`demo/10-events.html:72, 130`
+
+- [ ] **修 `00-index.html:133` `?tab=api` 死链**
+  改为 `?tab=api-options`
+  文件:`demo/00-index.html:133`
+
+### P1 — 应修,影响体验
+
+- [ ] **从 `00-index.html` 加 6 个 demo 入口卡片**(10-element, 10-events, 11-mixed-theme, 12-noise-converge, 99-debug, cdn.html)
+  文件:`demo/00-index.html`(在 142 行 divider 之后新增一段"· 交互特性 demo")
+
+- [ ] **6 个 demo 加"返回总览"链接**(10-element, 10-events, 11-mixed-theme, 12-noise-converge, 99-debug, cdn.html)
+  文件:各自 `.crumbs` 区域加 `← All Demos` 链接
+
+- [ ] **统一 GitHub 仓库链接**(xietuier vs czhmisaka)
+  决定 owner,所有 4 处统一
+  文件:`00-index.html:69,150`, `07-tutorial.html:1377`, `09-blog.html:188,193`, README 头部
+
+- [ ] **`personal/` 卡片在 hub 上明确标注"蟹腿儿个人内容"**
+  文件:`demo/00-index.html:98-110` 副标题 / 加 badge
+
+- [ ] **`10-element` / `10-events` 解决同号问题**
+  选一种:重命名为 `11-element` / 改前缀为 `10a-events` / README 写明
+
+- [ ] **`12-noise-converge` 输入框加 debounce**
+  50ms rAF 节流,避免每键击重算
+  文件:`demo/12-noise-converge.html:223-226`
+
+- [ ] **`12-noise-converge` onFrame 阶段推断改为读真实 instance 状态**
+  干掉 setTimeout 模拟
+  文件:`demo/12-noise-converge.html:175-184, 206-217`
+
+- [ ] **`10-events.html:148-152` setInterval 永驻 + clearInterval(this) 死代码**
+  替换为 `setTimeout` 递归 + 1 次性触发,或保存 interval handle 后 clearInterval(handle)
+  文件:`demo/10-events.html:148-152`
+
+- [ ] **`12-noise-converge.html:152` mountFpsOverlay 加 pagehide 清理**
+  与 00-index / 09-blog 同款
+  文件:`demo/12-noise-converge.html` 末尾 script 块
+
+- [ ] **7 个 demo 移除 Google Fonts CDN 引用**(home + 6 demos)
+  本地化字体到 `dist/fonts/`,或降级 `system-ui`
+  文件:`index.html:14-16`, `00-index.html:9-11`, `09-blog.html:14-16`, `10-events.html:9`, `11-mixed-theme.html:9`, `12-noise-converge.html:9`
+
+- [ ] **缓存版本号统一为 `?v=0.1.0`(读 package.json)**
+  9 个 demo 当前 8 种不同 `?v=N`,改统一
+  文件:`demo/*.html` 11 个 import 行
+
+- [ ] **加 ARIA 标签到主要交互元素**
+  优先级:08-ai-tune 的 icon 按钮(`title` 改 `aria-label`), 10/11/12 的 select 控件
+  文件:各 demo
+
+### P2 — 优化项
+
+- [ ] **重命名 `cdn.html` → `iife.html`**(命名误导)
+  文件:`demo/cdn.html` → `demo/iife.html`,更新所有引用
+
+- [ ] **`demo/_archive/README.md` 新建,说明归档理由**
+  文件:新建 `demo/_archive/README.md`
+
+- [ ] **`07-tutorial.html:1377` README.md 链接加 `type="text/plain"`**
+  nginx MIME 问题
+
+- [ ] **`personal/04-landing.html:49-60` 7 个 `href="#"` 死按钮**
+  改 `aria-disabled="true"` + 灰显,或换 demo-only URL
+
+- [ ] **08-ai-tune.html stage `var(--contrast)` 等 CSS 变量在 11-mixed-theme 未声明**
+  跨文件共享 CSS 变量,需要 root 样式统一,检查
+
+- [ ] **统一"重置"按钮行为** — 9 个 demo 里 7 个没有 reset 按钮
+
+- [ ] **URL 反映 12-noise-converge 状态** — `?phase=`, `?order=`, `?noiseDur=`(便于分享)
+
+- [ ] **localStorage 持久化主题选择** — 跨页跳时保留用户选的主题
+
+- [ ] **首页 + 每个 demo 标注"📦 本地资源,无 CDN"** — 让偏好可见
+
+---
+
+## 附录 A:被引用的外部 CDN 资源清单(全量)
+
+| 资源 | URL | 出现文件 | 类型 |
+|---|---|---|---|
+| Inter / Fraunces / JetBrains Mono | `fonts.googleapis.com` | index.html, 00-index, 09-blog, 10-events, 11-mixed-theme, 12-noise-converge | 字体 |
+| fonts.gstatic.com preconnect | fonts.gstatic.com | index.html, 00-index, 09-blog | 字体 CDN |
+| cdn.jsdelivr.net | `cdn.jsdelivr.net/npm/@xietuier/matrix-rain` | 07-tutorial 代码示例(2 处,合理) | 教学示例 |
+| GitHub repo | `github.com/xietuier/matrix-rain` | 00-index, 09-blog | 项目主页 |
+| GitHub repo (不一致) | `github.com/czhmisaka/matrix-rain` | 07-tutorial:1377 | 项目主页(疑误) |
+| NPM 包页 | `npmjs.com/package/@xietuier/matrix-rain` | 09-blog:193 | 包主页 |
+| LLM base URL 提示 | `api.minimax.io`, `api.openai.com` | 08-ai-tune:951-952 | 文档提示(用户自填) |
+
+## 附录 B:demo 文件 vs 入场矩阵
+
+| Demo | 00-index 卡片 | 自我返回链 | 跨 demo 引用 | 备注 |
+|---|---|---|---|---|
+| 00-index | (自身) | n/a | 7 个 hub 卡片 | hub 中心 |
+| 07-tutorial | ✓ | ✓(自身 footer) | → 08-ai-tune, 09-blog | 12 tab 单页 |
+| 08-ai-tune | ✓ | ✓ | → 07-playground | LLM 集成 |
+| 09-blog | ✓ | ✓ | → 4 处 inline cta | 博客 |
+| 10-element | ✗ | ✗ | 无 | Web Component demo |
+| 10-events | ✗ | ✗ | 无 | 4 事件 demo |
+| 11-mixed-theme | ✗ | ✗ | 无 | 主题拼色 demo |
+| 12-noise-converge | ✗ | ✗ | 无 | 涌现动画 demo |
+| 99-debug | ✗ | ✗ | 无 | Debug 面板 |
+| cdn.html | ✗ | ✗ | 无 | IIFE 用法 |
+
+## 附录 C:`?tab=` 参数有效性矩阵
+
+| `?tab=xxx` | 07-tutorial `data-pane` 存在? | 来源文件 |
+|---|---|---|
+| `intro` | ✓ | 07 内部默认 |
+| `install` | ✓ | index.html:308 |
+| `quickstart` | ✓ | 09-blog:107, index.html:295 |
+| `themes` | ✓ | 00-index:115 |
+| `variants` | ✓ | 00-index:121, 09-blog:156, index.html:376 |
+| `react` | ✓ | index.html:383 |
+| `vue` | ✓ | (无外部引用) |
+| `next` | ✓ | (无外部引用) |
+| `cdn` | ✓ | (无外部引用) |
+| `api-options` | ✓ | (无外部引用) |
+| `api-methods` | ✓ | (无外部引用) |
+| `playground` | ✓ | 00-index:127, 08-ai-tune:832, 09-blog:83,135, index.html:292,311 |
+| `landing` | ✓ | (无外部引用) |
+| `blog` | ✓ | (无外部引用) |
+| **`api`** | ❌ **不存在** | **00-index:133 ⚠ 死链** |
+
+---
+
+## 总结
+
+**3 个 P0 必须修**:`10-events.html` 两个 API bug + `00-index` 死链 `?tab=api`。
+**7 个 P1** 主要集中在:hub 入口不全 / 返回链缺失 / 字体外链违反偏好 / 缓存版本号混乱 / `12-noise-converge` 状态机失真 / `setInterval` 永驻。
+**5 个 P2** 大多是命名 / 持久化 / ARIA 细节。
+
+最大单点风险:Google Fonts CDN 在 7 个文件里出现,跟"完全本地部署"项目偏好正面冲突;在断网或内网部署时,这些 demo 会立刻视觉降级(降级 system-ui)。
+
+建议:本周末内先修 P0 + 字体本地化(影响最大),P1/P2 列入下一个 sprint。
+
+---
+
+*报告由 Claude Code 自动化生成,审查方法:逐文件 Read + 4 维度 Grep(链接/资源/字符/事件) + API 签名对照。*
