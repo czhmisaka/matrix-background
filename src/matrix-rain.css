@@ -1,0 +1,154 @@
+/* =========================================================
+ * @xietuier/matrix-rain · 配套 CSS · 5 层暗色动态背景
+ * 与 ES Module 引擎配合使用,负责 Canvas 之外的光效层
+ *
+ * 引入方式:
+ *   import '@xietuier/matrix-rain/matrix-rain.css';
+ *
+ * z-index 体系(必须保持):
+ *   0  .matrix-rain-wrapper  (Canvas 数字雨)
+ *   1  .bg-sweep             (斜向扫光)
+ *   2  .bg-highlight         (3 团径向光晕)
+ *   3  .bg-vignette          (暗角)
+ *   4  .bg-topline           (顶部彩色光带)
+ *   5+ 正文
+ * ========================================================= */
+
+:root {
+  --mr-bg: #0a0a14;
+  --mr-bg-deep: #06060c;
+  --mr-rose: 255, 77, 109;
+  --mr-violet: 124, 92, 255;
+  --mr-cyan: 0, 229, 255;
+}
+
+/* =========================================================
+ * 暗色滚动条 — 项目风格
+ * 6px 细条 + 冷青→紫渐变 thumb + 极淡 track
+ * 双引擎兼容: Webkit (Chrome/Safari/Edge) + Firefox
+ * ========================================================= */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(124, 92, 255) rgba(255, 255, 255, 0.04);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgb(0, 229, 255), rgb(124, 92, 255));
+  border-radius: 3px;
+  transition: background .2s ease, box-shadow .2s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgb(77, 255, 255), rgb(167, 139, 255));
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.45);
+}
+::-webkit-scrollbar-corner {
+  background: var(--mr-bg);
+}
+
+html {
+  background: radial-gradient(100% 80% at 50% 0%,
+    rgb(22, 22, 42), rgb(10, 10, 20), rgb(6, 6, 12));
+  background-attachment: fixed;
+  color: rgb(240, 236, 223);
+  font-family: Inter, -apple-system, BlinkMacSystemFont,
+               "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.matrix-rain-wrapper {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.matrix-rain-wrapper canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* 嵌入非 body 容器时(用户传 container):改为 absolute 跟随父元素 */
+.matrix-rain-container {
+  position: relative;
+  overflow: hidden;
+}
+.matrix-rain-container > .matrix-rain-wrapper {
+  position: absolute;
+  inset: 0;
+}
+
+@keyframes mr-sweep {
+  0%   { background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.bg-sweep {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(110deg,
+    rgba(0, 0, 0, 0) 30%,
+    rgba(255, 77, 109, 0.08) 40%,
+    rgba(0, 229, 255, 0.10) 50%,
+    rgba(124, 92, 255, 0.08) 60%,
+    rgba(0, 0, 0, 0) 70%);
+  background-size: 300% 100%;
+  background-repeat: repeat;
+  animation: mr-sweep 12s linear infinite;
+}
+
+.bg-highlight {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 50% at 15% 5%,
+      rgba(124, 92, 255, 0.25),
+      rgba(0, 0, 0, 0) 60%),
+    radial-gradient(50% 40% at 85% 20%,
+      rgba(0, 229, 255, 0.22),
+      rgba(0, 0, 0, 0) 60%),
+    radial-gradient(40% 30% at 50% 100%,
+      rgba(255, 77, 109, 0.18),
+      rgba(0, 0, 0, 0) 70%);
+}
+
+.bg-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: radial-gradient(rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.28) 100%);
+}
+
+.bg-topline {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0.6;
+  background: linear-gradient(90deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgb(255, 77, 109) 18%,
+    rgb(255, 138, 61) 32%,
+    rgb(255, 210, 63) 46%,
+    rgb(46, 213, 115) 60%,
+    rgb(0, 229, 255) 74%,
+    rgb(124, 92, 255) 88%,
+    rgba(0, 0, 0, 0) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .matrix-rain-wrapper,
+  .bg-sweep { display: none !important; }
+}

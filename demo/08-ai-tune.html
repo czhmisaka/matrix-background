@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a14">
+<title>@xietuier/matrix-rain · 🪄 AI 调参 Playground</title>
+<meta name="description" content="自然语言描述背景效果,LLM 自动改配置,精准点修 / 数字微调 / 复杂描述三种模式。">
+<meta property="og:title" content="@xietuier/matrix-rain · 🪄 AI 调参 Playground">
+<meta property="og:description" content="自然语言描述背景效果,LLM 自动改配置">
+<link rel="canonical" href="https://matrix-rain.xietuier.ai/demo/08-ai-tune.html">
+<link rel="stylesheet" href="../dist/matrix-rain.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; font-family: Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: #0a0a14; color: #f0ecdf; }
+  html, body { overflow: hidden; height: 100vh; }
+  body { display: grid; grid-template-columns: 380px 1fr; grid-template-rows: auto 1fr; min-height: 100vh; }
+
+  /* 数字矩阵风滚动条 */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 229, 255, .55) rgba(0, 0, 0, .35);
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track {
+    background:
+      linear-gradient(180deg, rgba(0, 229, 255, .04), rgba(0, 229, 255, .02)),
+      rgba(0, 0, 0, .35);
+    border-radius: 5px;
+    box-shadow: inset 0 0 0 1px rgba(0, 229, 255, .08);
+  }
+  *::-webkit-scrollbar-thumb {
+    background:
+      linear-gradient(180deg,
+        rgba(0, 229, 255, .65) 0%,
+        rgba(124, 92, 255, .65) 50%,
+        rgba(0, 229, 255, .65) 100%);
+    border-radius: 5px;
+    box-shadow:
+      0 0 6px rgba(0, 229, 255, .6),
+      0 0 12px rgba(124, 92, 255, .35);
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background:
+      linear-gradient(180deg,
+        rgba(0, 229, 255, .9) 0%,
+        rgba(124, 92, 255, .9) 50%,
+        rgba(0, 229, 255, .9) 100%);
+    box-shadow:
+      0 0 10px rgba(0, 229, 255, .9),
+      0 0 20px rgba(124, 92, 255, .6);
+  }
+
+  /* 顶部 header */
+  .topbar {
+    grid-column: 1 / -1;
+    padding: 14px 22px;
+    border-bottom: 1px solid rgba(0, 229, 255, .12);
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    background:
+      linear-gradient(180deg, rgba(0, 0, 0, .6), rgba(0, 0, 0, .3));
+    backdrop-filter: blur(8px);
+  }
+  .topbar h1 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    color: rgb(0, 229, 255);
+    text-shadow: 0 0 10px rgba(0, 229, 255, .4);
+    letter-spacing: .3px;
+  }
+  .topbar .crumb { color: rgba(200, 196, 184, .6); font-size: 12px; font-family: "JetBrains Mono", monospace; }
+  .topbar a { color: rgba(0, 229, 255, .7); text-decoration: none; font-size: 12px; }
+  .topbar a:hover { color: rgb(0, 229, 255); }
+  .topbar .spacer { flex: 1; }
+  .topbar .badge {
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: rgba(124, 92, 255, .12);
+    color: rgb(124, 92, 255);
+    font-size: 11px;
+    font-family: "JetBrains Mono", monospace;
+    border: 1px solid rgba(124, 92, 255, .3);
+  }
+
+  /* 右侧 stage */
+  .stage-area {
+    grid-row: 2;
+    grid-column: 2;
+    position: relative;
+    overflow: hidden;
+    background: #000;
+  }
+  .stage-area canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+  /* ===== 左下角对话叠加层 (占渲染面板 1/4) ===== */
+  .ai-overlay {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    width: calc(25% - 24px);
+    min-width: 220px;
+    max-width: 360px;
+    max-height: 50%;
+    z-index: 10;
+    pointer-events: none;
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg,
+        rgba(8, 8, 18, 0) 0%,
+        rgba(8, 8, 18, 0.55) 35%,
+        rgba(8, 8, 18, 0.92) 100%);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(0, 229, 255, 0.12);
+    box-shadow:
+      0 0 24px rgba(0, 229, 255, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    color: rgb(240, 236, 223);
+    animation: ai-overlay-rise 0.6s cubic-bezier(.2, .8, .2, 1) 0.2s both;
+  }
+  .ai-overlay-glow {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(0, 229, 255, 0.6) 50%,
+      transparent 100%);
+    pointer-events: none;
+  }
+  .ai-overlay-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px 6px;
+    flex-shrink: 0;
+    pointer-events: auto;
+  }
+  .ai-overlay-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: rgb(0, 229, 255);
+    box-shadow: 0 0 6px rgba(0, 229, 255, 0.8);
+    animation: ai-overlay-pulse 2s ease-in-out infinite;
+  }
+  .ai-overlay-title {
+    font-size: 11px;
+    font-family: "JetBrains Mono", monospace;
+    color: rgba(0, 229, 255, 0.85);
+    letter-spacing: .15em;
+    text-transform: uppercase;
+  }
+  .ai-overlay-toggle {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: rgba(200, 196, 184, 0.6);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color 0.2s;
+  }
+  .ai-overlay-toggle:hover { color: rgb(0, 229, 255); }
+  .ai-overlay-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 4px 12px 12px;
+    pointer-events: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 229, 255, 0.35) transparent;
+  }
+  .ai-overlay-body::-webkit-scrollbar { width: 4px; }
+  .ai-overlay-body::-webkit-scrollbar-track { background: transparent; }
+  .ai-overlay-body::-webkit-scrollbar-thumb {
+    background: rgba(0, 229, 255, 0.35);
+    border-radius: 2px;
+  }
+  .ai-overlay-empty {
+    color: rgba(200, 196, 184, 0.4);
+    font-size: 11px;
+    font-style: italic;
+    padding: 4px 0;
+  }
+
+  /* ===== 叠加层底部输入框 ===== */
+  .ai-overlay-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px 10px;
+    flex-shrink: 0;
+    border-top: 1px solid rgba(0, 229, 255, 0.08);
+    pointer-events: auto;
+  }
+  .ai-overlay-form input {
+    flex: 1; min-width: 0;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(124, 92, 255, 0.25);
+    color: rgb(240, 236, 223);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11.5px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .ai-overlay-form input::placeholder {
+    color: rgba(200, 196, 184, 0.4);
+  }
+  .ai-overlay-form input:focus {
+    border-color: rgba(0, 229, 255, 0.6);
+    box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.2);
+  }
+  .ai-overlay-form button {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgb(0, 229, 255), rgb(124, 92, 255));
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px; font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .ai-overlay-form button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 229, 255, 0.4);
+  }
+  .ai-overlay-form button:active { transform: translateY(0); }
+  .ai-overlay-form button:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* 折叠态 */
+  .ai-overlay.collapsed .ai-overlay-body { display: none; }
+  .ai-overlay.collapsed .ai-overlay-toggle { transform: rotate(180deg); }
+  .ai-overlay-toggle { transition: transform 0.25s, color 0.2s; }
+
+  /* 叠加层中的消息(复用 ai-msg 样式但更紧凑) */
+  .ai-overlay .ai-msg {
+    margin: 6px 0;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    animation: ai-msg-rise 0.4s cubic-bezier(.2, .8, .2, 1) both;
+  }
+  .ai-overlay .ai-msg .role { font-size: 9.5px; margin-bottom: 2px; }
+  .ai-overlay .ai-msg .patch-list { font-size: 10.5px; margin: 2px 0; }
+  .ai-overlay .ai-msg .patch-list li { margin: 1px 0; }
+  .ai-overlay .ai-msg .ai-reason { font-size: 10.5px; }
+
+  @keyframes ai-overlay-rise {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes ai-overlay-pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(0, 229, 255, 0.8); }
+    50% { opacity: 0.4; box-shadow: 0 0 3px rgba(0, 229, 255, 0.4); }
+  }
+  @keyframes ai-msg-rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* stage-info 错开避免与 overlay 撞车 */
+  .stage-area .stage-info { z-index: 11; }
+
+  /* ===== AI Mode 上传卡片 3态 ===== */
+  .ai-upload-zone {
+    flex: 1;
+    min-width: 0;
+    display: block;
+    position: relative;
+    border: 1px dashed rgba(0, 229, 255, 0.22);
+    border-radius: 8px;
+    padding: 12px 10px;
+    text-align: center;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.2);
+    color: rgba(200, 196, 184, 0.7);
+    transition: all 0.2s ease;
+    overflow: hidden;
+  }
+  .ai-upload-zone:hover {
+    border-color: rgba(0, 229, 255, 0.7);
+    background: rgba(0, 229, 255, 0.04);
+    color: rgba(240, 236, 223, 0.95);
+  }
+  .ai-upload-zone.dragover {
+    border-style: solid;
+    border-color: rgb(0, 229, 255);
+    background: linear-gradient(135deg,
+      rgba(0, 229, 255, 0.12),
+      rgba(124, 92, 255, 0.08));
+    box-shadow:
+      0 0 0 3px rgba(0, 229, 255, 0.15),
+      0 0 18px rgba(0, 229, 255, 0.25),
+      inset 0 0 12px rgba(0, 229, 255, 0.05);
+    transform: scale(1.02);
+  }
+  .ai-upload-zone.dragover .ai-upload-title {
+    color: rgb(0, 229, 255);
+    text-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+  }
+  .ai-upload-empty[hidden],
+  .ai-upload-filled[hidden] { display: none !important; }
+  .ai-upload-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    pointer-events: none;
+  }
+  .ai-upload-icon {
+    width: 22px;
+    height: 22px;
+    color: rgba(0, 229, 255, 0.7);
+    transition: color 0.2s, transform 0.2s;
+  }
+  .ai-upload-zone:hover .ai-upload-icon { color: rgb(0, 229, 255); transform: translateY(-2px); }
+  .ai-upload-zone.dragover .ai-upload-icon { color: rgb(0, 229, 255); transform: translateY(-4px); }
+  .ai-upload-title {
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.2;
+    transition: color 0.2s, text-shadow 0.2s;
+  }
+  .ai-upload-hint {
+    font-size: 10px;
+    color: rgba(200, 196, 184, 0.6);
+    font-family: "JetBrains Mono", monospace;
+    line-height: 1.3;
+    letter-spacing: .02em;
+  }
+  .ai-upload-filled {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .ai-upload-thumb {
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 229, 255, 0.3);
+    background: rgba(0, 0, 0, 0.4);
+    flex-shrink: 0;
+  }
+  .ai-upload-meta {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+  .ai-upload-name {
+    font-size: 11px;
+    color: rgb(240, 236, 223);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.3;
+  }
+  .ai-upload-size {
+    font-size: 9.5px;
+    color: rgba(0, 229, 255, 0.6);
+    font-family: "JetBrains Mono", monospace;
+    line-height: 1.3;
+    margin-top: 2px;
+  }
+
+  /* ===== AI Mode 右侧 sidebar 顶部输入区 (已删除) ===== */
+  /* (ai-sidebar-header / ai-hero-form / ai-history / ai-clear 全部删除 · 输入框已移到左下角叠加层) */
+
+  /* 描述输入 (旧 ai-hero-form 样式) - 已删除·请看 .ai-overlay-form */
+  .ai-hero-form-legacy {
+    display: none;
+  }
+  .ai-hero-form-legacy button {
+    display: none;
+  }
+
+  /* 文本/图片输入 · 原 .ai-hero .ai-inputs */
+  .sidebar .ai-inputs {
+    display: flex; flex-direction: column; gap: 8px;
+    margin: 0 0 10px;
+  }
+  .sidebar .ai-input-block {
+    position: relative;  /* 让 .ai-input-clear-fab 绝对定位 */
+    background: rgba(8, 8, 18, .75);
+    border: 1px solid rgba(124, 92, 255, .18);
+    border-radius: 12px; padding: 14px 14px 12px;
+    /* 明确色差 + 轻微上浮 */
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .02) inset;
+  }
+  .sidebar .ai-input-block label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10.5px; letter-spacing: .08em;
+    color: rgba(0, 229, 255, .9); font-family: "JetBrains Mono", monospace;
+    margin-bottom: 8px; text-transform: uppercase; font-weight: 500;
+  }
+  .sidebar .ai-input-block label .label-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px;
+    border-radius: 4px;
+    background: linear-gradient(135deg, rgba(0, 229, 255, .25), rgba(124, 92, 255, .25));
+    border: 1px solid rgba(0, 229, 255, .35);
+    color: rgb(0, 229, 255);
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .sidebar .ai-input-block label .label-badge-cyan {
+    background: linear-gradient(135deg, rgba(124, 92, 255, .25), rgba(255, 77, 109, .15));
+    border-color: rgba(124, 92, 255, .4);
+    color: rgb(167, 139, 255);
+  }
+  .sidebar .ai-input-block label .label-text { letter-spacing: .05em; }
+  .sidebar .ai-input-block label .label-text-muted { color: rgba(200, 196, 184, .5); }
+  .sidebar .ai-input-block label .label-arrow {
+    width: 14px; height: 6px;
+    color: rgba(124, 92, 255, .6);
+    flex-shrink: 0;
+  }
+  .sidebar .ai-input-row {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .sidebar .ai-input-block input[type="text"],
+  .sidebar .ai-input-block input[type="file"],
+  .sidebar .ai-input-block textarea {
+    flex: 1; min-width: 0;
+    background: rgba(0, 0, 0, .4);
+    border: 1px solid rgba(124, 92, 255, .3);
+    color: rgb(240, 236, 223); font-family: "JetBrains Mono", monospace;
+    font-size: 12px; padding: 8px 12px; border-radius: 6px; outline: none;
+    box-sizing: border-box;
+    resize: vertical; min-height: 34px; max-height: 96px; line-height: 1.5;
+  }
+  .sidebar .ai-input-block textarea { padding-top: 10px; padding-bottom: 10px; }
+  .sidebar .ai-input-block input[type="text"]:focus,
+  .sidebar .ai-input-block input[type="file"]:focus { border-color: rgba(0, 229, 255, .6); }
+  .sidebar .ai-input-apply {
+    flex-shrink: 0;
+    width: 28px; height: 28px;
+    padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgba(0, 229, 255, .12), rgba(124, 92, 255, .12));
+    border: 1px solid rgba(0, 229, 255, .35);
+    color: rgb(0, 229, 255); font-family: "JetBrains Mono", monospace;
+    font-size: 12px; border-radius: 6px; cursor: pointer;
+    transition: all .15s;
+  }
+  .sidebar .ai-input-apply:hover { background: rgba(0, 229, 255, .25); border-color: rgb(0, 229, 255); }
+  .sidebar .ai-input-clear { color: rgba(200, 196, 184, .7); border-color: rgba(200, 196, 184, .3); }
+  .sidebar .ai-input-clear:hover { background: rgba(200, 196, 184, .1); color: rgb(240, 236, 223); }
+
+  /* ===== A 方案: 浮动 ✦ 按钮 + 顶部 × 清除小圆点 ===== */
+  /* 顶部右上 × 小圆点 (card 内部) */
+  .ai-input-clear-fab {
+    position: absolute;
+    top: 8px; right: 8px;
+    width: 18px; height: 18px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent;
+    border: 1px solid rgba(200, 196, 184, .2);
+    color: rgba(200, 196, 184, .55);
+    border-radius: 50%;
+    font-size: 11px; line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    transition: all .15s;
+    z-index: 2;
+  }
+  .ai-input-clear-fab:hover {
+    background: rgba(200, 196, 184, .1);
+    color: rgb(240, 236, 223);
+    border-color: rgba(200, 196, 184, .5);
+  }
+
+  /* 浮动 row 容器 - 允许子元素 absolute · 高度由内塞元素(zone/textarea)决定 */
+  .sidebar .ai-input-floating {
+    position: relative;
+    display: block;  /* 覆盖 flex,让 zone/textarea 独占宽度 */
+  }
+
+  /* 浮动 ✦ 生成按钮 (textarea/upload 内部右下角) */
+  .ai-input-apply-fab {
+    position: absolute;
+    right: 6px; bottom: 6px;
+    width: 26px; height: 26px;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0;
+    background: linear-gradient(135deg, rgba(0, 229, 255, .25), rgba(124, 92, 255, .25));
+    border: 1px solid rgba(0, 229, 255, .5);
+    color: rgb(0, 229, 255);
+    border-radius: 7px;
+    font-size: 14px; line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 229, 255, .15);
+    transition: all .15s;
+    z-index: 1;
+  }
+  .ai-input-apply-fab:hover {
+    background: linear-gradient(135deg, rgba(0, 229, 255, .4), rgba(124, 92, 255, .4));
+    border-color: rgb(0, 229, 255);
+    box-shadow: 0 2px 12px rgba(0, 229, 255, .35);
+    transform: translateY(-1px);
+  }
+  .ai-input-apply-fab:active { transform: translateY(0); }
+
+  /* textarea 上 · 上 padding 加大留出 ✦ 位置 · 右侧留 × 边缘 */
+  .sidebar .ai-input-floating textarea {
+    padding-right: 42px;  /* 留出 ✦ 按钮 + 4px 边距 */
+    padding-bottom: 38px;  /* 留出 ✦ 按钮高度 + 间距 */
+  }
+  /* upload zone 同样保留 ✦ 位置 */
+  .ai-input-floating .ai-upload-zone {
+    padding-right: 42px;
+  }
+
+  /* 位图位置/运动选项 */
+  .ai-bitmap-opts { margin-top: 8px; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .ai-opts-label {
+    font-size: 10px; color: rgba(200, 196, 184, .55);
+    font-family: "JetBrains Mono", monospace; letter-spacing: .05em;
+    line-height: 22px;  /* 与 select 高度对齐 */
+  }
+  .ai-opts-select {
+    background-color: rgba(0, 0, 0, .25);
+    border: 1px solid rgba(124, 92, 255, .18);
+    color: rgba(200, 196, 184, .85);
+    font-family: "JetBrains Mono", monospace; font-size: 10.5px;
+    padding: 2px 22px 2px 8px; border-radius: 4px; outline: none; cursor: pointer;
+    flex: 0 0 auto; height: 22px; line-height: 1;
+    /* 自定义箭头 - 内联 svg */
+    appearance: none; -webkit-appearance: none; -moz-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' fill='none' stroke='rgba(0,229,255,0.7)' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'><path d='M1.5 3l2.5 2.5L6.5 3'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    background-size: 7px 7px;
+    transition: border-color .15s, color .15s;
+  }
+  .ai-opts-select:hover { color: rgb(240, 236, 223); border-color: rgba(0, 229, 255, .35); }
+  .ai-opts-select:focus { border-color: rgba(0, 229, 255, .6); }
+  .ai-opts-select option { background: #0a0a14; color: rgb(240, 236, 223); }
+
+  .stage-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(0, 229, 255, .4);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    pointer-events: none;
+  }
+  .stage-info {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    gap: 8px;
+    z-index: 15;  /* 高于雨滴,低于 Hero 文字 */
+    pointer-events: none;
+    flex-wrap: wrap;
+  }
+  .stage-tag {
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, .6);
+    border: 1px solid rgba(0, 229, 255, .25);
+    color: rgb(0, 229, 255);
+    font-size: 11px;
+    font-family: "JetBrains Mono", monospace;
+    backdrop-filter: blur(6px);
+  }
+
+  /* 左侧 sidebar */
+  .sidebar {
+    grid-row: 2;
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid rgba(0, 229, 255, .12);
+    background:
+      linear-gradient(180deg, rgba(124, 92, 255, .03), rgba(0, 0, 0, .4));
+    overflow: hidden;
+    padding: 4px;  /* 卡片距 sidebar 边缘 4px */
+    gap: 4px;     /* 卡片之间间距 4px */
+  }
+  /* Hero 重写后:原 ai-chat(聊天/输入)隐藏,主交互走 Hero 的大输入框;
+     sidebar 只保留 config(LLM 设置)+ history(聊天记录可看) */
+  /* 原: .sidebar .ai-input-area { display: none; } · 现在不再隐藏 */
+  /* 原: .sidebar .preset-chips { display: none; } · 现在不再隐藏 */
+  .ai-chat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .ai-history-legacy { display: none; }
+  .ai-msg {
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    word-wrap: break-word;
+  }
+  .ai-msg.user {
+    background: rgba(0, 229, 255, .08);
+    border: 1px solid rgba(0, 229, 255, .25);
+    color: rgb(240, 236, 223);
+    align-self: flex-end;
+    max-width: 90%;
+  }
+  .ai-msg.ai {
+    background: rgba(124, 92, 255, .08);
+    border: 1px solid rgba(124, 92, 255, .25);
+    color: rgb(240, 236, 223);
+    align-self: flex-start;
+    max-width: 95%;
+  }
+  .ai-msg .role {
+    font-size: 10px;
+    font-family: "JetBrains Mono", monospace;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    opacity: .65;
+  }
+  .ai-msg .patch-list {
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+  }
+  .ai-msg .patch-list li {
+    padding: 3px 6px;
+    background: rgba(0, 0, 0, .3);
+    border-radius: 3px;
+    margin-bottom: 2px;
+    color: rgb(0, 229, 255);
+  }
+  .ai-msg .patch-list li::before { content: "→ "; color: rgba(124, 92, 255, .7); }
+
+  .ai-input-area {
+    border-top: 1px solid rgba(0, 229, 255, .15);
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, .4);
+  }
+  .ai-textarea {
+    width: 100%;
+    min-height: 70px;
+    max-height: 180px;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, .4);
+    border: 1px solid rgba(0, 229, 255, .3);
+    border-radius: 6px;
+    color: rgb(240, 236, 223);
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size: 13px;
+    resize: vertical;
+    outline: none;
+  }
+  .ai-textarea:focus { border-color: rgb(0, 229, 255); box-shadow: 0 0 0 3px rgba(0, 229, 255, .1); }
+  .ai-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    align-items: center;
+  }
+  .ai-send {
+    flex: 1;
+    padding: 9px 14px;
+    background: linear-gradient(90deg, rgb(0, 229, 255), rgb(124, 92, 255));
+    color: #000;
+    border: 0;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: opacity .2s;
+  }
+  .ai-send:hover { opacity: .85; }
+  .ai-send:disabled { opacity: .4; cursor: not-allowed; }
+  .ai-clear {
+    padding: 9px 14px;
+    background: rgba(255, 255, 255, .05);
+    color: rgba(240, 236, 223, .7);
+    border: 1px solid rgba(255, 255, 255, .1);
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .ai-clear:hover { color: rgb(240, 236, 223); }
+
+  /* 加载状态 */
+  .ai-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    color: rgba(124, 92, 255, .9);
+    font-size: 12px;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .ai-loading .dots {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(124, 92, 255, .3);
+    border-top-color: rgb(124, 92, 255);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 配置区 */
+  .config-section {
+    padding: 10px 16px;
+    border-top: 1px solid rgba(0, 229, 255, .1);
+    background: rgba(0, 0, 0, .3);
+  }
+  .config-section details { font-size: 12px; }
+  .config-section summary {
+    color: rgba(0, 229, 255, .8);
+    cursor: pointer;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    user-select: none;
+    padding: 4px 0;
+  }
+  .config-section .field { margin-top: 6px; }
+  .config-section label { display: block; font-size: 11px; color: rgba(200, 196, 184, .7); margin-bottom: 3px; font-family: "JetBrains Mono", monospace; }
+  .config-section input {
+    width: 100%;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, .4);
+    border: 1px solid rgba(0, 229, 255, .2);
+    border-radius: 4px;
+    color: rgb(240, 236, 223);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+  }
+  .config-section input:focus { border-color: rgb(0, 229, 255); outline: none; }
+  .config-status { font-size: 10px; font-family: "JetBrains Mono", monospace; color: rgba(0, 229, 255, .6); margin-top: 4px; }
+  .config-status.error { color: rgb(255, 100, 100); }
+  .config-status.ok { color: rgb(46, 213, 115); }
+
+  /* 当前配置显示 */
+  .current-config {
+    padding: 10px 16px;
+    border-top: 1px solid rgba(0, 229, 255, .1);
+    background: rgba(0, 0, 0, .25);
+    max-height: 200px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .current-config h3 {
+    margin: 0 0 6px;
+    font-size: 11px;
+    color: rgba(0, 229, 255, .7);
+    font-family: "JetBrains Mono", monospace;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .current-config pre {
+    margin: 0;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: rgba(240, 236, 223, .85);
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  /* 移动端适配 */
+  @media (max-width: 768px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    .sidebar { grid-column: 1; grid-row: 2; border-left: 0; border-top: 1px solid rgba(0, 229, 255, .12); max-height: 50vh; overflow-y: auto; }
+    .stage-area { grid-row: 1; grid-column: 1; }
+    .topbar h1 { font-size: 14px; }
+    .topbar .badge { display: none; }
+  }
+
+  /* 预设按钮 */
+  .preset-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 4px 12px 0;  /* sidebar 已 4px 外边距，preset 内部减4 */
+  }
+  .preset-chip {
+    padding: 4px 9px;
+    background: rgba(0, 229, 255, .08);
+    border: 1px solid rgba(0, 229, 255, .25);
+    border-radius: 12px;
+    color: rgb(0, 229, 255);
+    font-size: 10.5px;
+    cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    transition: all .15s;
+  }
+  .preset-chip:hover { background: rgba(0, 229, 255, .18); border-color: rgb(0, 229, 255); }
+  .preset-chip:active { transform: scale(0.96); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="../">← 主页</a>
+  <a href="./00-index.html" style="font-size:12px;opacity:.7;">All Demos</a>
+  <a href="./09-blog.html" style="font-size:12px;opacity:.7;">Blog</a>
+  <h1>✦ AI 调参 Playground</h1>
+  <span class="crumb">08 / 7</span>
+  <span class="spacer"></span>
+  <span class="badge" id="ai-status-badge">未连接</span>
+  <a href="07-tutorial.html?tab=playground">教程 Playground →</a>
+</header>
+
+<main class="stage-area" id="stage">
+  <div class="stage-empty" id="stage-empty">正在加载...</div>
+  <div class="stage-info">
+    <span class="stage-tag" id="tag-fps">FPS: --</span>
+    <span class="stage-tag" id="tag-theme">主题: --</span>
+    <span class="stage-tag" id="tag-variant">变体: --</span>
+  </div>
+
+  <!-- ===== 左下角对话叠加层(占渲染面板 1/4) ===== -->
+  <div class="ai-overlay" id="ai-overlay" aria-live="polite">
+    <div class="ai-overlay-glow"></div>
+    <div class="ai-overlay-header">
+      <span class="ai-overlay-dot"></span>
+      <span class="ai-overlay-title">AI 对话</span>
+      <button type="button" class="ai-overlay-toggle" id="ai-overlay-toggle" title="折叠/展开">▾</button>
+    </div>
+    <div class="ai-overlay-body" id="ai-overlay-body">
+      <div class="ai-overlay-empty" id="ai-overlay-empty">在这里与 AI 助手对话,助手回复会从底部渐入显示</div>
+    </div>
+    <form class="ai-overlay-form" id="ai-hero-form" autocomplete="off">
+      <input type="text" id="ai-hero-input" placeholder="描述背景效果·如:熔岩红 雪崩下落 慢节奏" maxlength="200">
+      <button type="submit" id="ai-hero-send" title="发送">→</button>
+    </form>
+  </div>
+
+  <!-- ===== AI Mode Hero 已搬到右侧 sidebar(不再覆盖 stage) ===== -->
+</main>
+
+<aside class="sidebar">
+  <div class="ai-chat">
+    <!-- =============== 文本/图片输入 =============== -->
+    <div class="ai-inputs">
+      <div class="ai-input-block">
+        <label><span class="label-badge">T</span><span class="label-text">显示文字</span><svg class="label-arrow" viewBox="0 0 16 8" aria-hidden="true"><path d="M0 4h13M10 1l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="label-text label-text-muted">数字化图形</span></label>
+        <button type="button" id="ai-text-clear" class="ai-input-clear-fab" title="清除">×</button>
+        <div class="ai-input-row ai-input-floating">
+          <textarea id="ai-text-input" rows="2" placeholder="例:MATRIX / 硅谷大蟹"></textarea>
+          <button type="button" id="ai-text-apply" class="ai-input-apply-fab" title="生成">✦</button>
+        </div>
+        <div class="ai-input-row ai-bitmap-opts">
+          <label class="ai-opts-label">位置</label>
+          <select id="ai-text-anchor" class="ai-opts-select">
+            <option value="center" selected>居中</option>
+            <option value="topLeft">左上</option>
+            <option value="topRight">右上</option>
+            <option value="bottomLeft">左下</option>
+            <option value="bottomRight">右下</option>
+          </select>
+          <label class="ai-opts-label">运动</label>
+          <select id="ai-text-motion" class="ai-opts-select">
+            <option value="static" selected>静止</option>
+            <option value="drift">横向漂</option>
+            <option value="bounce">反弹</option>
+            <option value="float">上下浮</option>
+          </select>
+        </div>
+      </div>
+      <div class="ai-input-block">
+        <label><span class="label-badge label-badge-cyan">I</span><span class="label-text">上传图片</span><svg class="label-arrow" viewBox="0 0 16 8" aria-hidden="true"><path d="M0 4h13M10 1l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="label-text label-text-muted">数字化轮廓</span></label>
+        <button type="button" id="ai-image-clear" class="ai-input-clear-fab" title="清除">×</button>
+        <div class="ai-input-row ai-input-floating">
+          <label class="ai-upload-zone" id="ai-upload-zone" for="ai-image-input">
+            <input type="file" id="ai-image-input" accept="image/*" hidden>
+            <div class="ai-upload-empty" id="ai-upload-empty">
+              <svg class="ai-upload-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 16V4M12 4l-4 4M12 4l4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <div class="ai-upload-title">拖入图片 或 点击上传</div>
+              <div class="ai-upload-hint">PNG / JPG / WebP · ≤ 4 MB</div>
+            </div>
+            <div class="ai-upload-filled" id="ai-upload-filled" hidden>
+              <img class="ai-upload-thumb" id="ai-upload-thumb" alt="预览">
+              <div class="ai-upload-meta">
+                <div class="ai-upload-name" id="ai-upload-name">filename.png</div>
+                <div class="ai-upload-size" id="ai-upload-size">0 KB</div>
+              </div>
+            </div>
+          </label>
+          <button type="button" id="ai-image-apply" class="ai-input-apply-fab" title="生成">✦</button>
+        </div>
+        <div class="ai-input-row ai-bitmap-opts">
+          <label class="ai-opts-label">位置</label>
+          <select id="ai-image-anchor" class="ai-opts-select">
+            <option value="center" selected>居中</option>
+            <option value="topLeft">左上</option>
+            <option value="topRight">右上</option>
+            <option value="bottomLeft">左下</option>
+            <option value="bottomRight">右下</option>
+          </select>
+          <label class="ai-opts-label">运动</label>
+          <select id="ai-image-motion" class="ai-opts-select">
+            <option value="static" selected>静止</option>
+            <option value="drift">横向漂</option>
+            <option value="bounce">反弹</option>
+            <option value="float">上下浮</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- =============== 6 个 preset =============== -->
+    <div class="preset-chips" id="preset-chips">
+      <button class="preset-chip" data-prompt="想要更赛博朋克一点,雨下慢一些">赛博朋克</button>
+      <button class="preset-chip" data-prompt="激情一点,暖色更明显,雨速加快">激情熔岩</button>
+      <button class="preset-chip" data-prompt="慢节奏,字符变化少,亮度降低,适合长时间观看">慢节奏冥想</button>
+      <button class="preset-chip" data-prompt="纯黑客帝国,经典绿,雨快一些,数字疯狂闪">经典黑客</button>
+      <button class="preset-chip" data-prompt="明亮梦幻,字符少,残影长,雨速中等">梦幻轻柔</button>
+      <button class="preset-chip" data-prompt="极简灰阶,无颜色,雨慢,字符少">极简灰</button>
+    </div>
+    <!-- 重复输入区已删除(老大 14:26 反馈)· 统一走顶部 .ai-hero-form -->
+    <div class="config-section">
+      <details>
+        <summary>Cfg · LLM 配置(MiniMax / 其它兼容 API)</summary>
+        <div style="font-size:10.5px;color:rgba(200,196,184,.6);font-family:'JetBrains Mono',monospace;line-height:1.6;margin-bottom:8px;">
+          👋 <b style="color:rgb(0,229,255);">请用户自己填写</b> 兼容 OpenAI Chat Completions 的端点:<br>
+          • <b>MiniMax</b>: baseUrl = <code style="color:rgb(0,229,255);">https://api.minimax.io/v1</code><br>
+          • <b>OpenAI</b>: baseUrl = <code style="color:rgb(0,229,255);">https://api.openai.com/v1</code><br>
+          • <b>其它</b>: 任何兼容 Chat Completions 的服务<br>
+          💾 key 仅存浏览器 localStorage,不上传任何服务
+        </div>
+        <div class="field">
+          <label>API Base URL</label>
+          <input type="text" id="cfg-baseUrl" placeholder="https://api.minimax.io/v1">
+        </div>
+        <div class="field">
+          <label>API Key</label>
+          <input type="password" id="cfg-apiKey" placeholder="eyJhbGciOi...">
+        </div>
+        <div class="field">
+          <label>模型名</label>
+          <input type="text" id="cfg-model" placeholder="MiniMax-M3" value="MiniMax-M3">
+        </div>
+        <div class="field" style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="cfg-vision" checked style="width:auto;">
+          <label for="cfg-vision" style="margin:0;cursor:pointer;">启用视觉审核(送背景截图给 LLM)</label>
+        </div>
+        <div class="config-status" id="cfg-status">未配置</div>
+      </details>
+    </div>
+    <div class="current-config">
+      <h3>JSON · 当前配置</h3>
+      <pre id="current-config-json">{ }</pre>
+    </div>
+  </div>
+</aside>
+
+<script type="module">
+  import { matrixRain, textToBitmap, imageToBitmap, fileToImage, themes, VARIANT_DEFAULTS, MatrixRain } from '../dist/index.js?v=17';
+
+  // ============== Stage ==============
+  let pgRain = null;
+  let pgCurrent = {
+    theme: 'silicon-valley',
+    variant: 'classic',
+    fontSize: 6,
+    trailAlpha: 0.92,
+    charset: '0123456789'
+  };
+
+  function startStage() {
+    const stage = document.getElementById('stage');
+    stage.querySelectorAll('.matrix-rain-wrapper').forEach(w => w.remove());
+    pgRain = matrixRain({ container: stage, ...pgCurrent });
+    window.pgRain = pgRain;
+    document.getElementById('stage-empty').style.display = 'none';
+    refreshCurrentConfig();
+    refreshStageTags();
+    startFPSTag();
+  }
+
+  function rebuildRain(opts = {}) {
+    if (pgRain) {
+      try { pgRain.destroy(); } catch (e) {}
+    }
+    pgCurrent = { ...pgCurrent, ...opts };
+    startStage();
+  }
+
+  function refreshStageTags() {
+    document.getElementById('tag-theme').textContent = '主题: ' + pgCurrent.theme;
+    document.getElementById('tag-variant').textContent = '变体: ' + pgCurrent.variant;
+  }
+
+  let fpsInterval = null;
+  function startFPSTag() {
+    if (fpsInterval) clearInterval(fpsInterval);
+    fpsInterval = setInterval(() => {
+      const fps = pgRain?.getFPS?.();
+      if (fps) document.getElementById('tag-fps').textContent = 'FPS: ' + fps.toFixed(0);
+    }, 500);
+  }
+
+  function refreshCurrentConfig() {
+    document.getElementById('current-config-json').textContent = JSON.stringify(pgCurrent, null, 2);
+  }
+
+  // ============== LLM Config ==============
+  const LLM_STORAGE_KEY = 'matrix-rain-llm-config-v1';
+  function loadLLMConfig() {
+    try {
+      const saved = localStorage.getItem(LLM_STORAGE_KEY);
+      if (saved) {
+        const cfg = JSON.parse(saved);
+        document.getElementById('cfg-baseUrl').value = cfg.baseUrl || '';
+        document.getElementById('cfg-apiKey').value = cfg.apiKey || '';
+        document.getElementById('cfg-model').value = cfg.model || '';
+        return cfg;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function saveLLMConfig() {
+    const cfg = {
+      baseUrl: document.getElementById('cfg-baseUrl').value.trim(),
+      apiKey: document.getElementById('cfg-apiKey').value.trim(),
+      model: document.getElementById('cfg-model').value.trim()
+    };
+    localStorage.setItem(LLM_STORAGE_KEY, JSON.stringify(cfg));
+    updateLLMStatus();
+    return cfg;
+  }
+
+  function updateLLMStatus() {
+    const el = document.getElementById('cfg-status');
+    const baseUrl = document.getElementById('cfg-baseUrl').value.trim();
+    const apiKey = document.getElementById('cfg-apiKey').value.trim();
+    const model = document.getElementById('cfg-model').value.trim();
+    if (!apiKey) {
+      el.textContent = '⚠️ 缺少 API key';
+      el.className = 'config-status error';
+      document.getElementById('ai-status-badge').textContent = '未连接';
+    } else {
+      el.textContent = `✓ ${model || 'auto'} @ ${baseUrl ? new URL(baseUrl).host : 'no host'}`;
+      el.className = 'config-status ok';
+      document.getElementById('ai-status-badge').textContent = '已连接';
+    }
+  }
+
+  document.getElementById('cfg-baseUrl').addEventListener('change', saveLLMConfig);
+  document.getElementById('cfg-apiKey').addEventListener('change', saveLLMConfig);
+  document.getElementById('cfg-model').addEventListener('change', saveLLMConfig);
+
+  loadLLMConfig();
+  updateLLMStatus();
+
+  // ============== AI 调整 ==============
+  // 字段文档 · 给 LLM 看,让它知道每个字段的含义/范围/常见组合
+  const FIELD_DOCS = `
+# @xietuier/matrix-rain 参数手册
+
+## 一、面向用户的描述词汇 → 推荐调整
+
+> 当用户说以下描述时，按该表选字段。多个描述叠加时叠加调整。
+
+| 用户描述 | 推存动作 | 说明 |
+|---------|---------|------|
+| "雪崩下落" / "快速下落" | variant='avalanche', variantParams.avalancheSpeed=1.5, variantParams.phaseStep=0.08 | 块状实心下落 |
+| "缓慢" / "慢节奏" | variantParams.phaseStep=0.01, variantParams.avalancheSpeed=0.3, variantParams.chUpdateProb=0 | 减慢+减闪 |
+| "退潮" / "波动" / "从中心向外" | variant='ripple', lightCenter={x:0.5,y:0.5}, driftSpeed={x:0.02,y:0.02} | 中心波动 |
+| "纯文本" / "只显示" | charset=自定义字符串 | 字符集控制 |
+| "亮度高" / "亮一点" | themeParams.brightness=1.4, themeParams.lightnessShift=0.2 | 变亮 |
+| "黑金" / "独黑" | colorOverrides={'9':[255,215,0],'0':[40,30,0]} | 注入颜色 |
+| "熔岩" / "末世火熔" | theme='lava-red', warmthRadius=0.9, variantParams.phaseStep=0.06 | 红火带暖心 |
+| "赛博朋克" | theme='cyber-blue', hueRotateAmount=360, hueRotateSpeed=30 | 蓝紫动态 |
+| "黑客帝国" | theme='matrix-green', variantParams.brightCurve=4 | 纯绿阶梯 |
+| "黑白胶片" | theme='pure-mono', themeParams.chroma=0.4 | 灰阶 |
+| "拖尾长" | trailAlpha=0.06 | 长余辉 |
+| "拖尾短" / "干净" | trailAlpha=0.5 | 锐利帧 |
+| "静止" / "冻结" | flickerSpeed=0 | 画面不动 |
+| "狂闪" | flickerSpeed=3, sparkProbability=0.05 | 高频闪 |
+| "字大" | fontSize=28-36 | 大字符 |
+| "字小" | fontSize=10 | 密集字符 |
+| "波长" / "光心漂移" | driftSpeed={x:0.02,y:0.01}, warmthRadius=0.8 | 暖心带光 |
+| "除冷" | coldThemeParams.brightness=0.3 | 冷色变暗 |
+| "除暖" | warmThemeParams.brightness=0.3 | 暖色变暗 |
+| "变冷点" | hueShift=-30 | 偏冷 30 度 |
+| "变暖点" | hueShift=30 | 偏暖 30 度 |
+
+## 二、5 主题(选 1)
+
+- 'silicon-valley' (默认·珵青冷光)
+- 'matrix-green' (黑客帝国绿)
+- 'lava-red' (熔岩橙红)
+- 'cyber-blue' (赛博蓝紫)
+- 'pure-mono' (黑白胶片)
+
+## 三、4 变体(选 1)
+
+- 'classic' (默认·随机闪动)
+- 'avalanche' (雪崩下落·头亮尾追)
+- 'ripple' (退潮波动·从中心向外)
+- 'ascii' (全字符刷·乱码感)
+
+## 四、可用字段表
+
+### 顶层(换主题/变体/全局重置调这里)
+- theme: 主题名 · 5 选 1
+- variant: 变体 · 4 选 1
+- fontSize: 字符宽 px · 范围 8-40(默认 14)
+- charset: 字符集字符串 · 如 '01' 或 'cZhMisaka' 或 '0123456789ABCDEF'
+- trailAlpha: 残影透明度 · 0.05=长拖尾 0.5=无拖尾(默认 0.18)
+- flickerSpeed: 闪烁速度倍率 · 0=冻结 1=默认 3=狂暴
+
+### 主题微调(themeParams,作用于当前主题颜色)
+- themeParams.brightness: 整体亮度乘数 · 0-2(默认 1)
+- themeParams.chroma: 色彩饱和度 · 0=灰阶 1=原色(默认 1)
+- themeParams.hueShift: 色相偏移 · -180 到 180 度
+- themeParams.saturationShift: 饱和度偏移 · -1 到 1
+- themeParams.lightnessShift: 亮度偏移 · -0.5 到 0.5
+- themeParams.invertHue: 颜色反转 · 0-1
+- themeParams.contrast: 对比度 · 0-2(默认 1)
+
+### 变体微调(variantParams,作用于当前变体动作)
+- variantParams.phaseStep: 相位步进 · 0-0.2(默认 0.04)· 调大=闪快
+- variantParams.phaseJitter: 相位随机 · 0-0.1(默认 0.06)
+- variantParams.sinWeightA: sin 主权重 · 0-1(ripple 生效)
+- variantParams.brightCurve: 亮度阶梯 · 1-10(默认 3.5)· 调大=偏暗
+- variantParams.chUpdateProb: 字符刷新概率 · 0-1(avalanche 默认 0.3,其他默认 0)
+- variantParams.headBright: 雪崩头部亮度 · 7-9(默认 8)
+- variantParams.headFalloff: 雪崩头部衰减 · 1=线性 2=二次
+- variantParams.avalancheSpeed: 雪崩下落速度 · 0-2(默认 0.5)
+
+### 冷/暖色板独立微调
+- coldThemeParams: { hueShift, saturationShift, brightness } · 冷色板(科技感侧)
+- warmThemeParams: { hueShift, saturationShift, brightness } · 暖色板(温度感侧)
+
+### 时间驱动色相(动态效果)
+- hueRotateSpeed: 色相旋转速度(度/秒)· 0=不动
+- hueRotateAmount: 色相最大累计幅度 · 0-360
+
+### 颜色注入点(覆盖指定亮度档)
+- colorOverrides: { '0': [r,g,b], '5': [r,g,b], '9': [r,g,b] } · 键='0'-'9' 代表亮度档(0=熄灭,9=最亮)· 值为 [r,g,b] 0-255 · 传 null 清除
+
+### 闪烁阶梯
+- flickerRates: { high, mid, low, dark } · 4 档闪烁概率(0-1)
+- sparkProbability: 雪崩头额外爆闪概率 · 0-1(默认 0.003)
+
+### 温度光心(暖心位置 + 漂移)
+- lightCenter: { x, y } · 屏幕比例 0-1(默认 0.7, 0.3 右上角)
+- warmthRadius: 暖色范围 · 0-1(默认 0.6)
+- warmthLerp: 跟随阻尼 · 0-1(默认 0.04)· 越大跟随越紧
+- driftSpeed: { x, y } · 光心漂移速度(默认 0.008, 0.006)
+
+## 五、组合配方库(高级用户描述时参考)
+
+1. **"黑客帝国原始"**: theme=matrix-green + variant=classic + themeParams.chroma=0.7 + variantParams.brightCurve=4
+2. **"赛博朋克黑夜"**: theme=cyber-blue + variant=avalanche + variantParams.avalancheSpeed=1.2 + hueRotateSpeed=30
+3. **"熔岩末日"**: theme=lava-red + variant=avalanche + warmthRadius=0.9 + variantParams.phaseStep=0.08
+4. **"深海白波"**: theme=silicon-valley + variant=ripple + lightCenter={x:0.5,y:0.5} + driftSpeed={x:0.02,y:0.015}
+5. **"静态雕塑"**: theme=pure-mono + flickerSpeed=0 + trailAlpha=0.05 + variant=avalanche
+6. **"青绿灯闪烁"**: theme=silicon-valley + themeParams.hueShift=-50 + flickerSpeed=2
+7. **"重粒子淅沱"**: variant=avalanche + variantParams.avalancheSpeed=1.6 + trailAlpha=0.08
+
+## 六、禁忌(不要调)
+
+- **不要输出 canvas/container/apiKey 等环境字段** · 这些不是配置项
+- **不要调 themeParams.contrast=0** · 会变全灰不可看
+- **不要同时设 theme='xxx' + 调 themeParams.XXX 为大值** · 主题色会被完全覆盖失去识别度
+`;
+
+  // 系统 prompt · 让 LLM 输出 JSON
+  function buildSystemPrompt(currentConfig, mode = 'first') {
+    const reviewBlock = mode === 'first' ? '' : `
+# 【自我审核】这是多轮迭代的 第 N 轮
+你上一轮已应用了 patches: {{APPLIED}}
+当前配置已变化(见上面基线)。**重新评估用户原始需求**:
+- 检查: 用户原话提的每一项都覆盖了吗?
+- 检查: 是否有冲突的字段被你漏调?
+- 检查: 有无更精确的同位项能加强表现?(例 "赛博" 可能不只 hueShift,还能加 hueRotateSpeed)
+- 检查: **看附的截图** · 画面中实际呈现的色调/亮度/动态跟用户描述一致吗?·是否需要反向调?
+- 只输出还需要的 patches(不要重复已应用的)
+- 如果认为已 100% 满足用户需求: 输出 {"patches":[], "done": true, "reason": "已覆盖 X / Y / Z,看截图已达到效果"}
+`;
+    return `你是 matrix-rain 数字矩阵背景的调参助手。
+你的任务:根据用户的自然语言描述,**查出要修改的字段和值,只返回 JSON**。
+
+# 输出严格约束(避免 token 超支)
+- **不要输出思考块 / 推理过程 / 解释文字**
+- **直接输出 JSON 对象** · 无任何额外文字
+
+# 思考路径
+1. **解析用户描述**: 拆出"主题"“动作”“亮度”“颜色”等词
+2. **查描述词汇表**(手册第一部分) → 推荐字段和值
+3. **多描述叠加**则叠加调整(比如 "雪崩 + 慢" = avalanche 变体但 phaseStep 调小)
+4. **以当前配置为基线**,只返回差异字段(不要重发全部字段)
+
+${reviewBlock}
+
+# 输出格式(严格遵守)
+- **只输出 JSON** · 无 markdown code block · 无任何额外文字
+- 单 patch: {"op":"set","path":"theme","value":"cyber-blue"}
+- 多 patch: {"patches":[{"op":"set",...},{"op":"set",...}]}
+- 完成 / 描述不明: {"patches":[], "done": true, "reason": "..."}
+
+# 当前配置(基线·只返回与下不同字段)
+\`\`\`json
+${JSON.stringify(currentConfig, null, 2)}
+\`\`\`
+
+# 参数手册
+${FIELD_DOCS}
+
+# 示例
+用户: "雪崩下落,慢一点,熔岩红"
+输出: {"patches":[
+  {"op":"set","path":"theme","value":"lava-red"},
+  {"op":"set","path":"variant","value":"avalanche"},
+  {"op":"set","path":"variantParams.avalancheSpeed","value":0.3},
+  {"op":"set","path":"variantParams.phaseStep","value":0.01}
+]}
+
+用户: "更赛博朋克,暖心在中间"
+输出: {"patches":[
+  {"op":"set","path":"theme","value":"cyber-blue"},
+  {"op":"set","path":"lightCenter","value":{"x":0.5,"y":0.5}}
+]}
+
+用户: "拖尾长,狂闪"
+输出: {"patches":[
+  {"op":"set","path":"trailAlpha","value":0.06"},
+  {"op":"set","path":"flickerSpeed","value":3}
+]}
+
+记住: **只输出 JSON,无任何额外文字。**`;
+  }
+
+  // 解析 LLM 响应(可能夹带 markdown / 思考块 / 多余文字 / 截断)·返回 { patches, done, reason }
+  function parseLLMResponse(text) {
+    // 预处理:剩 <think>...</think> 块(M3 推理模式会输出)
+    if (text) text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+    // 内部提取器:支持多种输出形状
+    const extract = (s) => {
+      if (!s) return null;
+      // 容错:LLM 可能输出带单引号 / 未转义换行 / 末尾逗号 → 尽量修复
+      const cleaned = s
+        .replace(/,\s*([}\]])/g, '$1')         // 去末尾多余逗号
+        .replace(/[\u2018\u2019]/g, "'")       // 中文引号 → ASCII
+        .replace(/[\u201C\u201D]/g, '"');
+      try {
+        const obj = JSON.parse(cleaned);
+        if (Array.isArray(obj.patches) || obj.done !== undefined) {
+          return { patches: obj.patches || [], done: !!obj.done, reason: obj.reason || '' };
+        }
+        if (Array.isArray(obj)) return { patches: obj, done: false, reason: '' };
+        if (obj.op) return { patches: [obj], done: false, reason: '' };
+      } catch (e) {}
+      return null;
+    };
+
+    // 尝试 1: 纯 JSON
+    const r1 = extract(text);
+    if (r1) return r1;
+
+    // 尝试 2: 提取 ```json ... ``` (可能是多层)
+    const fences = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/g)];
+    for (const m of fences) {
+      const r2 = extract(m[1]);
+      if (r2) return r2;
+    }
+
+    // 尝试 3: brace-counting 找第一个完整 {...} (处理截断)
+    const obj = extractFirstBalancedJson(text, '{', '}');
+    if (obj) {
+      const r3 = extract(obj);
+      if (r3) return r3;
+    }
+    // 尝试 3b: 找第一个 [...] 数组
+    const arr = extractFirstBalancedJson(text, '[', ']');
+    if (arr) {
+      const r3b = extract(arr);
+      if (r3b) return r3b;
+    }
+    return null;
+  }
+
+  // brace-counting:从首个 open 符号开始,找与其匹配的 close(考虑字符串/转义)
+  function extractFirstBalancedJson(text, open, close) {
+    const start = text.indexOf(open);
+    if (start === -1) return null;
+    let depth = 0, inStr = false, esc = false;
+    for (let i = start; i < text.length; i++) {
+      const c = text[i];
+      if (esc) { esc = false; continue; }
+      if (c === '\\' && inStr) { esc = true; continue; }
+      if (c === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (c === open) depth++;
+      else if (c === close) { depth--; if (depth === 0) return text.substring(start, i + 1); }
+    }
+    return null;  // 未找到平衡(被截断)
+  }
+
+  // 应用 patch
+  function applyPatches(patches) {
+    const applied = [];
+    for (const patch of patches) {
+      const { op, path, value } = patch;
+      if (op !== 'set' || !path) continue;
+      const segs = path.split('.');
+      let target = pgCurrent;
+      for (let i = 0; i < segs.length - 1; i++) {
+        const k = segs[i];
+        if (target[k] === undefined || target[k] === null) target[k] = {};
+        target = target[k];
+      }
+      target[segs[segs.length - 1]] = value;
+      applied.push(`${path} = ${JSON.stringify(value)}`);
+    }
+    // 重建 rain
+    rebuildRain();
+    return applied;
+  }
+
+  // 多轮聊天历史(只保存 user / assistant)
+  const chatHistory = [];   // { role: 'user'|'assistant', content: string }
+  const MAX_HISTORY = 6;    // 最多保留 3 轮(每轮 user+assistant),防 token 超
+
+  // ============== 截图:捕 stage canvas → base64 JPEG ==============
+  // 在 3 帧后取(让重建后的 rain 稳定、不抓到半成品)
+  async function captureStage(maxW = 320) {
+    const stage = document.getElementById('stage');
+    if (!stage) return null;
+    // 找 canvas
+    const canvas = stage.querySelector('canvas');
+    if (!canvas || !canvas.width) return null;
+    // 等 3 帧
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))));
+    try {
+      // 计算缩放:最长边 maxW
+      const scale = Math.min(1, maxW / Math.max(canvas.width, canvas.height));
+      const w = Math.round(canvas.width * scale);
+      const h = Math.round(canvas.height * scale);
+      const tmp = document.createElement('canvas');
+      tmp.width = w; tmp.height = h;
+      const ctx = tmp.getContext('2d');
+      ctx.drawImage(canvas, 0, 0, w, h);
+      // JPEG 0.6 质量、底色添黑防透明
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.fillStyle = '#0a0a14';
+      ctx.fillRect(0, 0, w, h);
+      return tmp.toDataURL('image/jpeg', 0.6);
+    } catch (e) {
+      console.warn('captureStage 失败', e);
+      return null;
+    }
+  }
+
+  // 调用 LLM (OpenAI 兼容 chat completions)·支持多轮上下文 + 迭代审核 + 视觉输入
+  async function callLLM(prompt, mode = 'first', appliedSoFar = [], imageBase64 = null) {
+    const cfg = {
+      baseUrl: document.getElementById('cfg-baseUrl').value.trim() || 'https://api.minimax.io/v1',
+      apiKey: document.getElementById('cfg-apiKey').value.trim(),
+      model: document.getElementById('cfg-model').value.trim() || 'MiniMax-M3'
+    };
+    if (!cfg.apiKey) throw new Error('未配置 API key');
+
+    let sys = buildSystemPrompt(pgCurrent, mode);
+    if (mode !== 'first') {
+      sys = sys.replace('{{APPLIED}}', appliedSoFar.length ? appliedSoFar.join('; ') : '（本轮刚进入迭代）');
+    }
+    const url = `${cfg.baseUrl.replace(/\/$/, '')}/chat/completions`;
+    // 构造多轮 messages:system + 最近 N 轮历史 + 当前 user
+    const messages = [{ role: 'system', content: sys }];
+    chatHistory.forEach(m => messages.push(m));
+    // user message:有图时是 multimodal content array,无图就是纯字符串
+    // 但若 LLM 禁视觉,强制不使用 image_url(避免不支持视觉的模型报错)
+    const visionEnabled = document.getElementById('cfg-vision')?.checked ?? true;
+    if (imageBase64 && visionEnabled) {
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: imageBase64 } }
+        ]
+      });
+    } else {
+      messages.push({ role: 'user', content: prompt });
+    }
+    // max_tokens 不传(走服务端默认)·避免思考型 LLM (M3) 思考过多被截断
+    const body = {
+      model: cfg.model,
+      messages,
+      temperature: 0.3
+    };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${cfg.apiKey}`
+      },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`HTTP ${resp.status}: ${err.slice(0, 200)}`);
+    }
+    const data = await resp.json();
+    return data.choices?.[0]?.message?.content || '';
+  }
+
+  // ============== UI 交互 ==============
+  // (右侧历史区已删) 消息只镜像到左下角叠加层
+  function addMsg(role, html) {
+    // === 直接镜像到左下角叠加层 ===
+    mirrorToOverlay(null, role, html);
+    return null;
+  }
+
+  // === 镜像消息到左下角叠加层(仅 user/ai,不含 ai-loading) ===
+  function mirrorToOverlay(srcEl, role, html) {
+    const body = document.getElementById('ai-overlay-body');
+    if (!body) return;
+    // 首次实际消息出现时,移除提示文案
+    const empty = document.getElementById('ai-overlay-empty');
+    if (empty) empty.remove();
+    // 克隆一份(不克隆事件,只是静态展示)
+    const clone = document.createElement('div');
+    clone.className = `ai-msg ${role}`;
+    clone.innerHTML = html;
+    body.appendChild(clone);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  // === 清空叠加层 (顶部 × 按钮同步) ===
+  function clearOverlay() {
+    const body = document.getElementById('ai-overlay-body');
+    if (!body) return;
+    body.innerHTML = '<div class="ai-overlay-empty" id="ai-overlay-empty">在这里与 AI 助手对话,助手回复会从底部渐入显示</div>';
+  }
+
+  function addLoading() {
+    // 改为镜像到 overlay
+    const body = document.getElementById('ai-overlay-body');
+    if (!body) return null;
+    const div = document.createElement('div');
+    div.className = 'ai-loading';
+    div.innerHTML = '<span class="dots"></span> AI 思考中...';
+    body.appendChild(div);
+    body.scrollTop = body.scrollHeight;
+    return div;
+  }
+
+  async function handleSend(textOverride) {
+    // textOverride · 从顶部 ai-hero-form 传过来(避免重复输入)
+    const text = (textOverride !== undefined ? textOverride : (document.getElementById('ai-hero-input')||{}).value || '').trim();
+    if (!text) return;
+
+    addMsg('user', `<div class="role">你</div><div>${escapeHTML(text)}</div>`);
+    // 清空顶部输入
+    const heroIn = document.getElementById('ai-hero-input');
+    if (heroIn) heroIn.value = '';
+
+    const sendBtn = document.getElementById('ai-hero-send');
+    sendBtn.disabled = true;
+
+    const loading = addLoading();
+    try {
+      // =============== 迭代主体:Round 1 → 2 → 3 ===============
+      const MAX_ITER = 3;
+      const iterLog = [];   // 记录每轮的 patches + reason
+      let finalResp = '';
+      let parseResult = null;
+      const startedAt = Date.now();
+
+      for (let round = 1; round <= MAX_ITER; round++) {
+        loading.textContent = `AI 思考中... (第 ${round}/${MAX_ITER} 轮)`;
+        const isFirst = round === 1;
+        // 每轮都截图:让 LLM 看到当前背景状态(首轮是原始背景,后续轮是调整后)
+        loading.textContent = `AI 思考中... (第 ${round}/${MAX_ITER} 轮,截图中)`;
+        const imgB64 = await captureStage(320);
+        loading.textContent = `AI 思考中... (第 ${round}/${MAX_ITER} 轮,送图中)`;
+        const llmResp = await callLLM(
+          isFirst ? `【用户原话】${text}。**附了当前背景截图,请看起点状态再推荐调整。** 输出 {"patches":[...], "done": bool, "reason": "..."}` : `【审核】重检用户需求: "${text}"。已应用: ${iterLog.flatMap(i => i.applied).join('; ')||'（暂无）'}。**附了上一轮调整后的截图,请看效果决定是否还调。** 输出 {"patches":[补充], "done": bool, "reason": "..."}`,
+          isFirst ? 'first' : 'review',
+          iterLog.flatMap(i => i.applied),
+          imgB64
+        );
+        finalResp = llmResp;
+        parseResult = parseLLMResponse(llmResp);
+        if (!parseResult) {
+          // 解析失败,中断
+          break;
+        }
+        // 应用 patches
+        if (parseResult.patches && parseResult.patches.length > 0) {
+          const applied = applyPatches(parseResult.patches);
+          iterLog.push({ round, applied, done: parseResult.done, reason: parseResult.reason });
+        } else {
+          iterLog.push({ round, applied: [], done: true, reason: parseResult.reason });
+        }
+        // 终止条件:LLM 认为已完成
+        if (parseResult.done) break;
+      }
+
+      loading.remove();
+
+      // 记录 user 消息到多轮历史
+      chatHistory.push({ role: 'user', content: text });
+      if (chatHistory.length > MAX_HISTORY) chatHistory.splice(0, chatHistory.length - MAX_HISTORY);
+
+      if (!parseResult) {
+        // 智能诊断:根据原始响应判断可能原因
+        const raw = finalResp || '';
+        let diagnosis = '';
+        if (!raw || raw.trim() === '') {
+          diagnosis = 'LLM 返回为空(可能是 API 限流/账单问题)';
+        } else if (raw.includes('<think>') && !raw.includes('<think>') && !raw.includes('</think>')) {
+          diagnosis = 'LLM 在思考块中走不出来(JSON 未输出)·可能 max_tokens 不够';
+        } else if (raw.trim().startsWith('<think>') || raw.includes('<think>')) {
+          // 剥离后判断剩多少
+          const after = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+          if (after.length < 10) diagnosis = 'LLM 只输出了思考块,没产生 JSON · 调高 max_tokens';
+          else if (after.startsWith('{') && !after.endsWith('}')) diagnosis = 'LLM 输出被截断(JSON 未闭包) · 调高 max_tokens 到 1200+';
+          else diagnosis = 'LLM 输出不含有效 JSON · 可能描述不准确';
+        } else if (raw.trim().startsWith('{') && !raw.trim().endsWith('}')) {
+          diagnosis = 'LLM JSON 被截断 · 调高 max_tokens';
+        } else {
+          diagnosis = 'LLM 输出不含 patches 字段 · 检查描述是否太抽象';
+        }
+        addMsg('ai', `<div class="role">🤖 助手</div><div>
+          <b>× 解析失败</b> · ${escapeHTML(diagnosis)}
+          <details><summary>原始响应(前 400 字)</summary><pre style="white-space:pre-wrap;word-break:break-all;background:rgba(0,0,0,.3);padding:8px;border-radius:4px;max-height:200px;overflow:auto;">${escapeHTML(raw.slice(0, 400))}</pre></details>
+          <div style="margin-top:8px;font-size:12px;color:rgba(200,196,184,.7);">
+            提示: “启用视觉审核”需模型支持 vision(MiniMax-M3 / gpt-4o / claude-3.5 / Qwen-VL)。如不兼容,关闭后可走纯文本模式。
+          </div>
+        </div>`);
+        chatHistory.push({ role: 'assistant', content: '[解析失败] ' + raw.slice(0, 400) });
+        if (chatHistory.length > MAX_HISTORY) chatHistory.splice(0, chatHistory.length - MAX_HISTORY);
+      } else {
+        refreshCurrentConfig();
+        const allApplied = iterLog.flatMap(i => i.applied);
+        const rounds = iterLog.length;
+        const durMs = Date.now() - startedAt;
+        const reasonLast = iterLog[iterLog.length - 1]?.reason || '';
+        const list = allApplied.map(a => `<li>${escapeHTML(a)}</li>`).join('');
+        const iterDetail = iterLog.map((it, i) => {
+          const marker = it.applied.length > 0 ? `⚒  ${it.applied.length} 项` : (it.done ? '✓ 完成' : '—');
+          const r = it.reason ? ` · ${escapeHTML(it.reason)}` : '';
+          return `<li><b>第 ${i+1} 轮</b> · ${marker}${r}</li>`;
+        }).join('');
+        addMsg('ai', `<div class="role">🤖 助手</div><div>
+          ✅ 任务完成 · 总耗时 ${durMs}ms · 迭代 ${rounds} 轮
+          <details open><summary>总应用 ${allApplied.length} 项修改</summary>
+            <ul class="patch-list">${list}</ul>
+          </details>
+          <details><summary>迭代轨迹</summary>
+            <ul class="patch-list">${iterDetail}</ul>
+          </details>
+          ${reasonLast ? `<div class="ai-reason">收尾评语:${escapeHTML(reasonLast)}</div>` : ''}
+        </div>`);
+        // 记录到多轮历史(压缩)
+        chatHistory.push({ role: 'assistant', content: `[${rounds}轮迭代] 已应用 ${allApplied.length} 项:${allApplied.join('; ')}${reasonLast ? '。评语:' + reasonLast : ''}` });
+        if (chatHistory.length > MAX_HISTORY) chatHistory.splice(0, chatHistory.length - MAX_HISTORY);
+      }
+    } catch (e) {
+      loading.remove();
+      addMsg('ai', `<div class="role">AI 助手</div><div>× <b>调用失败</b><br>${escapeHTML(e.message)}</div>`);
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+
+  function escapeHTML(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // ===== 描述输入桥接(现在位于左下角叠加层)=====
+  const heroForm = document.getElementById('ai-hero-form');
+  const heroInput = document.getElementById('ai-hero-input');
+  const heroSend = document.getElementById('ai-hero-send');
+  const stageArea = document.getElementById('stage');
+
+  function sendFromHero() {
+    const text = heroInput.value.trim();
+    if (!text) return;
+    handleSend(text);   // 直接传 text
+    heroInput.value = '';  // 清空输入框
+  }
+
+  heroForm.addEventListener('submit', e => { e.preventDefault(); sendFromHero(); });
+  heroSend.addEventListener('click', e => { e.preventDefault(); sendFromHero(); });
+  heroInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendFromHero(); }
+  });
+
+  // 6 个 preset 桥接 → 填值并发送
+  document.querySelectorAll('.preset-chip').forEach(pill => {
+    pill.addEventListener('click', () => {
+      heroInput.value = pill.dataset.prompt;
+      sendFromHero();
+    });
+  });
+
+  // =============== 文本 → bitmap → setTargetBitmap ===============
+  // 矩阵雨会“围着”这个字形走(亮区字符下落快)
+  document.getElementById('ai-text-apply').addEventListener('click', () => {
+    const text = document.getElementById('ai-text-input').value.trim();
+    if (!text) { alert('请输入文字'); return; }
+    // **关键**:cols/rows 必须跟 canvas grid 完全一致,否则索引错位
+    // 跟 engine.ts buildGrid 逻辑保持一致:col = ceil(width/fontSize), row = ceil(height/(fontSize*1.1))
+    const stage = document.getElementById('stage');
+    const w = stage ? stage.clientWidth : window.innerWidth;
+    const h = stage ? stage.clientHeight : window.innerHeight;
+    const charFont = pgCurrent.fontSize || 4;
+    const gridCols = Math.ceil(w / charFont);
+    const gridRows = Math.ceil(h / (charFont * 1.1));
+    try {
+      // **关键**:bitmap cols/rows 跟 grid 同步·每 1 位 = 1 个 cell
+      // 字形不超采样·直接画在 grid 尺寸画布上·不需被错位缩放
+      const bitmap = textToBitmap(text, gridCols, gridRows);
+      const anchor = document.getElementById('ai-text-anchor').value;
+      const motion = document.getElementById('ai-text-motion').value;
+      if (pgRain && typeof pgRain.setTargetBitmap === 'function') {
+        pgRain.setTargetBitmap(bitmap, { anchor, motion, motionSpeed: 0.3, hold: Infinity });
+        addMsg('ai', `<div class="role">T 文字动画</div><div>已生成"<b>${escapeHTML(text)}</b>"数字化图形(grid ${gridCols}×${gridRows}· 位置=${anchor} 运动=${motion})· 矩阵雨现在围字形流动</div>`);
+        refreshCurrentConfig();
+      }
+    } catch (e) {
+      addMsg('ai', `<div class="role">ERR</div><div>文字转 bitmap 失败:${escapeHTML(e.message)}</div>`);
+    }
+  });
+  document.getElementById('ai-text-clear').addEventListener('click', () => {
+    if (pgRain && typeof pgRain.clearTargetBitmap === 'function') {
+      pgRain.clearTargetBitmap();
+      document.getElementById('ai-text-input').value = '';
+      addMsg('ai', `<div class="role">T 文字动画</div><div>已清除字形 bitmap</div>`);
+    }
+  });
+
+  // =============== 上传卡片 3态 (空 / dragover / 已选) + 拖拽 ===============
+  (function setupUploadZone() {
+    const zone = document.getElementById('ai-upload-zone');
+    const fileInput = document.getElementById('ai-image-input');
+    const empty = document.getElementById('ai-upload-empty');
+    const filled = document.getElementById('ai-upload-filled');
+    const thumb = document.getElementById('ai-upload-thumb');
+    const name = document.getElementById('ai-upload-name');
+    const size = document.getElementById('ai-upload-size');
+    if (!zone || !fileInput) return;
+
+    function showFilled(file) {
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      thumb.src = url;
+      thumb.onload = () => URL.revokeObjectURL(url);
+      name.textContent = file.name;
+      size.textContent = formatBytes(file.size);
+      empty.hidden = true;
+      filled.hidden = false;
+      // 同步 fileInput.files（原本就有，这里只保证 UI 一致）
+    }
+    function showEmpty() {
+      empty.hidden = false;
+      filled.hidden = true;
+      thumb.removeAttribute('src');
+      name.textContent = '';
+      size.textContent = '';
+    }
+    function formatBytes(b) {
+      if (b < 1024) return b + ' B';
+      if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+      return (b / 1024 / 1024).toFixed(2) + ' MB';
+    }
+
+    // 选文件后切到“已选”态
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files?.[0];
+      if (f) showFilled(f);
+      else showEmpty();
+    });
+
+    // 拖拽 - dragover
+    zone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      zone.classList.add('dragover');
+    });
+    zone.addEventListener('dragleave', (e) => {
+      // 只在完全离开 zone 时才清除
+      if (e.target === zone || !zone.contains(e.relatedTarget)) {
+        zone.classList.remove('dragover');
+      }
+    });
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('dragover');
+      const f = e.dataTransfer?.files?.[0];
+      if (!f) return;
+      if (!f.type.startsWith('image/')) {
+        alert('请拖入图片文件 (PNG / JPG / WebP)');
+        return;
+      }
+      // 同步到 fileInput（让 fileInput.files 也能读出来）
+      const dt = new DataTransfer();
+      dt.items.add(f);
+      fileInput.files = dt.files;
+      showFilled(f);
+    });
+
+    // 导出供其他事件复用
+    window.__aiUploadZone = { showEmpty, showFilled, fileInput };
+  })();
+
+// =============== 图片 → bitmap → setTargetBitmap ===============
+  document.getElementById('ai-image-apply').addEventListener('click', async () => {
+    const fileInput = document.getElementById('ai-image-input');
+    const file = fileInput.files?.[0];
+    if (!file) { alert('请选文件'); return; }
+    try {
+      const img = await fileToImage(file);
+      // **关键**:bitmap 尺寸 = grid 尺寸(全画布),由 anchor 控制位置
+      const stage = document.getElementById('stage');
+      const w = stage ? stage.clientWidth : window.innerWidth;
+      const h = stage ? stage.clientHeight : window.innerHeight;
+      const fontSize = pgCurrent.fontSize || 4;
+      const cols = Math.ceil(w / fontSize);
+      const rows = Math.ceil(h / (fontSize * 1.1));
+      const bitmap = imageToBitmap(img, cols, rows);
+      const anchor = document.getElementById('ai-image-anchor').value;
+      const motion = document.getElementById('ai-image-motion').value;
+      if (pgRain && typeof pgRain.setTargetBitmap === 'function') {
+        pgRain.setTargetBitmap(bitmap, { anchor, motion, motionSpeed: 0.3, hold: Infinity });
+        addMsg('ai', `<div class="role">I 图像动画</div><div>已生成"<b>${escapeHTML(file.name)}</b>"数字化轮廓(${cols}×${rows}网格· 位置=${anchor} 运动=${motion})· 矩阵雨现在围轮廓流动</div>`);
+        refreshCurrentConfig();
+      }
+    } catch (e) {
+      addMsg('ai', `<div class="role">ERR</div><div>图片转 bitmap 失败:${escapeHTML(e.message)}</div>`);
+    }
+  });
+  document.getElementById('ai-image-clear').addEventListener('click', () => {
+    if (pgRain && typeof pgRain.clearTargetBitmap === 'function') {
+      pgRain.clearTargetBitmap();
+      document.getElementById('ai-image-input').value = '';
+      window.__aiUploadZone?.showEmpty();
+      addMsg('ai', `<div class="role">I 图像动画</div><div>已清除轮廓 bitmap</div>`);
+    }
+  });
+
+  // 清空聊天记录(顶部 × 按钮) - 已删除
+  // addMsg('ai', '<div class="role">AI 助手</div><div>已清空对话。</div>')  // 顶部 × 已删除
+
+  // === 叠加层折叠/展开 ===
+  document.getElementById('ai-overlay-toggle')?.addEventListener('click', () => {
+    document.getElementById('ai-overlay')?.classList.toggle('collapsed');
+  });
+
+  // ============== 启动 ==============
+  startStage();
+
+  // 跨页面/关闭时自动清理(防 leak)
+  window.addEventListener('pagehide', () => MatrixRain.destroyAll());
+  window.addEventListener('beforeunload', () => MatrixRain.destroyAll());
+</script>
+
+</body>
+</html>

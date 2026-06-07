@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /demo/_archive/
+Disallow: /node_modules/
+Disallow: /src/
+Disallow: /test/
+Disallow: /types/
+Disallow: /dist/*.map
+
+Sitemap: https://matrix-rain.xietuier.ai/sitemap.xml

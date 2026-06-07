@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a14">
+<title>@xietuier/matrix-rain · 参数 Playground</title>
+<link rel="stylesheet" href="../dist/matrix-rain.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font-family: Inter, system-ui, sans-serif; display: flex; }
+  .stage { flex: 1; position: relative; }
+  .panel { width: 360px; background: rgba(8,8,18,.92); backdrop-filter: blur(12px); border-left: 1px solid rgba(124,92,255,.25); padding: 32px 24px; overflow-y: auto; max-height: 100vh; }
+  h1 { font-family: "Fraunces", serif; font-style: italic; font-size: 28px; color: rgb(240,236,223); margin: 0 0 24px; }
+  h1 em { font-style: italic; background: linear-gradient(95deg, rgb(0,229,255), rgb(124,92,255)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  h2 { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .2em; color: rgba(0,229,255,.7); text-transform: uppercase; margin: 24px 0 12px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: flex; justify-content: space-between; font-size: 12px; color: rgb(200,196,184); margin-bottom: 6px; font-family: "JetBrains Mono", monospace; }
+  .field label .v { color: rgb(0,229,255); }
+  .field input[type=range] { width: 100%; accent-color: rgb(0,229,255); }
+  .field input[type=text] { width: 100%; background: rgba(0,0,0,.3); border: 1px solid rgba(124,92,255,.3); color: rgb(240,236,223); padding: 8px 10px; border-radius: 6px; font-family: "JetBrains Mono", monospace; font-size: 12px; }
+  .themes, .variants { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 16px; }
+  .themes button, .variants button { background: transparent; color: rgb(200,196,184); border: 1px solid rgba(124,92,255,.3); padding: 8px; border-radius: 6px; cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 11px; }
+  .themes button:hover, .variants button:hover { border-color: rgba(0,229,255,.5); }
+  .themes button.active, .variants button.active { background: linear-gradient(135deg, rgb(0,229,255), rgb(124,92,255)); color: #000; border-color: transparent; }
+  .fps { position: fixed; top: 16px; right: 16px; z-index: 10; font-family: "JetBrains Mono", monospace; font-size: 11px; color: rgba(0,229,255,.7); padding: 6px 12px; background: rgba(0,0,0,.5); backdrop-filter: blur(8px); border-radius: 6px; }
+  @media (max-width: 900px) {
+    body { flex-direction: column; }
+    .stage { height: 45vh; min-height: 280px; }
+    .panel { width: 100%; max-width: 100%; max-height: none; border-left: none; border-top: 1px solid rgba(124,92,255,.25); padding: 24px 20px; }
+    h1 { font-size: 24px; margin-bottom: 16px; }
+    h2 { margin: 18px 0 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage"></div>
+<div class="panel">
+  <h1>Play<em>ground</em></h1>
+
+  <h2>主题</h2>
+  <div class="themes" id="themes">
+    <button data-v="silicon-valley" class="active">硅 谷</button>
+    <button data-v="matrix-green">黑 客</button>
+    <button data-v="lava-red">熔 岩</button>
+    <button data-v="cyber-blue">赛 博</button>
+    <button data-v="pure-mono">单 色</button>
+  </div>
+
+  <h2>变体</h2>
+  <div class="variants" id="variants">
+    <button data-v="classic" class="active">classic</button>
+    <button data-v="avalanche">avalanche</button>
+    <button data-v="ripple">ripple</button>
+    <button data-v="ascii">ascii</button>
+  </div>
+
+  <h2>字符网格</h2>
+  <div class="field">
+    <label>fontSize <span class="v" id="v-fontSize">14</span></label>
+    <input type="range" id="fontSize" min="8" max="32" step="1" value="14">
+  </div>
+  <div class="field">
+    <label>trailAlpha <span class="v" id="v-trailAlpha">0.18</span></label>
+    <input type="range" id="trailAlpha" min="0.05" max="0.5" step="0.01" value="0.18">
+  </div>
+
+  <h2>温度光心</h2>
+  <div class="field">
+    <label>center.x <span class="v" id="v-cx">0.7</span></label>
+    <input type="range" id="cx" min="0" max="1" step="0.05" value="0.7">
+  </div>
+  <div class="field">
+    <label>center.y <span class="v" id="v-cy">0.3</span></label>
+    <input type="range" id="cy" min="0" max="1" step="0.05" value="0.3">
+  </div>
+  <div class="field">
+    <label>warmthRadius <span class="v" id="v-wr">0.6</span></label>
+    <input type="range" id="wr" min="0.1" max="1.5" step="0.05" value="0.6">
+  </div>
+  <div class="field">
+    <label>warmthLerp <span class="v" id="v-wl">0.04</span></label>
+    <input type="range" id="wl" min="0.01" max="0.3" step="0.01" value="0.04">
+  </div>
+
+  <h2>字符集 (ASCII 变体)</h2>
+  <div class="field">
+    <input type="text" id="charset" value="01<>[]{}=*+">
+  </div>
+</div>
+<div class="fps" id="fps">FPS: --</div>
+
+<script type="module">
+import { matrixRain } from '../dist/index.js?v=3';
+
+let current = {
+  theme: 'silicon-valley',
+  variant: 'classic',
+  fontSize: 14,
+  trailAlpha: 0.18,
+  lightCenter: { x: 0.7, y: 0.3 },
+  warmthRadius: 0.6,
+  warmthLerp: 0.04,
+  charset: '01<>[]{}=*+'
+};
+
+let rain = matrixRain({ container: document.getElementById('stage'), ...current });
+
+// 主题切换
+document.querySelectorAll('#themes button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#themes button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  current.theme = b.dataset.v;
+  rain.setTheme(b.dataset.v);
+}));
+
+// 变体切换(destroy + 重启,因为 variant 改不了)
+document.querySelectorAll('#variants button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#variants button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  current.variant = b.dataset.v;
+  rain.destroy();
+  rain = matrixRain({ container: document.getElementById('stage'), ...current });
+}));
+
+// 滑块绑定
+const bind = (id, fn) => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    document.getElementById('v-'+id).textContent = v;
+    fn(v);
+    rain.destroy();
+    rain = matrixRain({ container: document.getElementById('stage'), ...current });
+  });
+};
+bind('fontSize', v => current.fontSize = v);
+bind('trailAlpha', v => current.trailAlpha = v);
+bind('cx', v => current.lightCenter = { x: v, y: current.lightCenter.y });
+bind('cy', v => current.lightCenter = { x: current.lightCenter.x, y: v });
+bind('wr', v => current.warmthRadius = v);
+bind('wl', v => current.warmthLerp = v);
+document.getElementById('charset').addEventListener('input', e => {
+  current.charset = e.target.value;
+  rain.destroy();
+  rain = matrixRain({ container: document.getElementById('stage'), ...current });
+});
+
+// FPS 实时显示
+const fpsEl = document.getElementById('fps');
+setInterval(() => { fpsEl.textContent = 'FPS: ' + rain.getFPS(); }, 500);
+</script>
+</body>
+</html>

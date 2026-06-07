@@ -1,0 +1,2312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a14">
+<title>@xietuier/matrix-rain · 使用教程 + Demo</title>
+<meta name="description" content="数字矩阵背景完整教程 · 介绍 / 安装 / 5 分钟上手 / 5 主题 / 4 变体 / React·Vue·Next / Playground / API。">
+<meta property="og:title" content="@xietuier/matrix-rain · 使用教程 + Demo">
+<meta property="og:description" content="12 个 tab 单页应用,数字矩阵背景完整教程 + Demo">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://matrix-rain.xietuier.ai/demo/07-tutorial.html">
+<link rel="stylesheet" href="../dist/matrix-rain.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; font-family: Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: #0a0a14; }
+  html, body { overflow: hidden; height: 100vh; }  /* 锁定 body/页面 整体不滑动 */
+  body { display: grid; grid-template-columns: 260px 1fr; grid-template-rows: 1fr auto; min-height: 100vh; }
+
+  /* ===== 数字矩阵风滚动条(全页统一) ===== */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 229, 255, .55) rgba(0, 0, 0, .35);
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track {
+    background:
+      linear-gradient(180deg, rgba(0, 229, 255, .04), rgba(0, 229, 255, .02)),
+      rgba(0, 0, 0, .35);
+    border-radius: 5px;
+    box-shadow: inset 0 0 0 1px rgba(0, 229, 255, .08);
+  }
+  *::-webkit-scrollbar-thumb {
+    background:
+      linear-gradient(180deg,
+        rgba(0, 229, 255, .15) 0%,
+        rgba(0, 229, 255, .55) 50%,
+        rgba(0, 229, 255, .15) 100%);
+    border-radius: 5px;
+    border: 1px solid rgba(0, 229, 255, .35);
+    box-shadow: 0 0 8px rgba(0, 229, 255, .35);
+    min-height: 40px;
+    transition: all .2s;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background:
+      linear-gradient(180deg,
+        rgba(0, 229, 255, .35) 0%,
+        rgba(124, 92, 255, .75) 50%,
+        rgba(0, 229, 255, .35) 100%);
+    border-color: rgba(124, 92, 255, .65);
+    box-shadow: 0 0 12px rgba(0, 229, 255, .55);
+  }
+  *::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(180deg, rgba(0, 229, 255, .7), rgba(0, 229, 255, .5));
+  }
+  *::-webkit-scrollbar-corner { background: transparent; }
+  *::-webkit-scrollbar-button { display: none; }
+
+  /* 移动端汉堡按钮 */
+  .menu-toggle {
+    display: none;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 100;
+    width: 44px;
+    height: 44px;
+    background: rgba(8, 8, 18, .92);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(124, 92, 255, .4);
+    border-radius: 10px;
+    cursor: pointer;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    color: rgb(240, 236, 223);
+  }
+  .menu-toggle svg { width: 20px; height: 20px; }
+  body.menu-open { overflow: hidden; }
+
+  /* ===== 左侧菜单 ===== */
+  aside {
+    position: relative;
+    z-index: 5;
+    background: rgba(8, 8, 18, .88);
+    backdrop-filter: blur(12px);
+    border-right: 1px solid rgba(124, 92, 255, .2);
+    padding: 32px 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .brand {
+    padding: 0 28px 24px;
+    border-bottom: 1px solid rgba(124, 92, 255, .15);
+    margin-bottom: 16px;
+  }
+  .brand .name {
+    font-family: "Fraunces", "Cormorant Garamond", serif;
+    font-style: italic;
+    font-size: 22px;
+    color: rgb(240, 236, 223);
+    line-height: 1.2;
+  }
+  .brand .name em {
+    font-style: italic;
+    background: linear-gradient(95deg, rgb(0,229,255), rgb(124,92,255));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .brand .ver {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: rgba(200, 196, 184, .5);
+    letter-spacing: .15em;
+    margin-top: 6px;
+  }
+  .brand .ext-links { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px 10px; }
+  .brand .ext-links a { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .1em; color: rgb(0, 229, 255); text-decoration: none; padding: 4px 8px; border: 1px solid rgba(0, 229, 255, .3); border-radius: 4px; transition: all .15s; }
+  .brand .ext-links a:hover { background: rgba(0, 229, 255, .12); border-color: rgba(0, 229, 255, .6); }
+  .menu-section { margin-bottom: 12px; }
+  .menu-section h3 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: .2em;
+    color: rgba(0, 229, 255, .6);
+    text-transform: uppercase;
+    margin: 0 28px 8px;
+    padding: 0;
+  }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 28px;
+    color: rgb(200, 196, 184);
+    font-size: 14px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: all .15s;
+    user-select: none;
+  }
+  .menu-item:hover { color: rgb(240, 236, 223); background: rgba(124, 92, 255, .06); }
+  .menu-item.active {
+    color: rgb(0, 229, 255);
+    border-left-color: rgb(0, 229, 255);
+    background: rgba(0, 229, 255, .08);
+  }
+  .menu-item .icon { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .5; }
+  .menu-item.active .icon { opacity: 1; box-shadow: 0 0 8px currentColor; }
+
+  /* ===== 右侧内容区 ===== */
+  main {
+    position: relative;
+    z-index: 5;
+    padding: 40px 56px 80px;
+    overflow: hidden;  /* 禁 main 整体滚动,内部 grid 自管 */
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  /* tab-pane 设为 flex 列,高度跟 main 一致 */
+  .tab-pane {
+    display: none;
+    animation: fadeIn .3s;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .tab-pane.active { display: flex; flex-direction: column; }
+  /* 普通 tab 自滚, Playground 特殊不滚(交给内部 grid) */
+  .tab-pane.active:not([data-pane="playground"]) { overflow-y: auto; }
+  .tab-pane.active[data-pane="playground"] { overflow: hidden; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .tab-header { margin-bottom: 32px; }
+  .tab-header .crumb {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: rgba(200, 196, 184, .5);
+    letter-spacing: .15em;
+    margin-bottom: 8px;
+  }
+  .tab-header h1 {
+    font-family: "Fraunces", "Cormorant Garamond", serif;
+    font-style: italic;
+    font-size: 48px;
+    color: rgb(240, 236, 223);
+    margin: 0 0 12px;
+    line-height: 1.1;
+  }
+  .tab-header h1 em {
+    font-style: italic;
+    background: linear-gradient(95deg, rgb(255,77,109), rgb(255,210,63), rgb(0,229,255), rgb(124,92,255));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .tab-header p {
+    font-size: 15px;
+    color: rgba(200, 196, 184, .9);
+    line-height: 1.7;
+    margin: 0;
+    max-width: 720px;
+  }
+
+  /* ===== 教程内容 ===== */
+  .step {
+    background: rgba(16, 16, 26, .6);
+    border: 1px solid rgba(124, 92, 255, .2);
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-bottom: 16px;
+    backdrop-filter: blur(8px);
+  }
+  .step .num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: rgba(0, 229, 255, .7);
+    letter-spacing: .2em;
+  }
+  .step h3 {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-size: 22px;
+    color: rgb(240, 236, 223);
+    margin: 6px 0 12px;
+  }
+  .step p { font-size: 14px; line-height: 1.75; color: rgba(220, 216, 206, .85); margin: 0 0 12px; }
+  .step pre {
+    background: rgba(0, 0, 0, .4);
+    border: 1px solid rgba(124, 92, 255, .2);
+    border-radius: 8px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 0;
+  }
+  .step pre code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    color: rgb(220, 216, 206);
+    line-height: 1.6;
+  }
+  .step code.inline {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    background: rgba(0, 229, 255, .12);
+    color: rgb(0, 229, 255);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .step .k { color: rgb(255, 138, 61); }
+  .step .s { color: rgb(46, 213, 115); }
+  .step .c { color: rgba(200, 196, 184, .5); font-style: italic; }
+  .step .v { color: rgb(0, 229, 255); }
+
+  /* ===== Demo 网格 ===== */
+  .demo-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  .demo-card {
+    position: relative;
+    aspect-ratio: 16/9;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(124, 92, 255, .25);
+    background: rgba(0, 0, 0, .3);
+  }
+  .demo-card canvas { position: absolute !important; inset: 0; }
+  .demo-card .label {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    z-index: 2;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: rgb(240, 236, 223);
+    padding: 6px 12px;
+    background: rgba(0, 0, 0, .5);
+    backdrop-filter: blur(8px);
+    border-radius: 6px;
+  }
+  .demo-card .label .en { opacity: .6; font-size: 9px; }
+
+  /* ===== 单一大型 demo 区 ===== */
+  .demo-stage {
+    position: relative;
+    height: 420px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(124, 92, 255, .3);
+    margin-bottom: 16px;
+  }
+  .demo-stage canvas { position: absolute !important; inset: 0; }
+  .demo-stage .overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .demo-stage .overlay h2 {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-size: 72px;
+    color: rgb(240, 236, 223);
+    margin: 0;
+    line-height: 1.1;
+    text-shadow: 0 2px 24px rgba(0,0,0,.5);
+  }
+  .demo-stage .overlay h2 em {
+    font-style: italic;
+    background: linear-gradient(95deg, rgb(255,77,109), rgb(255,210,63), rgb(0,229,255), rgb(124,92,255));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .demo-stage .overlay .badge {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: rgb(0, 229, 255);
+    padding: 6px 14px;
+    border: 1px solid rgba(0, 229, 255, .4);
+    border-radius: 999px;
+    margin-bottom: 24px;
+    letter-spacing: .2em;
+  }
+
+  /* ===== API 表格 ===== */
+  table.api {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(16, 16, 26, .5);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(124, 92, 255, .2);
+  }
+  table.api th, table.api td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid rgba(124, 92, 255, .1);
+    font-size: 13px;
+  }
+  table.api th {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: .15em;
+    color: rgba(0, 229, 255, .7);
+    text-transform: uppercase;
+    background: rgba(0, 0, 0, .3);
+  }
+  table.api td { color: rgba(220, 216, 206, .9); }
+  table.api tr:last-child td { border-bottom: none; }
+  table.api code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: rgb(0, 229, 255);
+  }
+  table.api td.desc { color: rgba(200, 196, 184, .8); font-size: 12px; }
+
+  /* ===== Playground ===== */
+  .pg-layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: stretch; min-height: 0; flex: 1 1 auto; }
+  .pg-stage { height: 100%; min-height: 520px; position: relative; border-radius: 16px; overflow: hidden; border: 1px solid rgba(124, 92, 255, .3); }
+  .pg-panel { overflow-y: auto; height: 100%; max-height: calc(100vh - 140px); padding-right: 6px; min-height: 520px; }
+  .pg-stage .fps-tag { position: absolute; top: 12px; right: 12px; z-index: 6; font-family: "JetBrains Mono", monospace; font-size: 11px; color: rgba(0, 229, 255, .8); padding: 6px 12px; background: rgba(0, 0, 0, .5); backdrop-filter: blur(8px); border-radius: 6px; }
+  .pg-panel { padding: 0; }
+  .pg-section { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid rgba(124, 92, 255, .12); }
+  .pg-section:last-of-type { border-bottom: none; margin-bottom: 0; }
+  .pg-section h3 { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .2em; color: rgba(0, 229, 255, .7); text-transform: uppercase; margin: 0 0 12px; }
+  .pg-field { margin-bottom: 12px; }
+  .pg-field label { display: flex; justify-content: space-between; font-size: 11.5px; color: rgb(200, 196, 184); margin-bottom: 4px; font-family: "JetBrains Mono", monospace; }
+  .pg-field label .v { color: rgb(0, 229, 255); }
+  .pg-field input[type=range] { width: 100%; accent-color: rgb(0, 229, 255); }
+  .pg-field input[type=text] { width: 100%; background: rgba(0, 0, 0, .3); border: 1px solid rgba(124, 92, 255, .3); color: rgb(240, 236, 223); padding: 7px 9px; border-radius: 6px; font-family: "JetBrains Mono", monospace; font-size: 12px; }
+  .pg-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .pg-grid-2 button { background: transparent; color: rgb(200, 196, 184); border: 1px solid rgba(124, 92, 255, .3); padding: 7px; border-radius: 6px; cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 11px; transition: all .15s; }
+  .pg-grid-2 button:hover { border-color: rgba(0, 229, 255, .5); }
+  .pg-grid-2 button.active { background: linear-gradient(135deg, rgb(0, 229, 255), rgb(124, 92, 255)); color: #000; border-color: transparent; font-weight: 500; }
+  .pg-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .pg-grid-3 button { background: transparent; color: rgb(200, 196, 184); border: 1px solid rgba(124, 92, 255, .3); padding: 6px 4px; border-radius: 6px; cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 10.5px; transition: all .15s; text-align: center; }
+  .pg-grid-3 button:hover { border-color: rgba(0, 229, 255, .5); }
+  .pg-grid-3 button.active { background: linear-gradient(135deg, rgba(0, 229, 255, .15), rgba(124, 92, 255, .15)); border-color: rgba(0, 229, 255, .6); color: rgb(0, 229, 255); }
+  .pg-grid-3 button .emoji { font-size: 14px; display: block; margin-bottom: 2px; }
+
+  /* userfunc 4 层(ABC D) */
+  .pg-userfunc { background: rgba(0, 0, 0, .25); border: 1px solid rgba(124, 92, 255, .18); border-radius: 8px; padding: 10px; }
+  .pg-userfunc .pg-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+  .pg-userfunc .pg-tabs button { background: transparent; color: rgb(200, 196, 184); border: 1px solid rgba(124, 92, 255, .3); padding: 5px 8px; border-radius: 5px; cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 10.5px; flex: 1; transition: all .15s; }
+  .pg-userfunc .pg-tabs button:hover { border-color: rgba(0, 229, 255, .5); }
+  .pg-userfunc .pg-tabs button.active { background: linear-gradient(135deg, rgb(0, 229, 255), rgb(124, 92, 255)); color: #000; border-color: transparent; font-weight: 500; }
+  .pg-layer { display: none; }
+  .pg-layer.active { display: block; }
+  .pg-userfunc-status { font-size: 10px; font-family: "JetBrains Mono", monospace; color: rgba(200, 196, 184, .6); margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(124, 92, 255, .1); }
+  .pg-userfunc-status.active { color: rgb(46, 213, 115); }
+
+  /* C 曲线 SVG */
+  .pg-lut { width: 100%; height: 80px; background: rgba(0, 0, 0, .4); border: 1px solid rgba(124, 92, 255, .25); border-radius: 6px; display: block; }
+  .pg-lut .pg-lut-grid { stroke: rgba(124, 92, 255, .15); stroke-width: 1; }
+  .pg-lut .pg-lut-line { stroke: rgb(0, 229, 255); stroke-width: 2; fill: none; filter: drop-shadow(0 0 4px rgba(0, 229, 255, .5)); }
+  .pg-lut .pg-lut-pt { fill: rgb(0, 229, 255); stroke: #000; stroke-width: 1; cursor: grab; transition: r .1s; }
+  .pg-lut .pg-lut-pt:hover { fill: rgb(255, 255, 255); }
+  .pg-lut-pt.dragging { cursor: grabbing; }
+  .pg-lut-reset { background: transparent; color: rgb(200, 196, 184); border: 1px solid rgba(124, 92, 255, .3); padding: 4px 10px; border-radius: 5px; cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 10.5px; margin-top: 6px; }
+  .pg-lut-reset:hover { border-color: rgba(0, 229, 255, .5); }
+
+  /* B 波形 */
+  .pg-wave-channels { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+  .pg-wave-channel { display: grid; grid-template-columns: 60px 1fr 1fr 1fr 22px; gap: 4px; align-items: center; padding: 4px; background: rgba(0, 0, 0, .3); border-radius: 5px; border: 1px solid rgba(124, 92, 255, .15); }
+  .pg-wave-channel select, .pg-wave-channel input { background: rgba(0, 0, 0, .4); border: 1px solid rgba(124, 92, 255, .25); color: rgb(240, 236, 223); padding: 3px 5px; border-radius: 4px; font-family: "JetBrains Mono", monospace; font-size: 10px; width: 100%; }
+  .pg-wave-channel input { min-width: 0; }
+  .pg-wave-channel .pg-wave-del { background: rgba(255, 71, 87, .15); color: rgb(255, 71, 87); border: 1px solid rgba(255, 71, 87, .3); border-radius: 4px; cursor: pointer; font-size: 12px; line-height: 1; padding: 0; height: 22px; }
+  .pg-wave-channel .pg-wave-del:hover { background: rgba(255, 71, 87, .3); }
+  .pg-wave-add, .pg-wave-combine { background: rgba(0, 229, 255, .1); color: rgb(0, 229, 255); border: 1px solid rgba(0, 229, 255, .3); padding: 4px 8px; border-radius: 5px; cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 10.5px; }
+  .pg-wave-add:hover { background: rgba(0, 229, 255, .2); }
+  .pg-wave-combine { margin-left: 4px; }
+
+  /* A 沙箱 */
+  .pg-code { width: 100%; background: rgba(0, 0, 0, .5); border: 1px solid rgba(124, 92, 255, .3); color: rgb(0, 229, 255); padding: 8px; border-radius: 6px; font-family: "JetBrains Mono", monospace; font-size: 11px; resize: vertical; min-height: 70px; line-height: 1.5; }
+  .pg-code:focus { outline: none; border-color: rgba(0, 229, 255, .6); box-shadow: 0 0 8px rgba(0, 229, 255, .2); }
+  .pg-code-msg { font-size: 10px; font-family: "JetBrains Mono", monospace; margin-top: 4px; min-height: 14px; }
+  .pg-code-msg.ok { color: rgb(46, 213, 115); }
+  .pg-code-msg.err { color: rgb(255, 71, 87); }
+  .pg-hint { font-size: 10.5px; color: rgba(200, 196, 184, .6); margin: 0 0 10px; font-family: "JetBrains Mono", monospace; }
+  .pg-color-row { display: grid; grid-template-columns: 30px 1fr 1fr 1fr 30px; gap: 4px; align-items: center; margin-bottom: 6px; }
+  .pg-color-row .pg-color-lv { color: rgb(0, 229, 255); font-size: 11px; font-family: "JetBrains Mono", monospace; text-align: center; }
+  .pg-color-row input[type=number] { background: rgba(0, 0, 0, .4); border: 1px solid rgba(124, 92, 255, .25); color: rgb(240, 236, 223); padding: 3px 5px; border-radius: 4px; font-family: "JetBrains Mono", monospace; font-size: 10.5px; width: 100%; }
+  .pg-color-row .pg-color-swatch { height: 22px; border-radius: 4px; border: 1px solid rgba(124, 92, 255, .3); }
+  .pg-target-btn { background: rgba(0, 229, 255, .12); color: rgb(0, 229, 255); border: 1px solid rgba(0, 229, 255, .4); padding: 6px 10px; border-radius: 5px; cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 11px; flex: 1; }
+  .pg-target-btn:hover { background: rgba(0, 229, 255, .25); }
+  .pg-target-btn.dragover { background: rgba(46, 213, 115, .3); border-color: rgb(46, 213, 115); }
+  .pg-target-status { font-size: 10.5px; font-family: "JetBrains Mono", monospace; color: rgba(200, 196, 184, .7); margin-top: 6px; }
+  .pg-target-status.active { color: rgb(46, 213, 115); }
+  .pg-target-pg { font-size: 10px; font-family: "JetBrains Mono", monospace; color: rgba(0, 229, 255, .7); margin-top: 4px; min-height: 14px; }
+  .pg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pg-btn { padding: 10px 18px; border-radius: 8px; font-family: "JetBrains Mono", monospace; font-size: 12px; font-weight: 500; cursor: pointer; border: none; transition: all .15s; }
+  .pg-btn-primary { background: linear-gradient(135deg, rgb(0, 229, 255), rgb(124, 92, 255)); color: #000; }
+  .pg-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0, 229, 255, .3); }
+  .pg-btn-secondary { background: transparent; color: rgb(240, 236, 223); border: 1px solid rgba(124, 92, 255, .4); }
+  .pg-btn-secondary:hover { border-color: rgba(0, 229, 255, .6); }
+  .pg-toast { display: inline-block; margin-left: 8px; font-size: 11px; color: rgb(46, 213, 115); opacity: 0; transition: opacity .2s; font-family: "JetBrains Mono", monospace; }
+  details { margin-top: 8px; border: 1px solid rgba(124, 92, 255, .2); border-radius: 6px; background: rgba(0, 0, 0, .2); }
+  details summary { padding: 8px 10px; cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 11px; color: rgb(0, 229, 255); user-select: none; }
+  details summary:hover { background: rgba(0, 229, 255, .05); }
+  details[open] summary { border-bottom: 1px solid rgba(124, 92, 255, .2); }
+  details .pg-field { padding: 0 10px; margin-top: 8px; }
+  details .pg-field:last-child { padding-bottom: 10px; margin-bottom: 0; }
+  .pg-toast.show { opacity: 1; }
+  @media (max-width: 900px) {
+    .pg-layout { grid-template-columns: 1fr; }
+    .pg-stage { min-height: 320px; }  /* 移动端高度由 pane 自身 flex 撑 · 不锁 45vh */
+    .pg-panel { max-height: 50vh; min-height: auto; }
+  }
+
+  /* ===== Footer ===== */
+  .footer {
+    position: relative;
+    z-index: 5;
+    grid-column: 1 / -1;
+    padding: 16px 32px;
+    background: rgba(8, 8, 18, .6);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(124, 92, 255, .15);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: rgba(200, 196, 184, .5);
+    display: flex;
+    justify-content: space-between;
+  }
+  .footer a { color: rgba(0, 229, 255, .7); text-decoration: none; }
+  .footer a:hover { color: rgb(0, 229, 255); }
+
+  /* 重新布局:footer 横跨整页 */
+  body { grid-template-rows: 1fr auto; }
+  aside, main { grid-row: 1; }
+  .footer { grid-row: 2; grid-column: 1 / -1; }
+
+  @media (max-width: 900px) {
+    body { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
+    .menu-toggle { display: flex; }
+    aside {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: 280px;
+      max-width: 80vw;
+      z-index: 50;
+      transform: translateX(-100%);
+      transition: transform .25s ease;
+      border-right: 1px solid rgba(124, 92, 255, .25);
+    }
+    body.menu-open aside { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,.6); }
+    body.menu-open::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .55);
+      z-index: 40;
+    }
+    main { padding: 72px 20px 60px; }
+    .tab-header h1 { font-size: 32px; }
+    .tab-header p { font-size: 14px; }
+    .demo-grid { grid-template-columns: 1fr; }
+    .demo-stage { height: 280px; }
+    .demo-stage .overlay h2 { font-size: 40px; }
+    .step { padding: 18px 20px; }
+    .step h3 { font-size: 18px; }
+    .step pre { padding: 12px 14px; }
+    .step pre code { font-size: 11.5px; }
+    table.api th, table.api td { padding: 10px 12px; font-size: 12px; }
+    .footer { padding: 12px 16px; font-size: 10px; flex-direction: column; gap: 6px; }
+  }
+  @media (max-width: 480px) {
+    main { padding: 64px 16px 48px; }
+    .tab-header h1 { font-size: 28px; }
+    .demo-stage .overlay h2 { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="菜单">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <line x1="3" y1="6" x2="21" y2="6"/>
+    <line x1="3" y1="12" x2="21" y2="12"/>
+    <line x1="3" y1="18" x2="21" y2="18"/>
+  </svg>
+</button>
+
+<aside id="sidebar">
+  <div class="brand">
+    <div class="name">@xietuier/<em>matrix-rain</em></div>
+    <div class="ver">v0.1.0 · czhmisaka · MIT</div>
+    <div class="ext-links">
+      <a href="../">主页</a>
+      <a href="./00-index.html">All Demos</a>
+      <a href="./08-ai-tune.html">AI Mode</a>
+      <a href="./09-blog.html">Blog</a>
+    </div>
+  </div>
+
+  <div class="menu-section">
+    <h3>入门</h3>
+    <div class="menu-item active" data-tab="intro"><span class="icon"></span>介绍</div>
+    <div class="menu-item" data-tab="install"><span class="icon"></span>安装</div>
+    <div class="menu-item" data-tab="quickstart"><span class="icon"></span>5 分钟上手</div>
+  </div>
+
+  <div class="menu-section">
+    <h3>主题与变体</h3>
+    <div class="menu-item" data-tab="themes"><span class="icon"></span>5 主题预览</div>
+    <div class="menu-item" data-tab="variants"><span class="icon"></span>4 变体预览</div>
+  </div>
+
+  <div class="menu-section">
+    <h3>集成</h3>
+    <div class="menu-item" data-tab="react"><span class="icon"></span>React</div>
+    <div class="menu-item" data-tab="vue"><span class="icon"></span>Vue 3</div>
+    <div class="menu-item" data-tab="next"><span class="icon"></span>Next.js</div>
+    <div class="menu-item" data-tab="cdn"><span class="icon"></span>纯 HTML + CDN</div>
+  </div>
+
+  <div class="menu-section">
+    <h3>API</h3>
+    <div class="menu-item" data-tab="api-options"><span class="icon"></span>配置项</div>
+    <div class="menu-item" data-tab="api-methods"><span class="icon"></span>实例方法</div>
+    <div class="menu-item" data-tab="playground"><span class="icon"></span>配置项 Playground</div>
+  </div>
+
+  <div class="menu-section">
+    <h3>实战</h3>
+    <div class="menu-item" data-tab="landing"><span class="icon"></span>Landing Page</div>
+    <div class="menu-item" data-tab="blog"><span class="icon"></span>博客 / 文档</div>
+  </div>
+
+  <div class="sidebar-footer" style="margin-top:auto;padding:24px 0 8px;border-top:1px solid rgba(124,92,255,.15);font-size:11px;color:rgba(200,196,184,.4);font-family:'JetBrains Mono',monospace;letter-spacing:.1em;">
+    RETURN · 主页
+  </div>
+</aside>
+
+<main>
+
+  <!-- ==================== Tab: 介绍 ==================== -->
+  <div class="tab-pane active" data-pane="intro">
+    <div class="tab-header">
+      <div class="crumb">INTRO · 介绍</div>
+      <h1>数字矩阵背景<br><em>终端感 × 温度感</em></h1>
+      <p>硅 谷大蟹腿儿(🦞)出品 · Canvas 2D + rAF 实现的暗色数字雨背景。5 套主题、4 种变体、20+ 可调参数。零依赖,4KB minified,i5 单核 CPU 占用 &lt; 3%。</p>
+    </div>
+    <div class="demo-stage" id="stage-intro">
+      <div class="overlay">
+        <div class="badge">LIVE PREVIEW</div>
+        <h2>硅谷风 · <em>经典</em></h2>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Tab: 安装 ==================== -->
+  <div class="tab-pane" data-pane="install">
+    <div class="tab-header">
+      <div class="crumb">INSTALL · 安装</div>
+      <h1>3 种<em>安装</em>方式</h1>
+      <p>支持所有现代包管理器,也支持 CDN 单文件。</p>
+    </div>
+
+    <div class="step">
+      <div class="num">STEP 01</div>
+      <h3>npm</h3>
+      <pre><code>$ npm install @xietuier/matrix-rain</code></pre>
+    </div>
+
+    <div class="step">
+      <div class="num">STEP 02</div>
+      <h3>pnpm / yarn</h3>
+      <pre><code>$ pnpm add @xietuier/matrix-rain
+$ yarn add @xietuier/matrix-rain</code></pre>
+    </div>
+
+    <div class="step">
+      <div class="num">STEP 03</div>
+      <h3>CDN (无需 npm)</h3>
+      <pre><code>&lt;link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain/dist/matrix-rain.css"&gt;
+&lt;script type="module"&gt;
+  import { matrixRain } from '@xietuier/matrix-rain';
+  matrixRain({ theme: 'silicon-valley' });
+&lt;/script&gt;</code></pre>
+    </div>
+  </div>
+
+  <!-- ==================== Tab: 5 分钟上手 ==================== -->
+  <div class="tab-pane" data-pane="quickstart">
+    <div class="tab-header">
+      <div class="crumb">QUICKSTART · 5 分钟上手</div>
+      <h1>一行代码<em>起手</em></h1>
+      <p>默认配置即可用。需要深度定制时,所有参数都是可选项。</p>
+    </div>
+
+    <div class="step">
+      <div class="num">STEP 01</div>
+      <h3>最小可用</h3>
+      <pre><code><span class="k">import</span> { <span class="v">matrixRain</span> } <span class="k">from</span> <span class="s">'@xietuier/matrix-rain'</span>;
+
+<span class="k">const</span> rain = <span class="v">matrixRain</span>(); <span class="c">// 默认 硅 谷风 + 经典变体</span>
+
+<span class="c">// 用完销毁(推荐 SPA 路由切换时调)</span>
+rain.<span class="v">destroy</span>();</code></pre>
+    </div>
+
+    <div class="step">
+      <div class="num">STEP 02</div>
+      <h3>带样式</h3>
+      <pre><code><span class="k">import</span> { <span class="v">matrixRain</span> } <span class="k">from</span> <span class="s">'@xietuier/matrix-rain'</span>;
+<span class="k">import</span> <span class="s">'@xietuier/matrix-rain/style.css'</span>; <span class="c">// 5 层暗色背景</span>
+
+<span class="k">const</span> rain = <span class="v">matrixRain</span>({
+  <span class="v">theme</span>: <span class="s">'silicon-valley'</span>,
+  <span class="v">fontSize</span>: <span class="s">14</span>,
+});</code></pre>
+    </div>
+
+    <div class="step">
+      <div class="num">STEP 03</div>
+      <h3>深度定制</h3>
+      <pre><code><span class="k">const</span> rain = <span class="v">matrixRain</span>({
+  <span class="v">theme</span>: <span class="s">'silicon-valley'</span>,
+  <span class="v">variant</span>: <span class="s">'avalanche'</span>,        <span class="c">// 雪崩下落</span>
+  <span class="v">charset</span>: <span class="s">'01+-'</span>,                  <span class="c">// 自定义字符集</span>
+  <span class="v">trailAlpha</span>: <span class="s">0.12</span>,                  <span class="c">// 拖尾更长</span>
+  <span class="v">lightCenter</span>: { <span class="v">x</span>: <span class="s">0.5</span>, <span class="v">y</span>: <span class="s">0.5</span> },   <span class="c">// 光心居中</span>
+  <span class="v">warmthLerp</span>: <span class="s">0.1</span>,                    <span class="c">// 暖色更紧跟</span>
+});</code></pre>
+    </div>
+  </div>
+
+  <!-- ==================== Tab: 5 主题 ==================== -->
+  <div class="tab-pane" data-pane="themes">
+    <div class="tab-header">
+      <div class="crumb">THEMES · 主题</div>
+      <h1>5 套<em>主题</em>预设</h1>
+      <p>同一经典变体 + 5 套双调色板。覆盖从科技到赛博到纯灰的所有暗色调性。</p>
+    </div>
+    <div class="demo-grid" id="themes-grid"></div>
+  </div>
+
+  <!-- ==================== Tab: 4 变体 ==================== -->
+  <div class="tab-pane" data-pane="variants">
+    <div class="tab-header">
+      <div class="crumb">VARIANTS · 变体</div>
+      <h1>4 种<em>变体</em>形态</h1>
+      <p>同一硅谷风主题 + 4 种主循环行为。从《黑客帝国》雪崩到同心圆涟漪。</p>
+    </div>
+    <div class="demo-grid" id="variants-grid"></div>
+  </div>
+
+  <!-- ==================== Tab: React ==================== -->
+  <div class="tab-pane" data-pane="react">
+    <div class="tab-header">
+      <div class="crumb">INTEGRATION · React</div>
+      <h1>React <em>组件</em></h1>
+      <p>用 useEffect 接管生命周期,组件卸载时自动 destroy。</p>
+    </div>
+    <div class="step">
+      <div class="num">基础用法</div>
+      <pre><code><span class="k">import</span> { <span class="v">useEffect</span> } <span class="k">from</span> <span class="s">'react'</span>;
+<span class="k">import</span> { <span class="v">matrixRain</span> } <span class="k">from</span> <span class="s">'@xietuier/matrix-rain'</span>;
+<span class="k">import</span> <span class="s">'@xietuier/matrix-rain/style.css'</span>;
+
+<span class="k">export function</span> <span class="v">MatrixRain</span>({ theme = <span class="s">'silicon-valley'</span> }) {
+  <span class="v">useEffect</span>(() => {
+    <span class="k">const</span> rain = <span class="v">matrixRain</span>({ theme });
+    <span class="k">return</span> () => rain.<span class="v">destroy</span>(); <span class="c">// 卸载时销毁</span>
+  }, [theme]);
+
+  <span class="k">return null</span>; <span class="c">// Canvas 由库自动创建</span>
+}</code></pre>
+    </div>
+    <div class="step">
+      <div class="num">进阶:动态主题切换</div>
+      <pre><code><span class="k">import</span> { <span class="v">useEffect</span>, <span class="v">useRef</span> } <span class="k">from</span> <span class="s">'react'</span>;
+<span class="k">import</span> { <span class="v">matrixRain</span>, <span class="k">type</span> <span class="v">MatrixRainInstance</span> } <span class="k">from</span> <span class="s">'@xietuier/matrix-rain'</span>;
+
+<span class="k">export function</span> <span class="v">MatrixRain</span>({ theme }) {
+  <span class="k">const</span> ref = <span class="v">useRef</span>&lt;<span class="v">MatrixRainInstance</span>&gt;(<span class="k">null</span>);
+
+  <span class="v">useEffect</span>(() => {
+    ref.<span class="v">current</span> = <span class="v">matrixRain</span>({ theme });
+    <span class="k">return</span> () => ref.<span class="v">current</span>?.<span class="v">destroy</span>();
+  }, []);
+
+  <span class="v">useEffect</span>(() => {
+    ref.<span class="v">current</span>?.<span class="v">setTheme</span>(theme); <span class="c">// 主题 prop 变了不重建,只换色</span>
+  }, [theme]);
+
+  <span class="k">return null</span>;
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- ==================== Tab: Vue 3 ==================== -->
+  <div class="tab-pane" data-pane="vue">
+    <div class="tab-header">
+      <div class="crumb">INTEGRATION · Vue 3</div>
+      <h1>Vue 3 <em>组件</em></h1>
+      <p>onMounted / onUnmounted / watch 三件套。</p>
+    </div>
+    <div class="step">
+      <div class="num">基础用法</div>
+      <pre><code>&lt;<span class="k">script</span> <span class="v">setup</span>&gt;
+<span class="k">import</span> { <span class="v">onMounted</span>, <span class="v">onUnmounted</span>, <span class="v">ref</span>, <span class="v">watch</span> } <span class="k">from</span> <span class="s">'vue'</span>;
+<span class="k">import</span> { <span class="v">matrixRain</span> } <span class="k">from</span> <span class="s">'@xietuier/matrix-rain'</span>;
+<span class="k">import</span> <span class="s">'@xietuier/matrix-rain/style.css'</span>;
+
+<span class="k">const</span> props = <span class="v">defineProps</span>({ theme: { <span class="v">type</span>: <span class="v">String</span>, <span class="v">default</span>: <span class="s">'silicon-valley'</span> } });
+<span class="k">const</span> instance = <span class="v">ref</span>(<span class="k">null</span>);
+
+<span class="v">onMounted</span>(() => { instance.<span class="v">value</span> = <span class="v">matrixRain</span>({ theme: props.theme }); });
+<span class="v">onUnmounted</span>(() => instance.<span class="v">value</span>?.<span class="v">destroy</span>());
+<span class="v">watch</span>(() => props.theme, t => instance.<span class="v">value</span>?.<span class="v">setTheme</span>(t));
+&lt;/<span class="k">script</span>&gt;
+
+&lt;<span class="k">template</span>&gt;&lt;!-- 不需要任何 DOM --&gt;&lt;/<span class="k">template</span>&gt;</code></pre>
+    </div>
+  </div>
+
+  <!-- ==================== Tab: Next.js ==================== -->
+  <div class="tab-pane" data-pane="next">
+    <div class="tab-header">
+      <div class="crumb">INTEGRATION · Next.js</div>
+      <h1>Next.js <em>App Router</em></h1>
+      <p>Canvas 是浏览器 API,必须 'use client'。</p>
+    </div>
+    <div class="step">
+      <div class="num">app/layout.tsx</div>
+      <pre><code><span class="k">import</span> <span class="s">'@xietuier/matrix-rain/style.css'</span>;
+<span class="k">import</span> <span class="v">MatrixBg</span> <span class="k">from</span> <span class="s">'@/components/MatrixBg'</span>;
+
+<span class="k">export default function</span> <span class="v">RootLayout</span>({ children }) {
+  <span class="k">return</span> (
+    &lt;<span class="k">html</span>&gt;&lt;<span class="k">body</span>&gt;
+      &lt;<span class="v">MatrixBg</span> /&gt;
+      {children}
+    &lt;/<span class="k">body</span>&lt;/<span class="k">html</span>&gt;
+  );
+}</code></pre>
+    </div>
+    <div class="step">
+      <div class="num">components/MatrixBg.tsx</div>
+      <pre><code><span class="s">'use client'</span>;
+<span class="k">import</span> { <span class="v">useEffect</span> } <span class="k">from</span> <span class="s">'react'</span>;
+<span class="k">import</span> { <span class="v">matrixRain</span> } <span class="k">from</span> <span class="s">'@xietuier/matrix-rain'</span>;
+
+<span class="k">export default function</span> <span class="v">MatrixBg</span>() {
+  <span class="v">useEffect</span>(() => {
+    <span class="k">const</span> rain = <span class="v">matrixRain</span>({ theme: <span class="s">'silicon-valley'</span> });
+    <span class="k">return</span> () => rain.<span class="v">destroy</span>();
+  }, []);
+  <span class="k">return null</span>;
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- ==================== Tab: CDN ==================== -->
+  <div class="tab-pane" data-pane="cdn">
+    <div class="tab-header">
+      <div class="crumb">INTEGRATION · 纯 HTML + CDN</div>
+      <h1>零 npm <em>也能用</em></h1>
+      <p>jsdelivr CDN 一行,适合博客/低代码/快速 demo。</p>
+    </div>
+    <div class="step">
+      <div class="num">完整可运行的 HTML</div>
+      <pre><code><span class="c">&lt;!DOCTYPE html&gt;</span>
+&lt;<span class="k">html</span> <span class="v">lang</span>=<span class="s">"zh-CN"</span>&gt;
+&lt;<span class="k">head</span>&gt;
+  &lt;<span class="k">link</span> <span class="v">rel</span>=<span class="s">"stylesheet"</span> <span class="v">href</span>=<span class="s">"https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain/dist/matrix-rain.css"</span>&gt;
+&lt;/<span class="k">head</span>&gt;
+&lt;<span class="k">body</span>&gt;
+  &lt;<span class="k">main</span>&gt;你的内容&lt;/<span class="k">main</span>&gt;
+  &lt;<span class="k">script</span> <span class="v">type</span>=<span class="s">"module"</span>&gt;
+    <span class="k">import</span> { <span class="v">matrixRain</span> } <span class="k">from</span> <span class="s">'@xietuier/matrix-rain'</span>;
+    <span class="v">matrixRain</span>({ theme: <span class="s">'silicon-valley'</span> });
+  &lt;/<span class="k">script</span>&gt;
+&lt;/<span class="k">body</span>&gt;
+&lt;/<span class="k">html</span>&gt;</code></pre>
+    </div>
+  </div>
+
+  <!-- ==================== Tab: API 配置项 ==================== -->
+  <div class="tab-pane" data-pane="api-options">
+    <div class="tab-header">
+      <div class="crumb">API · 配置项</div>
+      <h1><em>MatrixRainOptions</em></h1>
+      <p>所有字段都可选,传哪个改哪个,其余用默认。</p>
+    </div>
+    <table class="api">
+      <thead><tr><th>字段</th><th>类型</th><th>默认</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>theme</code></td><td><code>ThemeName</code></td><td><code>'silicon-valley'</code></td><td class="desc">5 套主题预设</td></tr>
+        <tr><td><code>variant</code></td><td><code>VariantName</code></td><td><code>'classic'</code></td><td class="desc">4 种变体</td></tr>
+        <tr><td><code>fontSize</code></td><td><code>number</code></td><td><code>14</code></td><td class="desc">字符宽(px),越大越疏</td></tr>
+        <tr><td><code>charset</code></td><td><code>string</code></td><td><code>'0123456789'</code></td><td class="desc">字符集</td></tr>
+        <tr><td><code>trailAlpha</code></td><td><code>number</code></td><td><code>0.18</code></td><td class="desc">残影 alpha,0.05=长拖尾 / 0.5=无拖尾</td></tr>
+        <tr><td><code>maxDPR</code></td><td><code>number</code></td><td><code>2</code></td><td class="desc">DPR 上限,性能优先设 1</td></tr>
+        <tr><td><code>coldPalette</code></td><td><code>HSLPalette</code></td><td>theme</td><td class="desc">冷色板(科技感侧)· HSL 公式 { h, s, lMin, lMax, aMax }</td></tr>
+        <tr><td><code>warmPalette</code></td><td><code>HSLPalette</code></td><td>theme</td><td class="desc">暖色板(温度感侧)· HSL 公式 { h, s, lMin, lMax, aMax }</td></tr>
+        <tr><td><code>lightCenter</code></td><td><code>{x,y}</code></td><td><code>{0.7, 0.3}</code></td><td class="desc">温度光心位置(屏幕比例 0-1)</td></tr>
+        <tr><td><code>driftSpeed</code></td><td><code>{x,y}</code></td><td><code>{0.008, 0.006}</code></td><td class="desc">光心漂移速度</td></tr>
+        <tr><td><code>warmthRadius</code></td><td><code>number</code></td><td><code>0.6</code></td><td class="desc">光晕半径(相对视口高)</td></tr>
+        <tr><td><code>warmthLerp</code></td><td><code>number</code></td><td><code>0.04</code></td><td class="desc">阻尼跟随(0-1),越大越紧</td></tr>
+        <tr><td><code>sparkProbability</code></td><td><code>number</code></td><td><code>0.003</code></td><td class="desc">爆闪到最亮档的概率</td></tr>
+        <tr><td><code>flickerRates</code></td><td><code>4 档对象</code></td><td><code>0.7/0.4/0.15/0.04</code></td><td class="desc">闪烁概率阶梯</td></tr>
+        <tr><td><code>flickerSpeed</code></td><td><code>number</code></td><td><code>1</code></td><td class="desc">闪烁速度倍率 · 0=冻结 1=默认 3=狂暴</td></tr>
+        <tr><td><code>themeParams</code></td><td><code>Partial&lt;ThemeParams&gt;</code></td><td><code>跟随主题</code></td><td class="desc">主题参数覆盖 { brightness, chroma, hueShift, saturationShift, lightnessShift, invertHue, contrast }</td></tr>
+        <tr><td><code>variantParams</code></td><td><code>Partial&lt;VariantParams&gt;</code></td><td><code>跟随变体</code></td><td class="desc">变体参数覆盖 { phaseStep, phaseJitter, sinWeightA/B/C, brightCurve, chUpdateProb, headBright, headFalloff, avalancheSpeed }</td></tr>
+        <tr><td><code>coldThemeParams</code></td><td><code>Partial&lt;ThemeParams&gt;</code></td><td><code>{hueShift:0, sat:0, brightness:1}</code></td><td class="desc">冷色板独立参数(混色前 applyTP)</td></tr>
+        <tr><td><code>warmThemeParams</code></td><td><code>Partial&lt;ThemeParams&gt;</code></td><td><code>{hueShift:0, sat:0, brightness:1}</code></td><td class="desc">暖色板独立参数</td></tr>
+        <tr><td><code>hueRotateSpeed</code></td><td><code>number</code></td><td><code>0</code></td><td class="desc">时间驱动色相旋转速度(度/秒)</td></tr>
+        <tr><td><code>hueRotateAmount</code></td><td><code>number</code></td><td><code>360</code></td><td class="desc">色相旋转累计量(色相最大偏移)</td></tr>
+        <tr><td><code>colorOverrides</code></td><td><code>{[L]:[r,g,b]}</code></td><td><code>null</code></td><td class="desc">颜色注入点·完全覆盖指定亮度档颜色(L=0-9)</td></tr>
+        <tr><td><code>colorCurve</code></td><td><code>string</code></td><td><code>null</code></td><td class="desc">颜色动态曲线代码·f(t,h,s,r)→度数偏移</td></tr>
+        <tr><td><code>brightnessCurve</code></td><td><code>string</code></td><td><code>null</code></td><td class="desc">亮度曲线代码·f(t,h,s,r)→0-1</td></tr>
+        <tr><td><code>flickerCurve</code></td><td><code>string</code></td><td><code>null</code></td><td class="desc">闪烁概率曲线代码·f(t,h,s,r)→0-1</td></tr>
+        <tr><td><code>phaseFunc</code></td><td><code>string</code></td><td><code>null</code></td><td class="desc">相位增量函数代码·f(t,h,s,r)→±0.05</td></tr>
+        <tr><td><code>charsetFunc</code></td><td><code>string</code></td><td><code>null</code></td><td class="desc">字符分布函数代码·f(t,h,s,r,ch)→int</td></tr>
+        <tr><td><code>targetBitmap</code></td><td><code>Float32Array</code></td><td><code>null</code></td><td class="desc">目标位图(文字/图片转换的灰度 0-1,长度 r*i)</td></tr>
+        <tr><td><code>targetFadeIn</code></td><td><code>number</code></td><td><code>0.5</code></td><td class="desc">目标位图淑入时长(秒)</td></tr>
+        <tr><td><code>targetHold</code></td><td><code>number</code></td><td><code>3.0</code></td><td class="desc">目标位图保持时长(秒)·Infinity=永久</td></tr>
+        <tr><td><code>targetFadeOut</code></td><td><code>number</code></td><td><code>2.0</code></td><td class="desc">目标位图淑出时长(秒)</td></tr>
+        <tr><td><code>targetChaos</code></td><td><code>number 0-1</code></td><td><code>0.5</code></td><td class="desc">淑入淑出时字符混乱度(0-1)</td></tr>
+        <tr><td><code>container</code></td><td><code>HTMLElement</code></td><td><code>document.body</code></td><td class="desc">父容器</td></tr>
+        <tr><td><code>canvas</code></td><td><code>HTMLCanvasElement</code></td><td>auto</td><td class="desc">自定义画布</td></tr>
+        <tr><td><code>onReady</code></td><td><code>(i)=&gt;void</code></td><td>—</td><td class="desc">启动回调</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== Tab: API 方法 ==================== -->
+  <div class="tab-pane" data-pane="api-methods">
+    <div class="tab-header">
+      <div class="crumb">API · 实例方法</div>
+      <h1><em>MatrixRainInstance</em></h1>
+      <p>返回的实例句柄,生命周期 + 运行时控制。</p>
+    </div>
+    <table class="api">
+      <thead><tr><th>方法</th><th>签名</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>destroy()</code></td><td><code>() =&gt; void</code></td><td class="desc">销毁实例,释放 rAF / 事件 / DOM</td></tr>
+        <tr><td><code>pause()</code></td><td><code>() =&gt; void</code></td><td class="desc">暂停动画(切 tab 省电)</td></tr>
+        <tr><td><code>resume()</code></td><td><code>() =&gt; void</code></td><td class="desc">恢复动画</td></tr>
+        <tr><td><code>getFPS()</code></td><td><code>() =&gt; number</code></td><td class="desc">当前 FPS(30 帧滑动平均)</td></tr>
+        <tr><td colspan="3"><strong>主题/变体/色板</strong></td></tr>
+        <tr><td><code>setTheme(name)</code></td><td><code>ThemeName</code></td><td class="desc">切换主题(5 预设)·热更新</td></tr>
+        <tr><td><code>setThemeParams(p)</code></td><td><code>Partial&lt;ThemeParams&gt;</code></td><td class="desc">热更新主题参数 7 字段(brightness/chroma/hueShift/satShift/lightShift/invert/contrast)</td></tr>
+        <tr><td><code>setColdThemeParams(p)</code></td><td><code>Partial&lt;ThemeParams&gt;</code></td><td class="desc">热更新冷色板独立参数</td></tr>
+        <tr><td><code>setWarmThemeParams(p)</code></td><td><code>Partial&lt;ThemeParams&gt;</code></td><td class="desc">热更新暖色板独立参数</td></tr>
+        <tr><td><code>setHueRotate(speed, amount?)</code></td><td><code>number, number?</code></td><td class="desc">热更新时间驱动色相旋转(度/秒, 范围)</td></tr>
+        <tr><td><code>setColorOverrides(o)</code></td><td><code>{[L]:[r,g,b]}|null</code></td><td class="desc">热更新颜色注入点·L=0-9 覆盖</td></tr>
+        <tr><td><code>setColorCurve(code)</code></td><td><code>string|null</code></td><td class="desc">热更新颜色动态曲线代码</td></tr>
+        <tr><td><code>setVariantParams(p)</code></td><td><code>Partial&lt;VariantParams&gt;</code></td><td class="desc">热更新变体参数(phase/sin 振幅/avalanche 速度等 10 字段)</td></tr>
+        <tr><td colspan="3"><strong>4 层用户函数驱动 (ABCD)</strong></td></tr>
+        <tr><td><code>setBrightnessCurve(code)</code></td><td><code>string|null</code></td><td class="desc">热更新亮度曲线 f(t,h,s,r)→0-1</td></tr>
+        <tr><td><code>setFlickerCurve(code)</code></td><td><code>string|null</code></td><td class="desc">热更新闪烁概率 f(t,h,s,r)→0-1</td></tr>
+        <tr><td><code>setPhaseFunc(code)</code></td><td><code>string|null</code></td><td class="desc">热更新相位增量 f(t,h,s,r)→±0.05</td></tr>
+        <tr><td><code>setCharsetFunc(code)</code></td><td><code>string|null</code></td><td class="desc">热更新字符分布 f(t,h,s,r,ch)→int</td></tr>
+        <tr><td colspan="3"><strong>文字/图片目标位图</strong></td></tr>
+        <tr><td><code>setTargetBitmap(bmp, opts?)</code></td><td><code>Float32Array|null, {fadeIn?, hold?, fadeOut?, chaos?}</code></td><td class="desc">设置目标位图 + 状态机参数(淑入/保持/淑出)</td></tr>
+        <tr><td><code>clearTargetBitmap()</code></td><td><code>() =&gt; void</code></td><td class="desc">立即淑出(提前结束显示)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== Tab: Playground ==================== -->
+  <div class="tab-pane" data-pane="playground">
+    <div class="tab-header">
+      <div class="crumb">PLAYGROUND · 实时调参</div>
+      <h1>拖动滑块调参<br><em>实时预览 + 导出 JSON</em></h1>
+      <p>调整下方 17 个参数,左侧舞台实时响应。满意后点击 <strong style="color: rgb(0,229,255);">下载配置 JSON</strong>,可直接贴进项目里运行。</p>
+    </div>
+
+    <div class="pg-layout">
+      <!-- 左侧舞台 -->
+      <div class="pg-stage" id="pg-stage">
+        <div class="fps-tag" id="pg-fps">FPS: --</div>
+      </div>
+
+      <!-- 右侧面板 -->
+      <div class="pg-panel">
+        <!-- 主题 -->
+        <div class="pg-section">
+          <h3>主题 (5 种预设调色板)</h3>
+          <div class="pg-grid-2" id="pg-themes">
+            <button data-v="silicon-valley" class="active" title="默认青绿+琥珀,适合科技产品">硅 谷<br><small>silicon-valley</small></button>
+            <button data-v="matrix-green" title="经典黑客帝国绿" >黑 客<br><small>matrix-green</small></button>
+            <button data-v="lava-red" title="高饱和红橙,激情感">熔 岩<br><small>lava-red</small></button>
+            <button data-v="cyber-blue" title="冷蓝紫,未来感">赛 博<br><small>cyber-blue</small></button>
+            <button data-v="pure-mono" title="灰阶,极简风">单 色<br><small>pure-mono</small></button>
+          </div>
+          <div class="pg-field" style="margin-top: 10px;">
+            <label>整体亮度 · theme.brightness <span class="v" id="pg-v-themeBrightness">1</span></label>
+            <input type="range" id="pg-themeBrightness" min="0" max="2" step="0.05" value="1">
+          </div>
+          <div class="pg-field">
+            <label>色彩饱和度 · theme.chroma <span class="v" id="pg-v-themeChroma">1</span></label>
+            <input type="range" id="pg-themeChroma" min="0" max="1.5" step="0.05" value="1">
+          </div>
+          <div class="pg-field">
+            <label>色相偏移 · theme.hueShift <span class="v" id="pg-v-themeHueShift">0</span></label>
+            <input type="range" id="pg-themeHueShift" min="-180" max="180" step="1" value="0">
+          </div>
+          <div class="pg-field">
+            <label>饱和度加减 · theme.saturationShift <span class="v" id="pg-v-themeSatShift">0</span></label>
+            <input type="range" id="pg-themeSatShift" min="-1" max="1" step="0.05" value="0">
+          </div>
+          <div class="pg-field">
+            <label>明度加减 · theme.lightnessShift <span class="v" id="pg-v-themeLightShift">0</span></label>
+            <input type="range" id="pg-themeLightShift" min="-0.5" max="0.5" step="0.01" value="0">
+          </div>
+          <div class="pg-field">
+            <label>反色强度 · theme.invertHue <span class="v" id="pg-v-themeInvert">0</span></label>
+            <input type="range" id="pg-themeInvert" min="0" max="1" step="0.05" value="0">
+          </div>
+          <div class="pg-field">
+            <label>对比度 · theme.contrast <span class="v" id="pg-v-themeContrast">1</span></label>
+            <input type="range" id="pg-themeContrast" min="0" max="2" step="0.05" value="1">
+          </div>
+        </div>
+
+        <!-- 冷暖色板独立调参 -->
+        <div class="pg-section">
+          <h3>冷暖色板独立调参</h3>
+          <p class="pg-hint">冷色走头部,暖色走尾部 · 混色之前独立调参</p>
+          <details>
+            <summary>🧊 冷色板 (寒冷头部)</summary>
+            <div class="pg-field">
+              <label>冷色板·色相偏移 · cold.hueShift <span class="v" id="pg-v-coldHueShift">0</span></label>
+              <input type="range" id="pg-coldHueShift" min="-180" max="180" step="1" value="0">
+            </div>
+            <div class="pg-field">
+              <label>冷色板·饱和度加减 · cold.saturationShift <span class="v" id="pg-v-coldSatShift">0</span></label>
+              <input type="range" id="pg-coldSatShift" min="-1" max="1" step="0.05" value="0">
+            </div>
+            <div class="pg-field">
+              <label>冷色板·亮度 · cold.brightness <span class="v" id="pg-v-coldBright">1</span></label>
+              <input type="range" id="pg-coldBright" min="0" max="2" step="0.05" value="1">
+            </div>
+          </details>
+          <details>
+            <summary>🔥 暖色板 (温暖尾部)</summary>
+            <div class="pg-field">
+              <label>暖色板·色相偏移 · warm.hueShift <span class="v" id="pg-v-warmHueShift">0</span></label>
+              <input type="range" id="pg-warmHueShift" min="-180" max="180" step="1" value="0">
+            </div>
+            <div class="pg-field">
+              <label>暖色板·饱和度加减 · warm.saturationShift <span class="v" id="pg-v-warmSatShift">0</span></label>
+              <input type="range" id="pg-warmSatShift" min="-1" max="1" step="0.05" value="0">
+            </div>
+            <div class="pg-field">
+              <label>暖色板·亮度 · warm.brightness <span class="v" id="pg-v-warmBright">1</span></label>
+              <input type="range" id="pg-warmBright" min="0" max="2" step="0.05" value="1">
+            </div>
+          </details>
+        </div>
+
+        <!-- 时间驱动色相旋转 -->
+        <div class="pg-section">
+          <h3>时间驱动色相旋转</h3>
+          <div class="pg-field">
+            <label>色相旋转速度(度/秒) · hueRotateSpeed <span class="v" id="pg-v-hueRotateSpeed">0</span></label>
+            <input type="range" id="pg-hueRotateSpeed" min="-360" max="360" step="1" value="0">
+          </div>
+          <div class="pg-field">
+            <label>色相旋转范围(度) · hueRotateAmount <span class="v" id="pg-v-hueRotateAmount">360</span></label>
+            <input type="range" id="pg-hueRotateAmount" min="1" max="720" step="1" value="360">
+          </div>
+        </div>
+
+        <!-- 颜色注入点 -->
+        <div class="pg-section">
+          <h3>颜色注入 (覆盖特定亮度档)</h3>
+          <p class="pg-hint">指定亮度档(0-9)用什么纯色,直接覆盖冷暖混色</p>
+          <div id="pg-color-overrides"></div>
+        </div>
+
+        <!-- 变体 -->
+        <div class="pg-section">
+          <h3>变体 (4 种动画形态)</h3>
+          <div class="pg-grid-2" id="pg-variants">
+            <button data-v="classic" class="active">经典 classic</button>
+            <button data-v="avalanche">雪崩 avalanche</button>
+            <button data-v="ripple">涟漪 ripple</button>
+            <button data-v="ascii">字符 ascii</button>
+          </div>
+          <div class="pg-field" style="margin-top: 10px;">
+            <label>相位步进 · variant.phaseStep <span class="v" id="pg-v-phaseStep">0.04</span></label>
+            <input type="range" id="pg-phaseStep" min="0" max="0.2" step="0.005" value="0.04">
+          </div>
+          <div class="pg-field">
+            <label>相位抖动 · variant.phaseJitter <span class="v" id="pg-v-phaseJitter">0.06</span></label>
+            <input type="range" id="pg-phaseJitter" min="0" max="0.1" step="0.005" value="0.06">
+          </div>
+          <div class="pg-field">
+            <label>正弦权重A · variant.sinWeightA <span class="v" id="pg-v-sinWeightA">0.4</span></label>
+            <input type="range" id="pg-sinWeightA" min="0" max="1" step="0.05" value="0.4">
+          </div>
+          <div class="pg-field">
+            <label>亮度曲线 · variant.brightCurve <span class="v" id="pg-v-brightCurve">3.5</span></label>
+            <input type="range" id="pg-brightCurve" min="1" max="10" step="0.1" value="3.5">
+          </div>
+          <div class="pg-field">
+            <label>字符随机更新概率 · variant.chUpdateProb <span class="v" id="pg-v-chUpdateProb">0</span></label>
+            <input type="range" id="pg-chUpdateProb" min="0" max="1" step="0.01" value="0">
+          </div>
+        </div>
+
+        <!-- 字符网格 -->
+        <div class="pg-section">
+          <h3>字符网格</h3>
+          <div class="pg-field">
+            <label>字符大小 · fontSize <span class="v" id="pg-v-fontSize">22</span></label>
+            <input type="range" id="pg-fontSize" min="8" max="32" step="1" value="22">
+          </div>
+          <div class="pg-field">
+            <label>拖尾透明度 · trailAlpha <span class="v" id="pg-v-trailAlpha">0.92</span></label>
+            <input type="range" id="pg-trailAlpha" min="0.05" max="0.95" step="0.01" value="0.92">
+          </div>
+          <div class="pg-field">
+            <label>最大DPR(高分辨率屏) · maxDPR <span class="v" id="pg-v-maxDPR">2</span></label>
+            <input type="range" id="pg-maxDPR" min="1" max="3" step="0.5" value="2">
+          </div>
+          <div class="pg-field">
+            <label>闪光概率 · sparkProbability <span class="v" id="pg-v-sparkProbability">0.08</span></label>
+            <input type="range" id="pg-sparkProbability" min="0" max="0.1" step="0.001" value="0.08">
+          </div>
+        </div>
+
+        <!-- 温度光心 -->
+        <div class="pg-section">
+          <h3>温度光心 (鼠标光晕中心)</h3>
+          <div class="pg-field">
+            <label>光心X位置(0-1) · center.x <span class="v" id="pg-v-cx">0.7</span></label>
+            <input type="range" id="pg-cx" min="0" max="1" step="0.05" value="0.7">
+          </div>
+          <div class="pg-field">
+            <label>光心Y位置(0-1) · center.y <span class="v" id="pg-v-cy">0.3</span></label>
+            <input type="range" id="pg-cy" min="0" max="1" step="0.05" value="0.3">
+          </div>
+          <div class="pg-field">
+            <label>光心漂移速度 · driftSpeed <span class="v" id="pg-v-driftSpeed">0.3</span></label>
+            <input type="range" id="pg-driftSpeed" min="0" max="0.5" step="0.01" value="0.3">
+          </div>
+          <div class="pg-field">
+            <label>温度光心半径 · warmthRadius <span class="v" id="pg-v-warmthRadius">0.6</span></label>
+            <input type="range" id="pg-warmthRadius" min="0.1" max="1.5" step="0.05" value="0.6">
+          </div>
+          <div class="pg-field">
+            <label>温度过渡速度 · warmthLerp <span class="v" id="pg-v-warmthLerp">0.04</span></label>
+            <input type="range" id="pg-warmthLerp" min="0.01" max="0.3" step="0.01" value="0.04">
+          </div>
+        </div>
+
+        <!-- 闪烁 -->
+        <div class="pg-section">
+          <h3>闪烁频率</h3>
+          <div class="pg-field">
+            <label>高亮闪烁率 · flicker.high <span class="v" id="pg-v-fh">0.7</span></label>
+            <input type="range" id="pg-fh" min="0" max="1" step="0.05" value="0.7">
+          </div>
+          <div class="pg-field">
+            <label>中亮闪烁率 · flicker.mid <span class="v" id="pg-v-fm">0.4</span></label>
+            <input type="range" id="pg-fm" min="0" max="1" step="0.05" value="0.4">
+          </div>
+          <div class="pg-field">
+            <label>低亮闪烁率 · flicker.low <span class="v" id="pg-v-fl">0.15</span></label>
+            <input type="range" id="pg-fl" min="0" max="1" step="0.05" value="0.15">
+          </div>
+          <div class="pg-field">
+            <label>熄灭闪烁率 · flicker.dark <span class="v" id="pg-v-fd">0.04</span></label>
+            <input type="range" id="pg-fd" min="0" max="0.5" step="0.01" value="0.04">
+          </div>
+          <div class="pg-field">
+            <label>闪烁倍率(0冻结/1默认/3狂暴) · flickerSpeed <span class="v" id="pg-v-flickerSpeed">1</span></label>
+            <input type="range" id="pg-flickerSpeed" min="0" max="3" step="0.05" value="1">
+            <div class="pg-hint" style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(200, 196, 184, .5); margin-top: 2px;">变化速度倍率 · 0=冻结 1=默认 3=狂暴</div>
+          </div>
+        </div>
+
+        <!-- 字符集 -->
+        <div class="pg-section">
+          <h3>字符集</h3>
+          <div class="pg-field">
+            <label>字符集(任意ASCII) · charset</label>
+            <input type="text" id="pg-charset" value="0123456789">
+          </div>
+        </div>
+
+        <!-- 第 5 个 userFunc: 颜色动态曲线 -->
+        <div class="pg-section">
+          <h3>颜色动态曲线 · 4 层编辑器</h3>
+          <div class="pg-userfunc" data-target="colorCurve">
+            <div class="pg-tabs">
+              <button class="active" data-layer="D" title="8 个预设曲线,点一下加载">预设 8 选 1</button>
+              <button data-layer="C" title="16 控制点拖动,生成查找表">手画曲线</button>
+              <button data-layer="B" title="6 基波 + 多 channel 叠加">波形组合</button>
+              <button data-layer="A" title="写 JS 表达式,沙箱安全执行">写代码</button>
+            </div>
+            <div class="pg-layer pg-layer-D active">
+              <div class="pg-grid-3 pg-presets" data-presets="colorCurve"></div>
+            </div>
+            <div class="pg-layer pg-layer-C">
+              <svg class="pg-lut" viewBox="0 0 320 80" data-lut="colorCurve" preserveAspectRatio="none"></svg>
+              <button class="pg-lut-reset" data-lut-reset="colorCurve">↺ 重置曲线</button>
+            </div>
+            <div class="pg-layer pg-layer-B">
+              <div class="pg-wave-channels" data-channels="colorCurve"></div>
+              <button class="pg-wave-add" data-wave-add="colorCurve">+ 加通道</button>
+              <select class="pg-wave-combine" data-wave-combine="colorCurve">
+                <option value="sum">求和(加)</option>
+                <option value="mul">相乘(×)</option>
+                <option value="max">取最大</option>
+                <option value="min">取最小</option>
+              </select>
+            </div>
+            <div class="pg-layer pg-layer-A">
+              <textarea class="pg-code" data-code="colorCurve" rows="4" spellcheck="false">return 60 * sin(t * 0.5);  // 色相 ±60 度周期</textarea>
+              <div class="pg-code-msg" data-code-msg="colorCurve"></div>
+            </div>
+            <div class="pg-userfunc-status" data-status="colorCurve">未启用(默认参数)</div>
+          </div>
+        </div>
+
+        <!-- 文字/图片目标位图 -->
+        <div class="pg-section">
+          <h3>文字/图片目标位图(覆盖亮度)</h3>
+          <p class="pg-hint">输入文字或上传图片 · 颜色不变只改亮度 · 淑入淑出</p>
+          <div class="pg-field">
+            <label>输入文字</label>
+            <textarea id="pg-target-text" rows="2" placeholder="例: HELLO  硅谷大蟹">HELLO</textarea>
+          </div>
+          <div class="pg-field" style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button id="pg-target-apply-text" class="pg-target-btn">📝 应用文字</button>
+            <button id="pg-target-upload" class="pg-target-btn">📁 选择文件</button>
+            <button id="pg-target-clear" class="pg-target-btn">🗑 清除</button>
+            <input type="file" id="pg-target-file" accept="image/*" style="display: none;">
+          </div>
+          <div class="pg-target-status" id="pg-target-status">未启用</div>
+          <div class="pg-target-pg" id="pg-target-pg"></div>
+        </div>
+
+        <!-- 用户函数:亮度曲线 / 闪烁 / phase / 字符 4 个量 -->
+        <div class="pg-section">
+          <h3>亮度曲线 · 4 层编辑器</h3>
+          <div class="pg-userfunc" data-target="brightnessCurve">
+            <div class="pg-tabs">
+              <button class="active" data-layer="D" title="8 个预设曲线,点一下加载">预设 8 选 1</button>
+              <button data-layer="C" title="16 控制点拖动,生成查找表">手画曲线</button>
+              <button data-layer="B" title="6 基波 + 多 channel 叠加">波形组合</button>
+              <button data-layer="A" title="写 JS 表达式,沙箱安全执行">写代码</button>
+            </div>
+            <div class="pg-layer pg-layer-D active">
+              <div class="pg-grid-3 pg-presets" data-presets="brightnessCurve"></div>
+            </div>
+            <div class="pg-layer pg-layer-C">
+              <svg class="pg-lut" viewBox="0 0 320 80" data-lut="brightnessCurve" preserveAspectRatio="none"></svg>
+              <button class="pg-lut-reset" data-lut-reset="brightnessCurve">↺ 重置曲线</button>
+            </div>
+            <div class="pg-layer pg-layer-B">
+              <div class="pg-wave-channels" data-channels="brightnessCurve"></div>
+              <button class="pg-wave-add" data-wave-add="brightnessCurve">+ 加通道</button>
+              <select class="pg-wave-combine" data-wave-combine="brightnessCurve">
+                <option value="sum">求和(加)</option>
+                <option value="mul">相乘(×)</option>
+                <option value="max">取最大</option>
+                <option value="min">取最小</option>
+              </select>
+            </div>
+            <div class="pg-layer pg-layer-A">
+              <textarea class="pg-code" data-code="brightnessCurve" rows="4" spellcheck="false">return 0.5 + 0.5 * sin(t * 2);  // 中间值 0.5 + 上下 0.5 震荡</textarea>
+              <div class="pg-code-msg" data-code-msg="brightnessCurve"></div>
+            </div>
+            <div class="pg-userfunc-status" data-status="brightnessCurve">未启用(默认参数)</div>
+          </div>
+        </div>
+
+        <div class="pg-section">
+          <h3>闪烁概率 · 4 层编辑器</h3>
+          <div class="pg-userfunc" data-target="flickerCurve">
+            <div class="pg-tabs">
+              <button class="active" data-layer="D" title="8 个预设曲线,点一下加载">预设 8 选 1</button>
+              <button data-layer="C" title="16 控制点拖动,生成查找表">手画曲线</button>
+              <button data-layer="B" title="6 基波 + 多 channel 叠加">波形组合</button>
+              <button data-layer="A" title="写 JS 表达式,沙箱安全执行">写代码</button>
+            </div>
+            <div class="pg-layer pg-layer-D active">
+              <div class="pg-grid-3 pg-presets" data-presets="flickerCurve"></div>
+            </div>
+            <div class="pg-layer pg-layer-C">
+              <svg class="pg-lut" viewBox="0 0 320 80" data-lut="flickerCurve" preserveAspectRatio="none"></svg>
+              <button class="pg-lut-reset" data-lut-reset="flickerCurve">↺ 重置曲线</button>
+            </div>
+            <div class="pg-layer pg-layer-B">
+              <div class="pg-wave-channels" data-channels="flickerCurve"></div>
+              <button class="pg-wave-add" data-wave-add="flickerCurve">+ 加通道</button>
+              <select class="pg-wave-combine" data-wave-combine="flickerCurve">
+                <option value="sum">求和(加)</option>
+                <option value="mul">相乘(×)</option>
+                <option value="max">取最大</option>
+                <option value="min">取最小</option>
+              </select>
+            </div>
+            <div class="pg-layer pg-layer-A">
+              <textarea class="pg-code" data-code="flickerCurve" rows="4" spellcheck="false">return 0.1 + 0.4 * sin(t * 1.5);  // 0.1 基础 + 0.4 振幅</textarea>
+              <div class="pg-code-msg" data-code-msg="flickerCurve"></div>
+            </div>
+            <div class="pg-userfunc-status" data-status="flickerCurve">未启用(默认参数)</div>
+          </div>
+        </div>
+
+        <div class="pg-section">
+          <h3>相位增量 · 4 层编辑器</h3>
+          <div class="pg-userfunc" data-target="phaseFunc">
+            <div class="pg-tabs">
+              <button class="active" data-layer="D" title="8 个预设曲线,点一下加载">预设 8 选 1</button>
+              <button data-layer="C" title="16 控制点拖动,生成查找表">手画曲线</button>
+              <button data-layer="B" title="6 基波 + 多 channel 叠加">波形组合</button>
+              <button data-layer="A" title="写 JS 表达式,沙箱安全执行">写代码</button>
+            </div>
+            <div class="pg-layer pg-layer-D active">
+              <div class="pg-grid-3 pg-presets" data-presets="phaseFunc"></div>
+            </div>
+            <div class="pg-layer pg-layer-C">
+              <svg class="pg-lut" viewBox="0 0 320 80" data-lut="phaseFunc" preserveAspectRatio="none"></svg>
+              <button class="pg-lut-reset" data-lut-reset="phaseFunc">↺ 重置曲线</button>
+            </div>
+            <div class="pg-layer pg-layer-B">
+              <div class="pg-wave-channels" data-channels="phaseFunc"></div>
+              <button class="pg-wave-add" data-wave-add="phaseFunc">+ 加通道</button>
+              <select class="pg-wave-combine" data-wave-combine="phaseFunc">
+                <option value="sum">求和(加)</option>
+                <option value="mul">相乘(×)</option>
+                <option value="max">取最大</option>
+                <option value="min">取最小</option>
+              </select>
+            </div>
+            <div class="pg-layer pg-layer-A">
+              <textarea class="pg-code" data-code="phaseFunc" rows="4" spellcheck="false">return 0.05 * sin(t * 0.5);  // 每帧相位增量 ±0.05</textarea>
+              <div class="pg-code-msg" data-code-msg="phaseFunc"></div>
+            </div>
+            <div class="pg-userfunc-status" data-status="phaseFunc">未启用(默认参数)</div>
+          </div>
+        </div>
+
+        <div class="pg-section">
+          <h3>字符分布 · 4 层编辑器</h3>
+          <div class="pg-userfunc" data-target="charsetFunc">
+            <div class="pg-tabs">
+              <button class="active" data-layer="D" title="8 个预设曲线,点一下加载">预设 8 选 1</button>
+              <button data-layer="C" title="16 控制点拖动,生成查找表">手画曲线</button>
+              <button data-layer="B" title="6 基波 + 多 channel 叠加">波形组合</button>
+              <button data-layer="A" title="写 JS 表达式,沙箱安全执行">写代码</button>
+            </div>
+            <div class="pg-layer pg-layer-D active">
+              <div class="pg-grid-3 pg-presets" data-presets="charsetFunc"></div>
+            </div>
+            <div class="pg-layer pg-layer-C">
+              <svg class="pg-lut" viewBox="0 0 320 80" data-lut="charsetFunc" preserveAspectRatio="none"></svg>
+              <button class="pg-lut-reset" data-lut-reset="charsetFunc">↺ 重置曲线</button>
+            </div>
+            <div class="pg-layer pg-layer-B">
+              <div class="pg-wave-channels" data-channels="charsetFunc"></div>
+              <button class="pg-wave-add" data-wave-add="charsetFunc">+ 加通道</button>
+              <select class="pg-wave-combine" data-wave-combine="charsetFunc">
+                <option value="sum">求和(加)</option>
+                <option value="mul">相乘(×)</option>
+                <option value="max">取最大</option>
+                <option value="min">取最小</option>
+              </select>
+            </div>
+            <div class="pg-layer pg-layer-A">
+              <textarea class="pg-code" data-code="charsetFunc" rows="4" spellcheck="false">return (ch + sin(t + h) * charset.length / 2) % charset.length;  // 字符在原始位置附近漂移</textarea>
+              <div class="pg-code-msg" data-code-msg="charsetFunc"></div>
+            </div>
+            <div class="pg-userfunc-status" data-status="charsetFunc">未启用(默认参数)</div>
+          </div>
+        </div>
+
+        <!-- 导出 -->
+        <div class="pg-section">
+          <h3>导出配置</h3>
+          <div class="pg-actions">
+            <button class="pg-btn pg-btn-primary" id="pg-export">📥 下载 JSON</button>
+            <button class="pg-btn pg-btn-secondary" id="pg-reset">↺ 重置默认</button>
+            <span class="pg-toast" id="pg-toast">✓ 已下载</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Tab: Landing ==================== -->
+  <div class="tab-pane" data-pane="landing">
+    <div class="tab-header">
+      <div class="crumb">SHOWCASE · Landing Page</div>
+      <h1>产品落地页 <em>实战</em></h1>
+      <p>雨滴做 Hero 区背景,大字 + 双 CTA,典型 AI 助理产品页用法。</p>
+    </div>
+    <div class="demo-stage" id="stage-landing">
+      <div class="overlay">
+        <div class="badge">硅 谷 大 蟹 · AI 助理</div>
+        <h2>老大身边那个<br><em>勤快、有活</em><br>的 AI 助理</h2>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Tab: Blog ==================== -->
+  <div class="tab-pane" data-pane="blog">
+    <div class="tab-header">
+      <div class="crumb">SHOWCASE · 博客</div>
+      <h1>博客 / 文档 <em>实战</em></h1>
+      <p>雨滴当低调背景,不抢内容可读性。</p>
+    </div>
+    <div class="demo-stage" id="stage-blog">
+      <div class="overlay">
+        <div class="badge">硅 谷 大 蟹 · BLOG</div>
+        <h2>把数字矩阵沉淀成<br><em>NPM 包</em></h2>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div class="footer">
+  <div>@xietuier/matrix-rain v0.1.0 · MIT · by czhmisaka</div>
+  <div><a href="../README.md">README</a> · <a href="https://github.com/czhmisaka/matrix-rain" target="_blank">GitHub</a> · <a href="https://www.npmjs.com/package/@xietuier/matrix-rain" target="_blank">npm</a></div>
+</div>
+
+<script type="module">
+import { matrixRain, MatrixRain } from '../dist/index.js?v=3';
+
+// ===== Tab 切换逻辑 =====
+const items = document.querySelectorAll('.menu-item');
+const panes = document.querySelectorAll('.tab-pane');
+const rainInstances = new Map(); // paneId -> instance
+
+function destroyRain(paneId) {
+  if (rainInstances.has(paneId)) {
+    rainInstances.get(paneId).destroy();
+    rainInstances.delete(paneId);
+  }
+}
+
+function switchTab(paneId) {
+  // 切走时主动 destroy 旧 pane 的 rain(避免 5+ 个 rain 同时跑吃光 FPS)
+  // playground 的 pgRain 是独立变量(不在 rainInstances 里),也需销毁
+  // 用 try/catch 避免 TDZ(playground 未初始化时 pgRain 还在声明前的“死区”)
+  try {
+    if (pgRain) {
+      try { pgRain.destroy(); } catch(e) {}
+      pgRain = null;
+      // 清掉 stage 里 stale wrapper(防御)
+      const pgStage = document.getElementById('pg-stage');
+      if (pgStage) pgStage.querySelectorAll('.matrix-rain-wrapper').forEach(w => w.remove());
+    }
+  } catch (e) {
+    // pgRain 未声明或访问错误,忽略
+  }
+
+  rainInstances.forEach((inst, id) => {
+    if (id !== paneId) {
+      try {
+        // inst 可能是单个实例,或是 themes/variants 的实例数组
+        if (Array.isArray(inst)) inst.forEach(i => { try { i.destroy(); } catch(e){} });
+        else inst.destroy();
+      } catch(e){}
+      rainInstances.delete(id);
+    }
+  });
+
+  // 防御性:扫 DOM 里残留的 wrapper(防御 bootPane 提前 return 造成 wrapper 泄漏)
+  document.querySelectorAll('#themes-grid .matrix-rain-wrapper, #variants-grid .matrix-rain-wrapper').forEach(w => w.remove());
+  // 同步清掉 demo-card 本身(destroy 后下次 bootPane 才能重新创建)
+  document.querySelectorAll('#themes-grid .demo-card, #variants-grid .demo-card').forEach(c => c.remove());
+
+  items.forEach(i => i.classList.toggle('active', i.dataset.tab === paneId));
+  panes.forEach(p => p.classList.toggle('active', p.dataset.pane === paneId));
+
+  // 切到的主题/变体/实战 tab 才创建实例
+  const needsRain = ['intro', 'themes', 'variants', 'landing', 'blog'].includes(paneId);
+  if (needsRain) {
+    // 等下个 tick,DOM 切完再挂
+    requestAnimationFrame(() => bootPane(paneId));
+  }
+  if (paneId === 'playground') {
+    requestAnimationFrame(() => bootPlayground());
+  }
+}
+
+function bootPane(paneId) {
+  destroyRain(paneId);
+
+  // 清理所有 stage-XXX 里的 stale wrapper(防御性:避免多次 boot 造成 wrapper 堆积、显存被多个 fullscreen rain 吃光)
+  document.querySelectorAll('[id^="stage-"] .matrix-rain-wrapper, #pg-stage .matrix-rain-wrapper').forEach(w => w.remove());
+
+  if (paneId === 'intro') {
+    const el = document.getElementById('stage-intro');
+    if (el) rainInstances.set(paneId, matrixRain({ container: el, theme: 'silicon-valley' }));
+  }
+  else if (paneId === 'landing') {
+    const el = document.getElementById('stage-landing');
+    if (el) rainInstances.set(paneId, matrixRain({ container: el, theme: 'silicon-valley', fontSize: 16 }));
+  }
+  else if (paneId === 'blog') {
+    const el = document.getElementById('stage-blog');
+    if (el) rainInstances.set(paneId, matrixRain({ container: el, theme: 'silicon-valley', trailAlpha: 0.25 }));
+  }
+  else if (paneId === 'themes') {
+    const grid = document.getElementById('themes-grid');
+    if (grid && grid.children.length === 0) {
+      const themes = [
+        { id: 'silicon-valley', name: '硅 谷',  desc: '默认 · 冷青+暖琥珀' },
+        { id: 'matrix-green',   name: '黑 客',  desc: 'matrix-green' },
+        { id: 'lava-red',       name: '熔 岩',  desc: 'lava-red' },
+        { id: 'cyber-blue',     name: '赛 博',  desc: 'cyber-blue' },
+        { id: 'pure-mono',      name: '单 色',  desc: 'pure-mono' },
+      ];
+      // 先清 grid 里任何 stale wrapper(防御)
+      grid.querySelectorAll('.matrix-rain-wrapper').forEach(w => w.remove());
+      const instances = [];
+      themes.forEach(t => {
+        const card = document.createElement('div');
+        card.className = 'demo-card';
+        card.innerHTML = `<div class="label"><div>${t.name}</div><div class="en">${t.id}</div></div>`;
+        grid.appendChild(card);
+        const inst = matrixRain({ container: card, theme: t.id, fontSize: 16, trailAlpha: 0.15 });
+        instances.push(inst);
+      });
+      // 用特殊 key 存数组,switchTab 会识别为数组并逐个 destroy
+      rainInstances.set('__themes__', instances);
+    }
+  }
+  else if (paneId === 'variants') {
+    const grid = document.getElementById('variants-grid');
+    if (grid && grid.children.length === 0) {
+      const variants = [
+        { id: 'classic',   name: 'Classic',   desc: '经典残影',  charset: undefined },
+        { id: 'avalanche', name: 'Avalanche', desc: '雪崩下落',  charset: undefined },
+        { id: 'ripple',    name: 'Ripple',    desc: '涟漪扩散',  charset: undefined },
+        { id: 'ascii',     name: 'ASCII',     desc: '代码符号',  charset: '01<>[]{}=*+' },
+      ];
+      grid.querySelectorAll('.matrix-rain-wrapper').forEach(w => w.remove());
+      const instances = [];
+      variants.forEach(v => {
+        const card = document.createElement('div');
+        card.className = 'demo-card';
+        card.innerHTML = `<div class="label"><div>${v.name}</div><div class="en">${v.desc}</div></div>`;
+        grid.appendChild(card);
+        const opts = { container: card, theme: 'silicon-valley', variant: v.id, fontSize: 14 };
+        if (v.charset) opts.charset = v.charset;
+        const inst = matrixRain(opts);
+        instances.push(inst);
+      });
+      rainInstances.set('__variants__', instances);
+    }
+  }
+}
+
+items.forEach(i => i.addEventListener('click', () => {
+  switchTab(i.dataset.tab);
+  // 手机端点击菜单后自动关闭抽屉
+  if (window.innerWidth <= 900) document.body.classList.remove('menu-open');
+}));
+
+// 汉堡按钮
+const menuToggle = document.getElementById('menuToggle');
+menuToggle.addEventListener('click', () => {
+  document.body.classList.toggle('menu-open');
+});
+// 点击主区关闭抽屉
+document.querySelector('main').addEventListener('click', () => {
+  if (window.innerWidth <= 900) document.body.classList.remove('menu-open');
+});
+
+// 启动默认 tab(支持 ?tab=xxx URL 锚点,直接跳到任意 tab)
+const urlTab = new URLSearchParams(location.search).get('tab');
+const validTab = urlTab && Array.from(panes).some(p => p.dataset.pane === urlTab);
+if (validTab) {
+  switchTab(urlTab);
+} else {
+  bootPane('intro');
+}
+
+// 切换 tab 时更新 URL(不刷新页面,只改 query)
+const origSwitchTab = switchTab;
+window.switchTab = function(paneId) {
+  origSwitchTab(paneId);
+  const url = new URL(location.href);
+  if (paneId === 'intro') {
+    url.searchParams.delete('tab');
+  } else {
+    url.searchParams.set('tab', paneId);
+  }
+  history.replaceState(null, '', url);
+};
+
+// ==================== Playground 逻辑(惰性) ====================
+let pgInitialized = false;
+let pgRain = null;
+let pgCurrent = null;
+let pgFps = document.getElementById('pg-fps');
+let pgFpsTimer = null;
+
+const pgDefaults = () => ({
+  theme: 'silicon-valley',
+  variant: 'classic',
+  fontSize: 22,
+  trailAlpha: 0.92,
+  maxDPR: 2,
+  sparkProbability: 0.08,
+  lightCenter: { x: 0.7, y: 0.3 },
+  driftSpeed: { x: 0.3, y: 0.3 },
+  warmthRadius: 0.6,
+  warmthLerp: 0.04,
+  flickerRates: { high: 0.7, mid: 0.4, low: 0.15, dark: 0.04 },
+  flickerSpeed: 1,
+  themeParams: { brightness: 1, chroma: 1, hueShift: 0, saturationShift: 0, lightnessShift: 0, invertHue: 0, contrast: 1 },
+  coldThemeParams: { hueShift: 0, saturationShift: 0, brightness: 1 },
+  warmThemeParams: { hueShift: 0, saturationShift: 0, brightness: 1 },
+  hueRotateSpeed: 0,
+  hueRotateAmount: 360,
+  colorOverrides: null,
+  variantParams: { phaseStep: 0.04, phaseJitter: 0.06, sinWeightA: 0.4, brightCurve: 3.5, chUpdateProb: 0 },
+  charset: '0123456789'
+});
+
+function bootPlayground() {
+  if (pgInitialized) return;
+  if (pgInitialized) return;
+  pgInitialized = true;
+  pgCurrent = pgDefaults();
+
+  // 启动 rain(需要从全局拿,ESM 在 </body> 加载可能未就绪)
+  // 用动态 import 保证不论脚本顺序都可用
+  import('../dist/index.js?v=3').then((mod) => {
+    const { matrixRain } = mod;
+    // 延迟 2 帧,确保 tab-pane active 后 container 有正确 clientWidth
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      // 防 stale wrapper 残留: 如果之前有 instance 遗留(错误路径),先清掉
+      document.querySelectorAll('#pg-stage .matrix-rain-wrapper').forEach(w => w.remove());
+      pgRain = matrixRain({ container: document.getElementById('pg-stage'), ...pgCurrent });
+      window.pgRain = pgRain;
+      window.pgCurrent = pgCurrent;
+      // FPS 检测
+      pgFpsTimer = setInterval(() => {
+        if (pgRain && pgRain.getFPS) pgFps.textContent = 'FPS: ' + pgRain.getFPS();
+      }, 500);
+    }));
+  });
+}
+
+function pgRebuild(opts = {}) {
+  if (pgRain) {
+    try { pgRain.destroy(); } catch (e) { console.warn('[pg] destroy failed', e); }
+  }
+  // 强保清除任何 stale wrapper(避免 hidden body canvas 占 1280x800)
+  document.querySelectorAll('#pg-stage .matrix-rain-wrapper').forEach(w => w.remove());
+  pgRain = matrixRain({ container: document.getElementById('pg-stage'), ...pgCurrent, ...opts });
+  window.pgRain = pgRain;
+  window.pgCurrent = pgCurrent;
+}
+
+// 主题 (热切换) · 切换时同步 slider 到该主题的默认 themeParams
+let pgThemes = null;
+let pgVariantDefaults = null;
+import('../dist/index.js?v=3').then(mod => {
+  pgThemes = mod.themes;
+  pgVariantDefaults = mod.VARIANT_DEFAULTS;
+});
+
+document.querySelectorAll('#pg-themes button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#pg-themes button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  const newTheme = b.dataset.v;
+  pgCurrent.theme = newTheme;
+  // 从 dist 拿该主题的默认 themeParams, 覆盖 pgCurrent
+  if (pgThemes && pgThemes[newTheme]) {
+    const t = pgThemes[newTheme]();
+    pgCurrent.themeParams = {
+      brightness: t.brightness, chroma: t.chroma, hueShift: t.hueShift,
+      saturationShift: t.saturationShift, lightnessShift: t.lightnessShift,
+      invertHue: t.invertHue, contrast: t.contrast
+    };
+  }
+  if (pgRain) pgRain.setTheme(newTheme);
+  syncSlidersFromCurrent();
+}));
+
+// 变体 (需要重建) · 切换时同步 variantParams slider
+document.querySelectorAll('#pg-variants button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#pg-variants button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  const newVariant = b.dataset.v;
+  pgCurrent.variant = newVariant;
+  // 从 dist 拿该变体的默认 variantParams, 覆盖 pgCurrent
+  if (pgVariantDefaults && pgVariantDefaults[newVariant]) {
+    pgCurrent.variantParams = { ...pgVariantDefaults[newVariant] };
+  }
+  if (pgRain) pgRebuild({ variant: newVariant });
+  syncSlidersFromCurrent();
+}));
+
+// 滑块绑定:需要 rebuild 的字段(variant 联动 / charWidth 等) vs 热更新
+const pgSliders = [
+  // [id, path, needsRebuild]
+  ['pg-fontSize', 'fontSize', true],
+  ['pg-trailAlpha', 'trailAlpha', true],
+  ['pg-maxDPR', 'maxDPR', true],
+  ['pg-sparkProbability', 'sparkProbability', true],
+  ['pg-cx', ['lightCenter', 'x'], true],
+  ['pg-cy', ['lightCenter', 'y'], true],
+  ['pg-driftSpeed', 'driftSpeed', true],
+  ['pg-warmthRadius', 'warmthRadius', true],
+  ['pg-warmthLerp', 'warmthLerp', true],
+  ['pg-fh', ['flickerRates', 'high'], false],
+  ['pg-fm', ['flickerRates', 'mid'], false],
+  ['pg-fl', ['flickerRates', 'low'], false],
+  ['pg-fd', ['flickerRates', 'dark'], false],
+  ['pg-flickerSpeed', 'flickerSpeed', false],
+  // 主题参数 · 热更新
+  ['pg-themeBrightness', '__themeBrightness', false],
+  ['pg-themeChroma', '__themeChroma', false],
+  ['pg-themeHueShift', '__themeHueShift', false],
+  ['pg-themeSatShift', '__themeSatShift', false],
+  ['pg-themeLightShift', '__themeLightShift', false],
+  ['pg-themeInvert', '__themeInvert', false],
+  ['pg-themeContrast', '__themeContrast', false],
+  // 冷暖色板独立
+  ['pg-coldHueShift', '__coldHueShift', false],
+  ['pg-coldSatShift', '__coldSatShift', false],
+  ['pg-coldBright', '__coldBright', false],
+  ['pg-warmHueShift', '__warmHueShift', false],
+  ['pg-warmSatShift', '__warmSatShift', false],
+  ['pg-warmBright', '__warmBright', false],
+  // hueRotate 热更新
+  ['pg-hueRotateSpeed', '__hueRotateSpeed', false],
+  ['pg-hueRotateAmount', '__hueRotateAmount', false],
+  // 变体参数 · 热更新
+  ['pg-phaseStep', '__phaseStep', false],
+  ['pg-phaseJitter', '__phaseJitter', false],
+  ['pg-sinWeightA', '__sinWeightA', false],
+  ['pg-brightCurve', '__brightCurve', false],
+  ['pg-chUpdateProb', '__chUpdateProb', false]
+];
+// 同步所有 slider/checkbox/textarea 从 pgCurrent 读(主题/变体切换后调用)
+function syncSlidersFromCurrent() {
+  // 顶层 scalar
+  const scalarMap = {
+    'pg-fontSize': pgCurrent.fontSize,
+    'pg-trailAlpha': pgCurrent.trailAlpha,
+    'pg-maxDPR': pgCurrent.maxDPR,
+    'pg-sparkProbability': pgCurrent.sparkProbability,
+    'pg-warmthRadius': pgCurrent.warmthRadius,
+    'pg-warmthLerp': pgCurrent.warmthLerp,
+    'pg-flickerSpeed': pgCurrent.flickerSpeed,
+    'pg-cx': pgCurrent.lightCenter?.x,
+    'pg-cy': pgCurrent.lightCenter?.y,
+    'pg-driftSpeed': pgCurrent.driftSpeed?.x,
+    'pg-fh': pgCurrent.flickerRates?.high,
+    'pg-fm': pgCurrent.flickerRates?.mid,
+    'pg-fl': pgCurrent.flickerRates?.low,
+    'pg-fd': pgCurrent.flickerRates?.dark,
+    'pg-hueRotateSpeed': pgCurrent.hueRotateSpeed,
+    'pg-hueRotateAmount': pgCurrent.hueRotateAmount,
+    'pg-charset': pgCurrent.charset
+  };
+  for (const [id, val] of Object.entries(scalarMap)) {
+    const el = document.getElementById(id);
+    if (el && val !== undefined) el.value = val;
+  }
+  // themeParams
+  if (pgCurrent.themeParams) {
+    const tp = pgCurrent.themeParams;
+    const map = {
+      'pg-themeBrightness': tp.brightness, 'pg-themeChroma': tp.chroma,
+      'pg-themeHueShift': tp.hueShift, 'pg-themeSatShift': tp.saturationShift,
+      'pg-themeLightShift': tp.lightnessShift, 'pg-themeInvert': tp.invertHue,
+      'pg-themeContrast': tp.contrast
+    };
+    for (const [id, val] of Object.entries(map)) {
+      const el = document.getElementById(id);
+      if (el && val !== undefined) el.value = val;
+    }
+  }
+  // cold/warm
+  if (pgCurrent.coldThemeParams) {
+    const ctp = pgCurrent.coldThemeParams;
+    if (document.getElementById('pg-coldHueShift')) document.getElementById('pg-coldHueShift').value = ctp.hueShift;
+    if (document.getElementById('pg-coldSatShift')) document.getElementById('pg-coldSatShift').value = ctp.saturationShift;
+    if (document.getElementById('pg-coldBright')) document.getElementById('pg-coldBright').value = ctp.brightness;
+  }
+  if (pgCurrent.warmThemeParams) {
+    const wtp = pgCurrent.warmThemeParams;
+    if (document.getElementById('pg-warmHueShift')) document.getElementById('pg-warmHueShift').value = wtp.hueShift;
+    if (document.getElementById('pg-warmSatShift')) document.getElementById('pg-warmSatShift').value = wtp.saturationShift;
+    if (document.getElementById('pg-warmBright')) document.getElementById('pg-warmBright').value = wtp.brightness;
+  }
+  // variantParams
+  if (pgCurrent.variantParams) {
+    const vp = pgCurrent.variantParams;
+    if (document.getElementById('pg-phaseStep')) document.getElementById('pg-phaseStep').value = vp.phaseStep;
+    if (document.getElementById('pg-phaseJitter')) document.getElementById('pg-phaseJitter').value = vp.phaseJitter;
+    if (document.getElementById('pg-sinWeightA')) document.getElementById('pg-sinWeightA').value = vp.sinWeightA;
+    if (document.getElementById('pg-brightCurve')) document.getElementById('pg-brightCurve').value = vp.brightCurve;
+    if (document.getElementById('pg-chUpdateProb')) document.getElementById('pg-chUpdateProb').value = vp.chUpdateProb;
+  }
+  // 文字 label
+  const updateV = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  updateV('pg-v-phaseStep', pgCurrent.variantParams?.phaseStep);
+  updateV('pg-v-phaseJitter', pgCurrent.variantParams?.phaseJitter);
+  updateV('pg-v-sinWeightA', pgCurrent.variantParams?.sinWeightA);
+  updateV('pg-v-brightCurve', pgCurrent.variantParams?.brightCurve);
+  updateV('pg-v-chUpdateProb', pgCurrent.variantParams?.chUpdateProb);
+}
+
+pgSliders.forEach(([id, path, rebuild]) => {
+  const el = document.getElementById(id);
+  const vEl = document.getElementById('pg-v-' + id.replace('pg-', ''));
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    vEl.textContent = v;
+    // 主题参数 + 变体参数 都存到 pgCurrent 透传给 matrixRain(重建时生效) + 同步热更新
+    if (Array.isArray(path)) pgCurrent[path[0]][path[1]] = v;
+    else if (path.startsWith('__')) {
+      // 主题 / 变体 参数热更新
+      if (path === '__themeBrightness') pgCurrent.themeParams = { ...(pgCurrent.themeParams || {}), brightness: v };
+      else if (path === '__themeChroma') pgCurrent.themeParams = { ...(pgCurrent.themeParams || {}), chroma: v };
+      else if (path === '__themeHueShift') pgCurrent.themeParams = { ...(pgCurrent.themeParams || {}), hueShift: v };
+      else if (path === '__themeSatShift') pgCurrent.themeParams = { ...(pgCurrent.themeParams || {}), saturationShift: v };
+      else if (path === '__themeLightShift') pgCurrent.themeParams = { ...(pgCurrent.themeParams || {}), lightnessShift: v };
+      else if (path === '__themeInvert') pgCurrent.themeParams = { ...(pgCurrent.themeParams || {}), invertHue: v };
+      else if (path === '__themeContrast') pgCurrent.themeParams = { ...(pgCurrent.themeParams || {}), contrast: v };
+      else if (path === '__coldHueShift') pgCurrent.coldThemeParams = { ...(pgCurrent.coldThemeParams || {}), hueShift: v };
+      else if (path === '__coldSatShift') pgCurrent.coldThemeParams = { ...(pgCurrent.coldThemeParams || {}), saturationShift: v };
+      else if (path === '__coldBright') pgCurrent.coldThemeParams = { ...(pgCurrent.coldThemeParams || {}), brightness: v };
+      else if (path === '__warmHueShift') pgCurrent.warmThemeParams = { ...(pgCurrent.warmThemeParams || {}), hueShift: v };
+      else if (path === '__warmSatShift') pgCurrent.warmThemeParams = { ...(pgCurrent.warmThemeParams || {}), saturationShift: v };
+      else if (path === '__warmBright') pgCurrent.warmThemeParams = { ...(pgCurrent.warmThemeParams || {}), brightness: v };
+      else if (path === '__hueRotateSpeed') { pgCurrent.hueRotateSpeed = v; if (pgRain && pgRain.setHueRotate) pgRain.setHueRotate(v, pgCurrent.hueRotateAmount); return; }
+      else if (path === '__hueRotateAmount') { pgCurrent.hueRotateAmount = v; if (pgRain && pgRain.setHueRotate) pgRain.setHueRotate(pgCurrent.hueRotateSpeed, v); return; }
+      else if (path === '__phaseStep') pgCurrent.variantParams = { ...(pgCurrent.variantParams || {}), phaseStep: v };
+      else if (path === '__phaseJitter') pgCurrent.variantParams = { ...(pgCurrent.variantParams || {}), phaseJitter: v };
+      else if (path === '__sinWeightA') pgCurrent.variantParams = { ...(pgCurrent.variantParams || {}), sinWeightA: v };
+      else if (path === '__brightCurve') pgCurrent.variantParams = { ...(pgCurrent.variantParams || {}), brightCurve: v };
+      else if (path === '__chUpdateProb') pgCurrent.variantParams = { ...(pgCurrent.variantParams || {}), chUpdateProb: v };
+      // 热更新
+      if (pgRain) {
+        if (path.startsWith('__theme')) pgRain.setThemeParams && pgRain.setThemeParams(pgCurrent.themeParams);
+        else if (path.startsWith('__cold')) pgRain.setColdThemeParams && pgRain.setColdThemeParams(pgCurrent.coldThemeParams);
+        else if (path.startsWith('__warm')) pgRain.setWarmThemeParams && pgRain.setWarmThemeParams(pgCurrent.warmThemeParams);
+        else if (path.startsWith('__') && (path === '__phaseStep' || path === '__phaseJitter' || path === '__sinWeightA' || path === '__brightCurve' || path === '__chUpdateProb')) {
+          pgRain.setVariantParams && pgRain.setVariantParams(pgCurrent.variantParams);
+        }
+      }
+      return; // 不 rebuild
+    }
+    else pgCurrent[path] = v;
+    if (rebuild) {
+      pgRebuild();
+    } else {
+      // 热更新: flickerSpeed 走 setFlickerSpeed 不重建(平滑),其他走 rebuild
+      if (id === 'pg-flickerSpeed' && pgRain && pgRain.setFlickerSpeed) {
+        pgRain.setFlickerSpeed(v);
+      } else {
+        pgRebuild();
+      }
+    }
+  });
+});
+
+// charset 文本框
+document.getElementById('pg-charset').addEventListener('input', e => {
+  pgCurrent.charset = e.target.value;
+  pgRebuild();
+});
+
+// ==================== 4 层用户函数驱动 (D 预设 / C 曲线 / B 波形 / A 沙箱) ====================
+// 准备 4 层所需的全局辅助(从 dist index 拉)
+import('../dist/index.js?v=3').then((mod) => {
+  const matrixRain = mod.matrixRain;
+  const validateUserFunction = mod.validateUserFunction || ((code) => { try { new Function(code); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } });
+  const PRESETS = mod.PRESETS || [
+    { id: 'linear', name: '线性', emoji: '📏', code: 'return 0.5;' },
+    { id: 'pulse', name: '脉冲', emoji: '💓', code: 'return 0.5 + 0.5 * sin(t * 3);' }
+  ];
+  const WAVE_TYPES = mod.WAVE_TYPES || [
+    { id: 'sin', name: 'sin', emoji: '〰️' }, { id: 'cos', name: 'cos', emoji: '🌊' },
+    { id: 'square', name: '方波', emoji: '⬜' }, { id: 'saw', name: '锯齿', emoji: '📐' },
+    { id: 'triangle', name: '三角', emoji: '🔺' }, { id: 'noise', name: '噪声', emoji: '⚡' }, { id: 'constant', name: '常数', emoji: '⏸️' }
+  ];
+  const channelsToCode = mod.channelsToCode || (() => 'return 0.5;');
+  const controlPointsToCode = mod.controlPointsToCode || (() => 'return 0.5;');
+  // 动态 import 嵌套,需要拿到 matrixRain, 跟 bootPlayground 一样
+
+  const USERFUNCS = ['brightnessCurve', 'flickerCurve', 'phaseFunc', 'charsetFunc', 'colorCurve'];
+  const SETTERS = {
+    brightnessCurve: 'setBrightnessCurve',
+    flickerCurve: 'setFlickerCurve',
+    phaseFunc: 'setPhaseFunc',
+    charsetFunc: 'setCharsetFunc',
+    colorCurve: 'setColorCurve'
+  };
+
+  // 存储 4 个量的状态
+  const userfuncState = {};
+  USERFUNCS.forEach(name => {
+    userfuncState[name] = {
+      code: null,         // 当前生效的代码
+      layer: null,        // 当前激活层(D/C/B/A)
+      channels: [{ wave: 'sin', amp: 0.5, freq: 1, phase: 0 }],  // B 层
+      combine: 'sum',
+      controlPoints: [0.1, 0.3, 0.5, 0.7, 0.9, 0.8, 0.6, 0.4, 0.2, 0.4, 0.6, 0.8, 0.7, 0.5, 0.3, 0.5]  // C 层
+    };
+  });
+
+  // ------- 初始化 4 个区块(填充预设 / 曲线 / 波形 / 代码) -------
+  USERFUNCS.forEach(name => {
+    const sec = document.querySelector(`[data-target="${name}"]`);
+    if (!sec) return;
+    // 1) tab 切换
+    sec.querySelectorAll('.pg-tabs button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        sec.querySelectorAll('.pg-tabs button').forEach(x => x.classList.remove('active'));
+        btn.classList.add('active');
+        sec.querySelectorAll('.pg-layer').forEach(x => x.classList.remove('active'));
+        sec.querySelector('.pg-layer-' + btn.dataset.layer).classList.add('active');
+        userfuncState[name].layer = btn.dataset.layer;
+        recomputeUserFunc(name);
+      });
+    });
+
+    // 2) D 预设: 填充按钮
+    const presetsEl = sec.querySelector(`[data-presets="${name}"]`);
+    PRESETS.forEach(p => {
+      const b = document.createElement('button');
+      b.innerHTML = `<span class="emoji">${p.emoji}</span>${p.name}`;
+      b.title = p.desc;
+      b.addEventListener('click', () => {
+        // 切到 A 层 + 加载代码
+        sec.querySelectorAll('.pg-tabs button').forEach(x => x.classList.remove('active'));
+        sec.querySelector('[data-layer="A"]').classList.add('active');
+        sec.querySelectorAll('.pg-layer').forEach(x => x.classList.remove('active'));
+        sec.querySelector('.pg-layer-A').classList.add('active');
+        userfuncState[name].layer = 'A';
+        const codeArea = sec.querySelector(`[data-code="${name}"]`);
+        codeArea.value = p.code;
+        sec.querySelectorAll(`[data-presets="${name}"] button`).forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        userfuncState[name].code = p.code;
+        applyUserFunc(name, p.code);
+      });
+      presetsEl.appendChild(b);
+    });
+
+    // 3) A 沙箱代码 textarea
+    const codeArea = sec.querySelector(`[data-code="${name}"]`);
+    const msgEl = sec.querySelector(`[data-code-msg="${name}"]`);
+    let codeDebounce = null;
+    codeArea.addEventListener('input', () => {
+      clearTimeout(codeDebounce);
+      codeDebounce = setTimeout(() => {
+        const v = codeArea.value.trim();
+        if (!v) {
+          msgEl.textContent = '';
+          msgEl.className = 'pg-code-msg';
+          userfuncState[name].code = null;
+          applyUserFunc(name, null);
+          return;
+        }
+        const vRes = validateUserFunction(v);
+        if (vRes.ok) {
+          msgEl.textContent = '✓ OK';
+          msgEl.className = 'pg-code-msg ok';
+          userfuncState[name].code = v;
+          applyUserFunc(name, v);
+        } else {
+          msgEl.textContent = '✗ ' + vRes.error;
+          msgEl.className = 'pg-code-msg err';
+          // 不调用 applyUserFunc,保持上一个生效的代码
+        }
+      }, 200);
+    });
+
+    // 4) C 曲线初始化
+    const lutSvg = sec.querySelector(`[data-lut="${name}"]`);
+    const CP_COUNT = 16;
+    function drawLUT() {
+      const cp = userfuncState[name].controlPoints;
+      lutSvg.innerHTML = '';
+      // 网格
+      for (let i = 1; i < 4; i++) {
+        const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        ln.setAttribute('x1', 0); ln.setAttribute('x2', 320);
+        ln.setAttribute('y1', i * 20); ln.setAttribute('y2', i * 20);
+        ln.setAttribute('class', 'pg-lut-grid');
+        lutSvg.appendChild(ln);
+      }
+      // 折线
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      const pts = cp.map((v, i) => `${(i / (cp.length - 1)) * 320},${80 - v * 80}`).join(' ');
+      path.setAttribute('points', pts);
+      path.setAttribute('class', 'pg-lut-line');
+      lutSvg.appendChild(path);
+      // 控制点
+      cp.forEach((v, i) => {
+        const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c.setAttribute('cx', (i / (cp.length - 1)) * 320);
+        c.setAttribute('cy', 80 - v * 80);
+        c.setAttribute('r', 4);
+        c.setAttribute('class', 'pg-lut-pt');
+        c.dataset.idx = i;
+        c.addEventListener('mousedown', startDrag);
+        c.addEventListener('touchstart', startDrag, { passive: false });
+        lutSvg.appendChild(c);
+      });
+    }
+    function startDrag(e) {
+      e.preventDefault();
+      const idx = parseInt(e.currentTarget.dataset.idx);
+      const rect = lutSvg.getBoundingClientRect();
+      const move = (ev) => {
+        const y = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
+        const v = Math.max(0, Math.min(1, 1 - y / 80));
+        userfuncState[name].controlPoints[idx] = v;
+        drawLUT();
+        // 实时生成代码 + apply
+        const code = controlPointsToCode(userfuncState[name].controlPoints);
+        userfuncState[name].code = code;
+        applyUserFunc(name, code);
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        document.removeEventListener('touchmove', move);
+        document.removeEventListener('touchend', up);
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+      document.addEventListener('touchmove', move, { passive: false });
+      document.addEventListener('touchend', up);
+    }
+    sec.querySelector(`[data-lut-reset="${name}"]`).addEventListener('click', () => {
+      userfuncState[name].controlPoints = [0.1, 0.3, 0.5, 0.7, 0.9, 0.8, 0.6, 0.4, 0.2, 0.4, 0.6, 0.8, 0.7, 0.5, 0.3, 0.5];
+      drawLUT();
+      const code = controlPointsToCode(userfuncState[name].controlPoints);
+      userfuncState[name].code = code;
+      applyUserFunc(name, code);
+    });
+    drawLUT();
+
+    // 5) B 波形 channel 初始化
+    const chEl = sec.querySelector(`[data-channels="${name}"]`);
+    function renderChannels() {
+      chEl.innerHTML = '';
+      userfuncState[name].channels.forEach((ch, idx) => {
+        const row = document.createElement('div');
+        row.className = 'pg-wave-channel';
+        row.innerHTML = `
+          <select class="pg-wave-type" data-idx="${idx}">
+            ${WAVE_TYPES.map(w => `<option value="${w.id}" ${w.id===ch.wave?'selected':''}>${w.emoji} ${w.name}</option>`).join('')}
+          </select>
+          <input type="number" class="pg-wave-amp" data-idx="${idx}" value="${ch.amp}" step="0.1" min="0" max="1" title="振幅 0-1">
+          <input type="number" class="pg-wave-freq" data-idx="${idx}" value="${ch.freq}" step="0.5" min="0" max="10" title="频率 0-10">
+          <input type="number" class="pg-wave-phase" data-idx="${idx}" value="${ch.phase}" step="0.1" min="-1" max="1" title="相位偏移 -1 到 1">
+          <button class="pg-wave-del" data-idx="${idx}">×</button>
+        `;
+        chEl.appendChild(row);
+      });
+      chEl.querySelectorAll('.pg-wave-type').forEach(s => s.addEventListener('change', e => {
+        userfuncState[name].channels[+e.target.dataset.idx].wave = e.target.value;
+        recomputeUserFunc(name);
+      }));
+      chEl.querySelectorAll('.pg-wave-amp').forEach(i => i.addEventListener('input', e => {
+        userfuncState[name].channels[+e.target.dataset.idx].amp = +e.target.value;
+        recomputeUserFunc(name);
+      }));
+      chEl.querySelectorAll('.pg-wave-freq').forEach(i => i.addEventListener('input', e => {
+        userfuncState[name].channels[+e.target.dataset.idx].freq = +e.target.value;
+        recomputeUserFunc(name);
+      }));
+      chEl.querySelectorAll('.pg-wave-phase').forEach(i => i.addEventListener('input', e => {
+        userfuncState[name].channels[+e.target.dataset.idx].phase = +e.target.value;
+        recomputeUserFunc(name);
+      }));
+      chEl.querySelectorAll('.pg-wave-del').forEach(b => b.addEventListener('click', e => {
+        const idx = +e.target.dataset.idx;
+        if (userfuncState[name].channels.length > 1) {
+          userfuncState[name].channels.splice(idx, 1);
+          renderChannels();
+          recomputeUserFunc(name);
+        }
+      }));
+    }
+    sec.querySelector(`[data-wave-add="${name}"]`).addEventListener('click', () => {
+      userfuncState[name].channels.push({ wave: 'sin', amp: 0.3, freq: 1, phase: 0 });
+      renderChannels();
+      recomputeUserFunc(name);
+    });
+    sec.querySelector(`[data-wave-combine="${name}"]`).addEventListener('change', e => {
+      userfuncState[name].combine = e.target.value;
+      recomputeUserFunc(name);
+    });
+    renderChannels();
+  });
+
+  // 重算并应用
+  function recomputeUserFunc(name) {
+    const s = userfuncState[name];
+    let code = null;
+    if (s.layer === 'A' && s.code) code = s.code;
+    else if (s.layer === 'C') code = controlPointsToCode(s.controlPoints);
+    else if (s.layer === 'B') code = channelsToCode(s.channels, s.combine);
+    if (code) {
+      s.code = code;
+      // 同步到 A textarea
+      const codeArea = document.querySelector(`[data-code="${name}"]`);
+      if (codeArea && s.layer !== 'A') codeArea.value = code;
+      applyUserFunc(name, code);
+    }
+  }
+
+  // 实际应用到 rain(用 setXxxFunc 热更新)
+  function applyUserFunc(name, code) {
+    const statusEl = document.querySelector(`[data-status="${name}"]`);
+    if (!pgRain) {
+      // 还没初始化,存到 pgCurrent 等 bootPlayground
+      if (code) pgCurrent[name] = code;
+      else delete pgCurrent[name];
+      return;
+    }
+    if (pgRain[SETTERS[name]]) {
+      try {
+        pgRain[SETTERS[name]](code);
+        if (code) {
+          statusEl.textContent = '✓ 生效 · ' + code.split('\n')[0].slice(0, 40) + (code.length > 40 ? '...' : '');
+          statusEl.classList.add('active');
+        } else {
+          statusEl.textContent = '未使用(默认参数)';
+          statusEl.classList.remove('active');
+        }
+        // 同步到 pgCurrent(JSON 导出需要)
+        if (code) pgCurrent[name] = code;
+        else delete pgCurrent[name];
+      } catch (e) {
+        statusEl.textContent = '✗ 错误: ' + e.message;
+        statusEl.classList.remove('active');
+      }
+    }
+  }
+});
+
+// 颜色注入编辑器
+(function buildColorOverrides() {
+  const container = document.getElementById('pg-color-overrides');
+  if (!container) return;
+  for (let lv = 0; lv <= 9; lv++) {
+    const row = document.createElement('div');
+    row.className = 'pg-color-row';
+    row.innerHTML = `
+      <div class="pg-color-lv">L${lv}</div>
+      <input type="number" class="pg-color-r" data-lv="${lv}" min="0" max="255" step="1" placeholder="红" value="0">
+      <input type="number" class="pg-color-g" data-lv="${lv}" min="0" max="255" step="1" placeholder="绿" value="0">
+      <input type="number" class="pg-color-b" data-lv="${lv}" min="0" max="255" step="1" placeholder="蓝" value="0">
+      <div class="pg-color-swatch" id="pg-swatch-${lv}" style="background: rgb(0,0,0);"></div>
+    `;
+    container.appendChild(row);
+  }
+  function update() {
+    const overrides = {};
+    for (let lv = 0; lv <= 9; lv++) {
+      const r = +container.querySelector(`.pg-color-r[data-lv="${lv}"]`).value;
+      const g = +container.querySelector(`.pg-color-g[data-lv="${lv}"]`).value;
+      const b = +container.querySelector(`.pg-color-b[data-lv="${lv}"]`).value;
+      // 任何一个有值都启用
+      if (r || g || b) {
+        overrides[lv] = [r, g, b];
+        document.getElementById(`pg-swatch-${lv}`).style.background = `rgb(${r},${g},${b})`;
+      } else {
+        document.getElementById(`pg-swatch-${lv}`).style.background = 'rgb(0,0,0)';
+      }
+    }
+    const has = Object.keys(overrides).length > 0;
+    pgCurrent.colorOverrides = has ? overrides : null;
+    if (pgRain && pgRain.setColorOverrides) pgRain.setColorOverrides(has ? overrides : null);
+  }
+  container.addEventListener('input', update);
+})();
+
+// 目标位图(文字/图片)应用器
+function applyTargetBitmap(bitmap) {
+  if (!pgRain || !pgRain.setTargetBitmap) {
+    document.getElementById('pg-target-status').textContent = '✗ rain 未初始化';
+    return;
+  }
+  pgRain.setTargetBitmap(bitmap, { fadeIn: 0.5, hold: 3.0, fadeOut: 2.0, chaos: 0.5 });
+  const el = document.getElementById('pg-target-status');
+  el.textContent = '✓ 已启用 · 淑入 0.5s + 保持 3s + 淑出 2s';
+  el.classList.add('active');
+  document.getElementById('pg-target-pg').textContent = `${bitmap.length} 灰度值 · `;
+}
+
+function clearTarget() {
+  if (pgRain && pgRain.clearTargetBitmap) pgRain.clearTargetBitmap();
+  const el = document.getElementById('pg-target-status');
+  el.textContent = '未启用';
+  el.classList.remove('active');
+  document.getElementById('pg-target-pg').textContent = '';
+}
+
+function getGridSize() {
+  // 从 rain instance 拿 r, i
+  if (!pgRain) return { cols: 50, rows: 30 };
+  // instance 没暴露 r/i 估计,我们以页面 width / fontSize 算
+  const stage = document.getElementById('pg-stage');
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  const fontSize = 22;
+  return { cols: Math.floor(w / fontSize * 1.1), rows: Math.floor(h / fontSize * 1.1) };
+}
+
+document.getElementById('pg-target-apply-text').addEventListener('click', async () => {
+  const text = document.getElementById('pg-target-text').value || 'HELLO';
+  const { cols, rows } = getGridSize();
+  try {
+    const bm = window.matrixRain_bitmap || (await import('../dist/index.js?v=3'));
+    const { textToBitmap } = bm;
+    const bmp = textToBitmap(text, cols, rows);
+    applyTargetBitmap(bmp.data);
+    document.getElementById('pg-target-pg').textContent = `文字: "${text.slice(0, 20)}" · ${cols}×${rows}`;
+  } catch (e) {
+    document.getElementById('pg-target-status').textContent = '✗ ' + e.message;
+  }
+});
+
+document.getElementById('pg-target-upload').addEventListener('click', () => {
+  document.getElementById('pg-target-file').click();
+});
+
+document.getElementById('pg-target-file').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  await loadAndApplyImage(f);
+  e.target.value = '';
+});
+
+async function loadAndApplyImage(file) {
+  if (!file.type.startsWith('image/')) {
+    document.getElementById('pg-target-status').textContent = '✗ 不是图片';
+    return;
+  }
+  const { cols, rows } = getGridSize();
+  try {
+    const bm = await import('../dist/index.js?v=3');
+    const img = await bm.fileToImage(file);
+    const bmp = bm.imageToBitmap(img, cols, rows);
+    applyTargetBitmap(bmp.data);
+    document.getElementById('pg-target-pg').textContent = `图片: ${file.name.slice(0, 20)} · ${cols}×${rows}`;
+  } catch (e) {
+    document.getElementById('pg-target-status').textContent = '✗ ' + e.message;
+  }
+}
+
+document.getElementById('pg-target-clear').addEventListener('click', clearTarget);
+
+// 拖拽上传
+const stage = document.getElementById('pg-stage');
+['dragover', 'dragenter'].forEach(ev => {
+  stage.addEventListener(ev, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('pg-target-upload').classList.add('dragover');
+  });
+});
+['dragleave', 'drop'].forEach(ev => {
+  stage.addEventListener(ev, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('pg-target-upload').classList.remove('dragover');
+  });
+});
+stage.addEventListener('drop', async (e) => {
+  const f = e.dataTransfer.files[0];
+  if (f) await loadAndApplyImage(f);
+});
+
+// 粘贴上传
+window.addEventListener('paste', async (e) => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const it of items) {
+    if (it.type.startsWith('image/')) {
+      const f = it.getAsFile();
+      if (f) await loadAndApplyImage(f);
+    }
+  }
+});
+
+// 重置
+document.getElementById('pg-reset').addEventListener('click', () => {
+  pgCurrent = pgDefaults();
+  pgRebuild();
+  // 同步 UI
+  document.querySelectorAll('#pg-themes button').forEach(x => x.classList.toggle('active', x.dataset.v === 'silicon-valley'));
+  document.querySelectorAll('#pg-variants button').forEach(x => x.classList.toggle('active', x.dataset.v === 'classic'));
+  syncSlidersFromCurrent();
+  // 颜色注入清零
+  for (let lv = 0; lv <= 9; lv++) {
+    document.querySelector(`.pg-color-r[data-lv="${lv}"]`).value = 0;
+    document.querySelector(`.pg-color-g[data-lv="${lv}"]`).value = 0;
+    document.querySelector(`.pg-color-b[data-lv="${lv}"]`).value = 0;
+    const sw = document.getElementById(`pg-swatch-${lv}`);
+    if (sw) sw.style.background = 'rgb(0,0,0)';
+  }
+});
+
+// 导出 JSON
+document.getElementById('pg-export').addEventListener('click', () => {
+  const config = {
+    theme: pgCurrent.theme,
+    variant: pgCurrent.variant,
+    fontSize: pgCurrent.fontSize,
+    trailAlpha: pgCurrent.trailAlpha,
+    maxDPR: pgCurrent.maxDPR,
+    sparkProbability: pgCurrent.sparkProbability,
+    lightCenter: { x: pgCurrent.lightCenter.x, y: pgCurrent.lightCenter.y },
+    driftSpeed: pgCurrent.driftSpeed,
+    warmthRadius: pgCurrent.warmthRadius,
+    warmthLerp: pgCurrent.warmthLerp,
+    flickerRates: { ...pgCurrent.flickerRates },
+    flickerSpeed: pgCurrent.flickerSpeed,
+    themeParams: { ...pgCurrent.themeParams },
+    coldThemeParams: { ...(pgCurrent.coldThemeParams || {}) },
+    warmThemeParams: { ...(pgCurrent.warmThemeParams || {}) },
+    hueRotateSpeed: pgCurrent.hueRotateSpeed,
+    hueRotateAmount: pgCurrent.hueRotateAmount,
+    colorOverrides: pgCurrent.colorOverrides,
+    variantParams: { ...pgCurrent.variantParams },
+    charset: pgCurrent.charset
+  };
+  const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `matrix-rain-config-${pgCurrent.theme}-${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  // toast
+  const t = document.getElementById('pg-toast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+});
+
+// 跨页面/关闭时自动清理(防 leak)
+window.addEventListener('pagehide', () => MatrixRain.destroyAll());
+window.addEventListener('beforeunload', () => MatrixRain.destroyAll());
+</script>
+
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a14">
+<title>@xietuier/matrix-rain · 4 变体对比</title>
+<link rel="stylesheet" href="../dist/matrix-rain.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Inter, system-ui, sans-serif; }
+  h1 { position: relative; z-index: 5; font-family: "Fraunces", serif; font-style: italic; font-size: 48px; color: rgb(240,236,223); text-align: center; padding: 32px 16px 0; margin: 0; }
+  .subtitle { position: relative; z-index: 5; text-align: center; color: rgb(200,196,184); margin: 8px 0 24px; font-size: 14px; }
+  .grid { position: relative; z-index: 5; display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; padding: 16px; max-width: 1400px; margin: 0 auto; }
+  .cell { position: relative; height: 320px; border-radius: 16px; overflow: hidden; border: 1px solid rgba(124,92,255,.25); }
+  .cell canvas { position: absolute !important; inset: 0; }
+  .label { position: absolute; bottom: 16px; left: 16px; z-index: 6; font-family: "JetBrains Mono", monospace; font-size: 12px; letter-spacing: .15em; padding: 8px 14px; background: rgba(0,0,0,.5); backdrop-filter: blur(10px); border-radius: 6px; color: rgb(240,236,223); }
+  .label .name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+  .label .desc { font-size: 10px; opacity: .7; max-width: 200px; line-height: 1.5; }
+  @media (max-width: 700px) {
+    h1 { font-size: 32px; padding: 20px 16px 0; }
+    .subtitle { font-size: 13px; margin: 6px 12px 16px; }
+    .grid { grid-template-columns: 1fr; gap: 12px; padding: 12px; }
+    .cell { height: 240px; }
+    .label { padding: 6px 10px; }
+  }
+</style>
+</head>
+<body>
+<h1>4 变体 · 同一硅谷风主题</h1>
+<p class="subtitle">classic · avalanche · ripple · ascii</p>
+<div class="grid" id="grid"></div>
+
+<script type="module">
+import { matrixRain } from '../dist/index.js?v=3';
+
+const variants = [
+  { id: 'classic',   name: 'Classic',   desc: '经典残影 + 三层 sin 波叠加 + 冷暖光心(默认)' },
+  { id: 'avalanche', name: 'Avalanche', desc: '雪崩下落 · 每列独立速度 · 头亮尾暗' },
+  { id: 'ripple',    name: 'Ripple',    desc: '同心圆涟漪 · phase 由到光心距离驱动' },
+  { id: 'ascii',     name: 'ASCII',     desc: 'ASCII 字符集 · 适合代码/IDE 风' },
+];
+
+const grid = document.getElementById('grid');
+variants.forEach(v => {
+  const cell = document.createElement('div');
+  cell.className = 'cell';
+  cell.innerHTML = `<div class="label"><div class="name">${v.name}</div><div class="desc">${v.desc}</div></div>`;
+  grid.appendChild(cell);
+
+  const opts = {
+    container: cell,
+    theme: 'silicon-valley',
+    variant: v.id,
+    fontSize: 14,
+  };
+  if (v.id === 'ascii') opts.charset = '01<>[]{}=*+';
+  matrixRain(opts);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+{
+  "name": "@xietuier/matrix-rain",
+  "version": "0.1.0",
+  "description": "czhmisaka 出品 · 数字矩阵背景 · 终端感 + 温度感 · 5 主题 4 变体 · 全参数可调",
+  "keywords": [
+    "matrix-rain",
+    "matrix",
+    "digital-rain",
+    "background",
+    "canvas",
+    "cyberpunk",
+    "terminal",
+    "hacker",
+    "effect",
+    "xietuier",
+    "czhmisaka"
+  ],
+  "license": "MIT",
+  "author": "czhmisaka <czhmisaka@users.noreply.github.com>",
+  "homepage": "https://github.com/xietuier/matrix-rain",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xietuier/matrix-rain.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xietuier/matrix-rain/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./style.css": "./dist/matrix-rain.css",
+    "./themes": {
+      "types": "./dist/themes.d.ts",
+      "import": "./dist/themes.js",
+      "require": "./dist/themes.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "tsup && cp src/matrix-rain.css dist/matrix-rain.css",
+    "dev": "tsup --watch",
+    "type-check": "tsc --noEmit",
+    "test": "node test/smoke.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
