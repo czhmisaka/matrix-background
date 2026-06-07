@@ -21,18 +21,29 @@ import type {
   ClickBurstOptions,
   CursorOption,
   MatrixRainSnapshot,
-  EnvironmentInfo
+  EnvironmentInfo,
+  HSLPalette
 } from '../types';
 import { VARIANT_DEFAULTS, themes, compileUserFunction, PaletteLUT, applyTP, type RGBALUT, ease, SAFE_GLOBALS } from './core';
 
-const DEFAULTS: Required<Omit<MatrixRainOptions, 'canvas' | 'container' | 'onReady' | 'theme' | 'variant' | 'charset' | 'coldPalette' | 'warmPalette' | 'flickerRates' | 'flickerSpeed' | 'lightCenter' | 'driftSpeed' | 'themeParams' | 'variantParams' | 'brightnessCurve' | 'flickerCurve' | 'phaseFunc' | 'charsetFunc' | 'coldThemeParams' | 'warmThemeParams' | 'hueRotateSpeed' | 'hueRotateAmount' | 'colorOverrides' | 'colorCurve' | 'targetBitmap' | 'targetCols' | 'targetRows' | 'targetAnchor' | 'targetMotion' | 'targetMotionSpeed' | 'targetFadeIn' | 'targetHold' | 'targetFadeOut' | 'targetChaos' | 'targetPhase' | 'targetNoiseDuration' | 'targetConvergeDuration' | 'targetLockOrder' | 'targetLockStability' | 'fixedTimeStep' | 'enableWhenReducedMotion' | 'coldFrom' | 'warmFrom' | 'onFrame' | 'onResize' | 'onThemeChange' | 'onTargetFinish' | 'clickBurst' | 'cursor'>> = {
+type NumericOptionKeys =
+  | 'fontSize' | 'trailAlpha' | 'maxDPR' | 'warmthRadius' | 'warmthLerp' | 'sparkProbability' | 'targetFPS'
+  | 'noiseFadeInDuration' | 'phaseTransitionDuration' | 'cellLockEaseDuration' | 'themeTransitionDuration' | 'variantTransitionDuration';
+
+const DEFAULTS: Required<Pick<MatrixRainOptions, NumericOptionKeys>> = {
   fontSize: 14,
   trailAlpha: 0.18,
   maxDPR: 2,
   warmthRadius: 0.6,
   warmthLerp: 0.04,
   sparkProbability: 0.003,
-  targetFPS: 0  // 0 = 不限(默认随 rAF),正数 = 限频(30/24/15/...)
+  targetFPS: 0,  // 0 = 不限(默认随 rAF),正数 = 限频(30/24/15/...)
+  // ========== 过渡系统默认时长(秒)==========
+  noiseFadeInDuration: 0.2,       // A1 noise 阶段开头渐入
+  phaseTransitionDuration: 0.15,  // A2 阶段间过渡
+  cellLockEaseDuration: 0.12,     // A3/A4 per-cell 锁定/解锁 ease
+  themeTransitionDuration: 0.4,   // C1 主题切换 HSL 插值
+  variantTransitionDuration: 0.3  // D1 variant 切换
 };
 
 const FLICKER_SPEED_DEFAULT = 1;
@@ -42,6 +53,53 @@ const DEFAULT_FLICKER = { high: 0.7, mid: 0.4, low: 0.15, dark: 0.04 };
 // ==================== 事件节流/防抖常量 ====================
 const ONFRAME_THROTTLE_MS = 1000 / 30;  // onFrame 30Hz 节流
 const RESIZE_DEBOUNCE_MS = 200;         // onResize debounce
+
+// ==================== 过渡系统 lerp 助手 ====================
+/**
+ * HSL 调色板线性插值(a → b over t ∈ [0, 1])
+ * 简化: hue 也走线性(虽然视觉上会过中间色相,但 400ms 内感觉是 hue shift)
+ * 严格 hue lerp 应走最短弧度,但 5 主题 hue 差一般 < 120°,影响小
+ */
+const lerpHSLPalette = (a: HSLPalette, b: HSLPalette, t: number): HSLPalette => ({
+  h: a.h + (b.h - a.h) * t,
+  s: a.s + (b.s - a.s) * t,
+  lMin: a.lMin + (b.lMin - a.lMin) * t,
+  lMax: a.lMax + (b.lMax - a.lMax) * t,
+  aMax: (a.aMax ?? 1) + ((b.aMax ?? 1) - (a.aMax ?? 1)) * t
+});
+
+/** ThemeParams 7 字段逐项 lerp */
+const lerpThemeParams = (a: ThemeParams, b: ThemeParams, t: number): ThemeParams => ({
+  brightness: a.brightness + (b.brightness - a.brightness) * t,
+  chroma: a.chroma + (b.chroma - a.chroma) * t,
+  hueShift: a.hueShift + (b.hueShift - a.hueShift) * t,
+  saturationShift: a.saturationShift + (b.saturationShift - a.saturationShift) * t,
+  lightnessShift: a.lightnessShift + (b.lightnessShift - a.lightnessShift) * t,
+  invertHue: a.invertHue + (b.invertHue - a.invertHue) * t,
+  contrast: a.contrast + (b.contrast - a.contrast) * t
+});
+
+/** VariantParams 数值字段逐项 lerp */
+const lerpVariantParams = (a: VariantParams, b: VariantParams, t: number): VariantParams => ({
+  phaseStep: a.phaseStep + (b.phaseStep - a.phaseStep) * t,
+  phaseJitter: a.phaseJitter + (b.phaseJitter - a.phaseJitter) * t,
+  sinWeightA: a.sinWeightA + (b.sinWeightA - a.sinWeightA) * t,
+  sinWeightB: a.sinWeightB + (b.sinWeightB - a.sinWeightB) * t,
+  sinWeightC: a.sinWeightC + (b.sinWeightC - a.sinWeightC) * t,
+  brightCurve: a.brightCurve + (b.brightCurve - a.brightCurve) * t,
+  chUpdateProb: a.chUpdateProb + (b.chUpdateProb - a.chUpdateProb) * t,
+  headBright: a.headBright + (b.headBright - a.headBright) * t,
+  headFalloff: a.headFalloff + (b.headFalloff - a.headFalloff) * t,
+  avalancheSpeed: a.avalancheSpeed + (b.avalancheSpeed - a.avalancheSpeed) * t
+});
+
+/** ease 函数(forward 引用) */
+const easeOut = (t: number) => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
+const easeIn = (t: number) => Math.pow(Math.max(0, Math.min(1, t)), 3);
+const easeInOut = (t: number) => {
+  const x = Math.max(0, Math.min(1, t));
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+};
 
 /**
  * 解析主题:支持 ThemeName / { coldFrom, warmFrom } / coldFrom-warmFrom 拼色
@@ -199,6 +257,78 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
   let warmPalette: Palette = (options.warmPalette || themes['silicon-valley']().warm) as Palette;
   let tp: ThemeParams = { brightness: 1, chroma: 1, hueShift: 0, saturationShift: 0, lightnessShift: 0, invertHue: 0, contrast: 1 };
 
+  // ==================== 过渡系统选项 ====================
+  // 5 个时长字段均由 DEFAULTS 兜底;用户传 0 = 关闭对应过渡
+  const noiseFadeInDur: number = cfg.noiseFadeInDuration ?? 0.2;
+  const phaseTransitionDur: number = cfg.phaseTransitionDuration ?? 0.15;
+  const cellLockEaseDur: number = cfg.cellLockEaseDuration ?? 0.12;
+  const themeTransitionDur: number = cfg.themeTransitionDuration ?? 0.4;
+  const variantTransitionDur: number = cfg.variantTransitionDuration ?? 0.3;
+
+  // ==================== 过渡系统状态 ====================
+  // E1: instance-level soft alpha(0=全透明,1=全不透明)· 路由切换/页面离开用
+  let transitionAlpha = 1.0;
+  let transitionAlphaAnim: { start: number; dur: number; from: number; to: number } | null = null;
+
+  // C1: 主题切换 HSL 插值状态(from palette → to palette over themeTransitionDur)
+  let themeTransition: {
+    fromCold: HSLPalette;
+    fromWarm: HSLPalette;
+    fromTp: ThemeParams;
+    fromCtp: ThemeParams;
+    fromWtp: ThemeParams;
+    start: number;
+    dur: number;
+  } | null = null;
+
+  // C2: 主题参数切换(主要为 brightness)插值状态
+  let themeParamsTransition: {
+    fromTp: ThemeParams;
+    fromCtp: ThemeParams;
+    fromWtp: ThemeParams;
+    start: number;
+    dur: number;
+  } | null = null;
+
+  // D1: 变体参数切换插值状态
+  let variantTransition: {
+    fromVp: VariantParams;
+    start: number;
+    dur: number;
+  } | null = null;
+
+  // B1/B2: 阶段切换 crossfade 状态(fade ↔ noise-converge)
+  let phaseTransition: {
+    fromPhase: 'fade' | 'noise-converge';
+    start: number;
+    dur: number;
+  } | null = null;
+
+  // A1: noise 阶段起始时间(-1 = 未在 noise 阶段)
+  let noisePhaseStartTime = -1;
+
+  // B1/B2: 阶段切换 crossfade 期间,保存"旧"状态以便与"新"状态叠加
+  type TargetSnapshot = {
+    bitmap: Float32Array | null;
+    cols: number;
+    rows: number;
+    anchor: 'topLeft' | 'center' | 'topRight' | 'bottomLeft' | 'bottomRight';
+    motion: 'static' | 'drift' | 'bounce' | 'float';
+    motionSpeed: number;
+    fadeIn: number;
+    hold: number;
+    fadeOut: number;
+    chaos: number;
+    phase: 'fade' | 'noise-converge';
+    startTime: number;
+    active: boolean;
+    noiseDuration: number;
+    convergeDuration: number;
+    lockOrder: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft';
+    lockStability: number;
+  };
+  let oldTargetSnapshot: TargetSnapshot | null = null;
+
   // ==================== 解析主题(支持 coldFrom/warmFrom 拼色)====================
   const themeResolved = resolveTheme(options.theme, options.coldFrom, options.warmFrom);
   let currentThemeName: ThemeName = themeResolved.effectiveName;
@@ -214,6 +344,12 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
    */
   const applyTheme = (name: ThemeName): boolean => {
     if (!themes[name]) return false;
+    // ========== C1 主题过渡:先快照旧值(供 setTheme 启动 themeTransition 用)==========
+    oldColdPalette = { ...coldPalette };
+    oldWarmPalette = { ...warmPalette };
+    oldTp = { ...tp };
+    oldCtp = { ...ctp };
+    oldWtp = { ...wtp };
     const t = themes[name]();
     coldPalette = t.cold;
     warmPalette = t.warm;
@@ -240,6 +376,13 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
   let wtp: ThemeParams = { ...tp };
   if (options.coldThemeParams) ctp = { ...ctp, ...options.coldThemeParams };
   if (options.warmThemeParams) wtp = { ...wtp, ...options.warmThemeParams };
+
+  // ========== C1/C2 主题过渡用的"旧值"快照(每次 setTheme/setThemeParams 时更新)==========
+  let oldColdPalette: HSLPalette = { ...coldPalette };
+  let oldWarmPalette: HSLPalette = { ...warmPalette };
+  let oldTp: ThemeParams = { ...tp };
+  let oldCtp: ThemeParams = { ...ctp };
+  let oldWtp: ThemeParams = { ...wtp };
 
   // 时间驱动色相旋转
   let hueRotateSpeed = options.hueRotateSpeed || 0;
@@ -428,6 +571,13 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     lockTime?: number;      // 锁定时刻(墙钟,秒,相对 targetStartTime)
     unlockTime?: number;    // 解锁时刻(dissolve 阶段设置)
     lockedCh?: number;      // 锁定后使用的字符索引
+    // ========== 过渡系统(A3/A4 per-cell ease)==========
+    lockEaseStart?: number;    // 锁定瞬间的 wallTime(秒)· undefined = 未在 ease
+    unlockEaseStart?: number;  // 解锁瞬间的 wallTime(秒)· undefined = 未在 ease
+    lockEaseFromL?: number;    // 锁定瞬间的 l(噪声亮度)· 用于 A3 ease
+    lockEaseToL?: number;      // 锁定瞬间的目标 l(bitmap 亮度)· 用于 A3 ease
+    unlockEaseFromL?: number;  // 解锁瞬间的 l(锁定亮度)· 用于 A4 ease
+    unlockEaseToL?: number;    // 解锁瞬间的目标 l(噪声亮度)· 用于 A4 ease
   }
 
   // ==================== Lifecycle ====================
@@ -459,6 +609,13 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       fpsWindowCount = 0;
     }
   };
+
+  // ==================== 过渡系统:D1 variant 过渡用 effectiveVp(每帧更新)====================
+  let effectiveVp: VariantParams = vp;
+  // C1/C2: 主题 / 主题参数 过渡用 effectiveTp/effectiveCtp/effectiveWtp(每帧更新)
+  let effectiveTp: ThemeParams = tp;
+  let effectiveCtp: ThemeParams = ctp;
+  let effectiveWtp: ThemeParams = wtp;
 
   const buildGrid = () => {
     n = Math.min(window.devicePixelRatio || 1, cfg.maxDPR);
@@ -524,6 +681,12 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         c.lockTime = undefined;
         c.unlockTime = undefined;
         c.lockedCh = undefined;
+        c.lockEaseStart = undefined;
+        c.unlockEaseStart = undefined;
+        c.lockEaseFromL = undefined;
+        c.lockEaseToL = undefined;
+        c.unlockEaseFromL = undefined;
+        c.unlockEaseToL = undefined;
       }
     }
     targetDissolveStartTime = -1;
@@ -725,24 +888,68 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
 
   /**
    * 单 cell 阶段处理(在 cell 循环中调)
-   * 输入:c(单元格)· h/s(网格坐标)· l(变体原始亮度)
+   * 输入:c(单元格)· h/s(网格坐标)· l(变体原始亮度)· elapsed(可选,默认用全局 wallTime)
    * 输出:{ l, ch, skipCharset } 或 null(非 noise-converge 模式)
    * - skipCharset = true:此 cell 由 phase 完全接管,跳过 normal flicker/charset 更新
    * - skipCharset = false:此 cell 让 normal flicker/charset 接管 ch 更新(非目标区 hold/dissolve)
+   *
+   * 过渡系统集成:
+   * - A1 noise 阶段开头渐入:在 noise phase 且 elapsed < noiseFadeInDur 时,lerp l from baseL to chaos
+   * - A3 per-cell lock-in:cell 锁定瞬间记录 lockEaseStart + 起始/终值,后续 cell 的 l 由 ease 决定
+   * - A4 per-cell unlock:cell 解锁瞬间记录 unlockEaseStart + 起始/终值,后续 cell 的 l 由 ease 决定
    */
-  const applyTargetBitmapPhase = (c: Cell, h: number, s: number, l: number): { l: number; ch: number; skipCharset: boolean } | null => {
+  const applyTargetBitmapPhase = (c: Cell, h: number, s: number, l: number, elapsedOpt?: number): { l: number; ch: number; skipCharset: boolean } | null => {
     if (!targetBitmap || !targetActive || targetPhase !== 'noise-converge') return null;
-    const elapsed = wallTime - targetStartTime;
+    const elapsed = elapsedOpt !== undefined ? elapsedOpt : (wallTime - targetStartTime);
     const noiseStart = targetNoiseDuration;
     const convergeSpan = targetConvergeDuration;
     const noiseAndConverge = noiseStart + convergeSpan;
     // 1e-9 epsilon:容忍 wallTime 累积浮点误差(60/180/...×1/60 可能 < 整数)
     const EPS = 1e-9;
 
+    // ========== A3 per-cell lock-in ease (优先级最高)==========
+    // cell 已锁但 lockEaseStart 还在 ease 窗口内 → 用 ease 后的 l 覆盖
+    if (c.lockEaseStart !== undefined && c.lockEaseFromL !== undefined && c.lockEaseToL !== undefined) {
+      const t = Math.min(1, Math.max(0, (elapsed - c.lockEaseStart) / Math.max(0.001, cellLockEaseDur)));
+      const eased = easeOut(t);
+      const resultL = c.lockEaseFromL * (1 - eased) + c.lockEaseToL * eased;
+      if (t >= 1) {
+        c.lockEaseStart = undefined;
+        c.lockEaseFromL = undefined;
+        c.lockEaseToL = undefined;
+      }
+      return { l: Math.max(0, Math.min(1, resultL)), ch: c.ch, skipCharset: true };
+    }
+    // ========== A4 per-cell unlock ease ==========
+    if (c.unlockEaseStart !== undefined && c.unlockEaseFromL !== undefined && c.unlockEaseToL !== undefined) {
+      const t = Math.min(1, Math.max(0, (elapsed - c.unlockEaseStart) / Math.max(0.001, cellLockEaseDur)));
+      const eased = easeIn(t);
+      const resultL = c.unlockEaseFromL * (1 - eased) + c.unlockEaseToL * eased;
+      if (t >= 1) {
+        c.unlockEaseStart = undefined;
+        c.unlockEaseFromL = undefined;
+        c.unlockEaseToL = undefined;
+      }
+      return { l: Math.max(0, Math.min(1, resultL)), ch: c.ch, skipCharset: false };
+    }
+
     // Phase 1: noise(全屏 chaos,即使变体也算 noise)
     if (elapsed + EPS < noiseStart) {
+      const noiseL = Math.random();
+      // ========== A1 noise 开头渐入 ==========
+      if (noiseFadeInDur > 0) {
+        const t = Math.min(1, Math.max(0, elapsed / noiseFadeInDur));
+        if (t < 1) {
+          const eased = easeOut(t);
+          return {
+            l: l * (1 - eased) + noiseL * eased,  // 从 rain 渐变到 noise
+            ch: Math.floor(Math.random() * charset.length),
+            skipCharset: true
+          };
+        }
+      }
       return {
-        l: Math.random(),
+        l: noiseL,
         ch: Math.floor(Math.random() * charset.length),
         skipCharset: true
       };
@@ -780,14 +987,25 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     }
 
     // 目标区 cell:lock state machine
+    const wasLocked = c.locked;
+    const wasUnlockTime = c.unlockTime;
     if (c.locked && c.unlockTime !== undefined && elapsed + EPS >= c.unlockTime) {
       // 解锁 → 切到 noise(此 cell 后续不再重新锁定,因 unlockTime 已生效)
+      // ========== A4 unlock ease:记录 ease 起点 ==========
+      const prevL = Math.max(0, Math.min(1, g * 0.7));
       c.locked = false;
-      c.lockedCh = undefined;
+      c.unlockEaseStart = elapsed;
+      c.unlockEaseFromL = prevL;
+      c.unlockEaseToL = Math.random();
     }
     // 只在 dissolve 阶段前(没有 unlockTime)才允许锁定,避免 dissolve 中解锁后立即被重新锁
     if (!c.locked && c.unlockTime === undefined && c.lockTime !== undefined && elapsed + EPS >= c.lockTime) {
+      // ========== A3 lock ease:记录 ease 起点 ==========
+      const prevL = Math.random();
       c.locked = true;
+      c.lockEaseStart = elapsed;
+      c.lockEaseFromL = prevL;
+      c.lockEaseToL = Math.max(0, Math.min(1, g * 0.7));
       c.lockedCh = Math.floor(Math.random() * charset.length);
     }
     if (c.locked) {
@@ -801,7 +1019,19 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         skipCharset: true
       };
     }
-    // 未锁(noise/converge 早期):noise 行为
+    // 未锁(noise/converge 早期 或 dissolve 中已解锁):noise 行为
+    // 如果刚刚进入 A4 ease(本帧设置 unlockEaseStart),立刻返回 ease 第一帧
+    if (c.unlockEaseStart !== undefined && !c.locked && c.unlockEaseFromL !== undefined && c.unlockEaseToL !== undefined) {
+      const t = Math.min(1, Math.max(0, (elapsed - c.unlockEaseStart) / Math.max(0.001, cellLockEaseDur)));
+      const eased = easeIn(t);
+      const resultL = c.unlockEaseFromL * (1 - eased) + c.unlockEaseToL * eased;
+      if (t >= 1) {
+        c.unlockEaseStart = undefined;
+        c.unlockEaseFromL = undefined;
+        c.unlockEaseToL = undefined;
+      }
+      return { l: Math.max(0, Math.min(1, resultL)), ch: c.ch, skipCharset: false };
+    }
     return {
       l: Math.random(),
       ch: Math.floor(Math.random() * charset.length),
@@ -886,10 +1116,74 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       }
       const totalHue = dynamicHue + dynamicColorHue;
 
+      // ==================== 过渡系统:每帧应用 ====================
+      // E1: transitionAlpha 插值(若有 in-flight 动画)
+      if (transitionAlphaAnim) {
+        const tt = (wallTime - transitionAlphaAnim.start) / transitionAlphaAnim.dur;
+        if (tt >= 1) {
+          transitionAlpha = transitionAlphaAnim.to;
+          transitionAlphaAnim = null;
+        } else {
+          transitionAlpha = transitionAlphaAnim.from + (transitionAlphaAnim.to - transitionAlphaAnim.from) * easeInOut(tt);
+        }
+      }
+
+      // C1: 主题 HSL 插值(每帧用 interpolated palette 重建 LUT)
+      let effectiveCold = coldPalette, effectiveWarm = warmPalette;
+      let effectiveTp = tp, effectiveCtp = ctp, effectiveWtp = wtp;
+      if (themeTransition) {
+        const tt = (wallTime - themeTransition.start) / themeTransition.dur;
+        if (tt >= 1) {
+          themeTransition = null;
+        } else {
+          const eased = easeInOut(Math.min(1, Math.max(0, tt)));
+          effectiveCold = lerpHSLPalette(themeTransition.fromCold, coldPalette, eased);
+          effectiveWarm = lerpHSLPalette(themeTransition.fromWarm, warmPalette, eased);
+          effectiveTp = lerpThemeParams(themeTransition.fromTp, tp, eased);
+          effectiveCtp = lerpThemeParams(themeTransition.fromCtp, ctp, eased);
+          effectiveWtp = lerpThemeParams(themeTransition.fromWtp, wtp, eased);
+          // 每帧 push 临时 palette 给 LUT(setPalettes 内部 hash 失配会重建)
+          paletteLUT.setPalettes(effectiveCold, effectiveWarm);
+        }
+      }
+      // C2: 主题参数(brightness/chroma 等)插值
+      if (themeParamsTransition) {
+        const tt = (wallTime - themeParamsTransition.start) / themeParamsTransition.dur;
+        if (tt >= 1) {
+          themeParamsTransition = null;
+        } else {
+          const eased = easeInOut(Math.min(1, Math.max(0, tt)));
+          effectiveTp = lerpThemeParams(themeParamsTransition.fromTp, tp, eased);
+          effectiveCtp = lerpThemeParams(themeParamsTransition.fromCtp, ctp, eased);
+          effectiveWtp = lerpThemeParams(themeParamsTransition.fromWtp, wtp, eased);
+        }
+      }
+      // D1: 变体参数插值 — 通过闭包共享,draw 函数内读 effectiveVp
+      if (variantTransition) {
+        const tt = (wallTime - variantTransition.start) / variantTransition.dur;
+        if (tt >= 1) {
+          variantTransition = null;
+        } else {
+          const eased = easeInOut(Math.min(1, Math.max(0, tt)));
+          effectiveVp = lerpVariantParams(variantTransition.fromVp, vp, eased);
+        }
+      } else {
+        effectiveVp = vp;
+      }
+      // B1/B2: 阶段切换 crossfade — 在 draw* 函数内处理(old vs new vis lerp)
+      // 这里仅判断/清理过期
+      if (phaseTransition) {
+        const tt = (wallTime - phaseTransition.start) / phaseTransition.dur;
+        if (tt >= 1) {
+          phaseTransition = null;
+          oldTargetSnapshot = null;
+        }
+      }
+
       // ==================== Palette LUT(每帧一次)====================
       // 拿冷暖两色终态 LUT:TP 或 hue 变化时内部 hash 失配会自动重建
-      const coldFinal = paletteLUT.getColdFinal(ctp, totalHue);
-      const warmFinal = paletteLUT.getWarmFinal(wtp, totalHue);
+      const coldFinal = paletteLUT.getColdFinal(effectiveCtp, totalHue);
+      const warmFinal = paletteLUT.getWarmFinal(effectiveWtp, totalHue);
 
       // ① 残影拖尾
       ctx!.fillStyle = `rgba(8, 8, 18, ${cfg.trailAlpha})`;
@@ -973,8 +1267,10 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     const gc = gG * oneMinusD + wG * d;
     const bc = gB * oneMinusD + wB * d;
     const k = (gA * oneMinusD + wA * d) / 255;
-    const [R2, G2, B2] = applyTP(rc, gc, bc, tp, totalHue);
-    ctx!.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${k})`;
+    const [R2, G2, B2] = applyTP(rc, gc, bc, effectiveTp, totalHue);
+    // ========== E1 transitionAlpha:整体透明度缩放 ==========
+    const finalA = k * transitionAlpha;
+    ctx!.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${finalA})`;
     ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
   };
 
@@ -995,7 +1291,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       for (let h = 0; h < r; h++) {
         const c = b[s][h];
         // phase 增量(dt-based:60fps 时与原 f-step 等价)
-        const basePhaseInc = (vp.phaseStep + Math.random() * vp.phaseJitter) * (cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT);
+        const basePhaseInc = (effectiveVp.phaseStep + Math.random() * effectiveVp.phaseJitter) * (cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT);
         if (userFuncs.phaseFunc) {
           __frameCtx.h = h; __frameCtx.s = s; __frameCtx.phase = c.phase;
           __frameCtx.L = c.bright; __frameCtx.ch = c.ch; __frameCtx.r = Math.random();
@@ -1004,9 +1300,9 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
           c.phase += basePhaseInc * lastDt * 60;
         }
         const W =
-          Math.sin(c.phase) * vp.sinWeightA +
-          Math.sin((h + s) * 0.05 + fBase1) * vp.sinWeightB +
-          Math.sin(h * 0.1 - s * 0.07 + fBase2) * vp.sinWeightC;
+          Math.sin(c.phase) * effectiveVp.sinWeightA +
+          Math.sin((h + s) * 0.05 + fBase1) * effectiveVp.sinWeightB +
+          Math.sin(h * 0.1 - s * 0.07 + fBase2) * effectiveVp.sinWeightC;
         // 亮度
         let l: number;
         if (userFuncs.brightnessCurve) {
@@ -1098,7 +1394,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
             F = l >= 0.66 ? flicker.high : l >= 0.33 ? flicker.mid : l >= 0.05 ? flicker.low : flicker.dark;
           }
           if (Math.random() < F) c.ch = Math.floor(Math.random() * charset.length);
-          if (vp.chUpdateProb > 0 && Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
+          if (effectiveVp.chUpdateProb > 0 && Math.random() < effectiveVp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
           if (userFuncs.charsetFunc) {
             __frameCtx.h = h; __frameCtx.s = s; __frameCtx.phase = c.phase;
             __frameCtx.L = l; __frameCtx.ch = c.ch; __frameCtx.r = Math.random();
@@ -1116,7 +1412,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     const totalHue = dynamicHue + dynamicColorHue;
     __frameCtx.f = f;
     __frameCtx.t = wallTime;
-    const yPosSpeed = vp.avalancheSpeed;
+    const yPosSpeed = effectiveVp.avalancheSpeed;
     // noise-converge 模式:每帧调一次全局状态
     updateTargetBitmapPhaseGlobal();
     for (let s = 0; s < i; s++) {
@@ -1127,7 +1423,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         if (c.yPos! > i) c.yPos = 0;
 
         const distFromHead = Math.abs(s - Math.floor(c.yPos!));
-        let l = Math.max(0, Math.min(1, (c.headBright! - Math.pow(distFromHead, vp.headFalloff)) / 8));
+        let l = Math.max(0, Math.min(1, (c.headBright! - Math.pow(distFromHead, effectiveVp.headFalloff)) / 8));
         c.bright = l;
 
         // 噪声→收敛模式
@@ -1141,7 +1437,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
           }
         }
 
-        if (!skipCharset && Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
+        if (!skipCharset && Math.random() < effectiveVp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
         if (l < 0.02) continue;  // 走老路径的 continue,仅 brightness 计算
 
         const d = Math.max(0, Math.min(1, c.warmth));
@@ -1154,7 +1450,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         const __lIdx = (l * 9) | 0;
         if (colorOverrides && (colorOverrides as any)[__lIdx]) {
           const o = (colorOverrides as any)[__lIdx]!;
-          ctx!.fillStyle = `rgba(${o[0]}, ${o[1]}, ${o[2]}, 0.9)`;
+          ctx!.fillStyle = `rgba(${o[0]}, ${o[1]}, ${o[2]}, ${0.9 * transitionAlpha})`;
           ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
           continue;
         }
@@ -1167,8 +1463,9 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         const gc = gG * oneMinusD + wG * d;
         const bc = gB * oneMinusD + wB * d;
         const k = (gA * oneMinusD + wA * d) / 255;
-        const [R2, G2, B2] = applyTP(rc, gc, bc, tp, totalHue);
-        ctx!.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${k})`;
+        const [R2, G2, B2] = applyTP(rc, gc, bc, effectiveTp, totalHue);
+        const finalA = k * transitionAlpha;
+        ctx!.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${finalA})`;
         ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
       }
     }
@@ -1184,8 +1481,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       const y = s * ef * 1.1 + ef * 0.55;
       for (let h = 0; h < r; h++) {
         const c = b[s][h];
-        c.phase += (vp.phaseStep + Math.random() * vp.phaseJitter) * (cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT) * lastDt * 60;
-        const W = Math.sin(c.phase) * vp.sinWeightA + 0.5;
+        c.phase += (effectiveVp.phaseStep + Math.random() * effectiveVp.phaseJitter) * (cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT) * lastDt * 60;
+        const W = Math.sin(c.phase) * effectiveVp.sinWeightA + 0.5;
         let l = Math.max(0, Math.min(1, W));
         c.bright = l;
 
@@ -1200,7 +1497,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
           }
         }
 
-        if (!skipCharset && Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
+        if (!skipCharset && Math.random() < effectiveVp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
         if (l < 0.02) continue;
 
         // 走简化路径(无 colorOverride 文档提及的 ripple 路径,但保留兼容)
@@ -1213,7 +1510,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         const __lIdx = (l * 9) | 0;
         if (colorOverrides && (colorOverrides as any)[__lIdx]) {
           const o = (colorOverrides as any)[__lIdx]!;
-          ctx!.fillStyle = `rgba(${o[0]}, ${o[1]}, ${o[2]}, 0.9)`;
+          ctx!.fillStyle = `rgba(${o[0]}, ${o[1]}, ${o[2]}, ${0.9 * transitionAlpha})`;
           ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
           continue;
         }
@@ -1226,8 +1523,9 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         const gc = gG * oneMinusD + wG * d;
         const bc = gB * oneMinusD + wB * d;
         const k = (gA * oneMinusD + wA * d) / 255;
-        const [R2, G2, B2] = applyTP(rc, gc, bc, tp, totalHue);
-        ctx!.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${k})`;
+        const [R2, G2, B2] = applyTP(rc, gc, bc, effectiveTp, totalHue);
+        const finalA = k * transitionAlpha;
+        ctx!.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${finalA})`;
         ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
       }
     }
@@ -1274,21 +1572,65 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         ctp = { ...tp };
         wtp = { ...tp };
       }
-      // LUT 失效:静态 LUT 重建(cold/warm 引用变了),终态 LUT dirty
-      paletteLUT.setPalettes(coldPalette, warmPalette);
+      // ========== C1 主题切换 HSL 插值 ==========
+      // 记录旧 palette(快照)· 启动过渡,dur 内每帧 lerp cold/warm/tp/ctp/wtp
+      if (themeTransitionDur > 0) {
+        themeTransition = {
+          fromCold: { ...oldColdPalette },
+          fromWarm: { ...oldWarmPalette },
+          fromTp: { ...oldTp },
+          fromCtp: { ...oldCtp },
+          fromWtp: { ...oldWtp },
+          start: wallTime,
+          dur: themeTransitionDur
+        };
+        // 立即 LUT 失效:during transition,每帧用 interpolated palette 重建
+        paletteLUT.setPalettes(coldPalette, warmPalette);
+      } else {
+        // 立即切换
+        paletteLUT.setPalettes(coldPalette, warmPalette);
+      }
       // 调试钩:同步主题
       (instance as DebugInstance).__debugTheme = name;
       // 触发 onThemeChange
       fireOnThemeChange(name);
     },
     setThemeParams(params: Partial<ThemeParams>) {
+      // ========== C2 主题参数(brightness 等)切换插值 ==========
+      if (themeTransitionDur > 0) {
+        themeParamsTransition = {
+          fromTp: { ...tp },
+          fromCtp: { ...ctp },
+          fromWtp: { ...wtp },
+          start: wallTime,
+          dur: themeTransitionDur
+        };
+      }
       tp = { ...tp, ...params };
       // 终态 LUT dirty(下次 getColdFinal/getWarmFinal 内部 hash 失配)
     },
     setColdThemeParams(params: Partial<ThemeParams>) {
+      if (themeTransitionDur > 0) {
+        themeParamsTransition = {
+          fromTp: { ...tp },
+          fromCtp: { ...ctp },
+          fromWtp: { ...wtp },
+          start: wallTime,
+          dur: themeTransitionDur
+        };
+      }
       ctp = { ...ctp, ...params };
     },
     setWarmThemeParams(params: Partial<ThemeParams>) {
+      if (themeTransitionDur > 0) {
+        themeParamsTransition = {
+          fromTp: { ...tp },
+          fromCtp: { ...ctp },
+          fromWtp: { ...wtp },
+          start: wallTime,
+          dur: themeTransitionDur
+        };
+      }
       wtp = { ...wtp, ...params };
     },
     setHueRotate(speed: number, amount?: number) {
@@ -1318,11 +1660,53 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       convergeDuration?: number;
       lockOrder?: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft';
       lockStability?: number;
+      /** 可选:切换 phase 时,跨阶段过渡时长(秒)。不传则走实例默认 phaseTransitionDuration */
+      phaseTransitionDuration?: number;
     }) {
       // **兼容**两种传参:直接 Float32Array 或 BitmapSource 包装对象
       const data: Float32Array | null = bitmap === null
         ? null
         : (bitmap instanceof Float32Array ? bitmap : bitmap.data);
+      // ========== B1/B2 阶段切换 crossfade:快照旧状态(若有旧 bitmap 在跑)==========
+      const prevPhase = targetPhase;
+      const prevActive = targetActive;
+      const prevBitmap = targetBitmap;
+      if (
+        data &&
+        prevActive &&
+        prevBitmap !== null &&
+        opts?.phase !== undefined &&
+        opts.phase !== prevPhase
+      ) {
+        // 跨阶段切换 → 快照旧状态,启动 crossfade
+        const dur = opts.phaseTransitionDuration ?? phaseTransitionDur;
+        if (dur > 0) {
+          oldTargetSnapshot = {
+            bitmap: prevBitmap,
+            cols: targetCols,
+            rows: targetRows,
+            anchor: targetAnchor,
+            motion: targetMotion,
+            motionSpeed: targetMotionSpeed,
+            fadeIn: targetFadeIn,
+            hold: targetHold,
+            fadeOut: targetFadeOut,
+            chaos: targetChaos,
+            phase: prevPhase,
+            startTime: targetStartTime,
+            active: true,
+            noiseDuration: targetNoiseDuration,
+            convergeDuration: targetConvergeDuration,
+            lockOrder: targetLockOrder,
+            lockStability: targetLockStability
+          };
+          phaseTransition = {
+            fromPhase: prevPhase,
+            start: wallTime,
+            dur
+          };
+        }
+      }
       targetBitmap = data;
       targetFinishFired = false;  // 重置 finish 触发标记
       // **记录位图尺寸**·用于位置 / 运动
@@ -1373,6 +1757,14 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       }
     },
     setVariantParams(params: Partial<VariantParams>) {
+      // ========== D1 变体切换:记录旧值,启动插值 ==========
+      if (variantTransitionDur > 0) {
+        variantTransition = {
+          fromVp: { ...vp },
+          start: wallTime,
+          dur: variantTransitionDur
+        };
+      }
       vp = { ...vp, ...params };
     },
     setBrightnessCurve(code: string | null) {
@@ -1396,10 +1788,48 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       catch (e: any) { diagnostics.charsetFunc = e.message; console.warn('[matrix-rain] charsetFunc:', e.message); userFuncs.charsetFunc = null; }
     },
     setPalettes(cold: Palette, warm: Palette) {
+      // ========== C1 主题过渡:记录旧值,启动插值 ==========
+      if (themeTransitionDur > 0) {
+        oldColdPalette = { ...coldPalette };
+        oldWarmPalette = { ...warmPalette };
+        themeTransition = {
+          fromCold: { ...oldColdPalette },
+          fromWarm: { ...oldWarmPalette },
+          fromTp: { ...tp },
+          fromCtp: { ...ctp },
+          fromWtp: { ...wtp },
+          start: wallTime,
+          dur: themeTransitionDur
+        };
+      }
       coldPalette = cold;
       warmPalette = warm;
       // LUT 静态表重建 + 终态表 dirty
       paletteLUT.setPalettes(coldPalette, warmPalette);
+    },
+    /**
+     * 设置过渡 alpha(0=全透明,1=全不透明)
+     * - 用于:路由切换/页面离开时优雅淡出;新实例淡入
+     * - 不影响性能:在 LUT 输出端乘 alpha,无额外 LUT 重建
+     * - alpha=1 时完全等价于未启用
+     * - 不传 dur → 立即设置;传 dur → 在 dur 秒内从当前 alpha 渐变到目标 alpha
+     */
+    setTransitionAlpha(alpha: number, dur?: number) {
+      const a = Math.max(0, Math.min(1, alpha));
+      if (dur !== undefined && dur > 0) {
+        transitionAlphaAnim = {
+          start: wallTime,
+          dur,
+          from: transitionAlpha,
+          to: a
+        };
+      } else {
+        transitionAlpha = a;
+        transitionAlphaAnim = null;
+      }
+    },
+    getTransitionAlpha(): number {
+      return transitionAlpha;
     },
     setFlickerSpeed(speed: number) {
       cfg = { ...cfg, flickerSpeed: Math.max(0, speed) };
@@ -1437,6 +1867,12 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       convergeDuration: number;
       lockStability: number;
       targetDissolveStartTime: number;
+      // ========== 过渡系统快照(测试用)==========
+      transitionAlpha: number;
+      phaseTransition: { fromPhase: 'fade' | 'noise-converge'; progress: number; dur: number } | null;
+      themeTransition: { progress: number; dur: number } | null;
+      themeParamsTransition: { progress: number; dur: number } | null;
+      variantTransition: { progress: number; dur: number } | null;
     } {
       let lockedCount = 0;
       let totalTargets = 0;
@@ -1476,7 +1912,26 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         noiseDuration: targetNoiseDuration,
         convergeDuration: targetConvergeDuration,
         lockStability: targetLockStability,
-        targetDissolveStartTime
+        targetDissolveStartTime,
+        // ========== 过渡状态快照(测试用)==========
+        transitionAlpha,
+        phaseTransition: phaseTransition ? {
+          fromPhase: phaseTransition.fromPhase,
+          progress: Math.min(1, Math.max(0, (wallTime - phaseTransition.start) / phaseTransition.dur)),
+          dur: phaseTransition.dur
+        } : null,
+        themeTransition: themeTransition ? {
+          progress: Math.min(1, Math.max(0, (wallTime - themeTransition.start) / themeTransition.dur)),
+          dur: themeTransition.dur
+        } : null,
+        themeParamsTransition: themeParamsTransition ? {
+          progress: Math.min(1, Math.max(0, (wallTime - themeParamsTransition.start) / themeParamsTransition.dur)),
+          dur: themeParamsTransition.dur
+        } : null,
+        variantTransition: variantTransition ? {
+          progress: Math.min(1, Math.max(0, (wallTime - variantTransition.start) / variantTransition.dur)),
+          dur: variantTransition.dur
+        } : null
       };
     },
     getOptions(): MatrixRainOptions {
@@ -1516,6 +1971,12 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         targetConvergeDuration,
         targetLockOrder,
         targetLockStability,
+        // ========== 过渡系统选项(可序列化)==========
+        noiseFadeInDuration: noiseFadeInDur,
+        phaseTransitionDuration: phaseTransitionDur,
+        cellLockEaseDuration: cellLockEaseDur,
+        themeTransitionDuration: themeTransitionDur,
+        variantTransitionDuration: variantTransitionDur,
         clickBurst: clickBurstCfg.radius > 0 ? { ...clickBurstCfg } : false,
         cursor: (canvas.style.cursor || undefined) as CursorOption
       };

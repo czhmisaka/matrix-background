@@ -316,6 +316,23 @@ export interface MatrixRainOptions {
    */
   targetLockStability?: number;
 
+  /**
+   * ========== 平滑过渡系统(10 类过渡的可调时长)==========
+   * 全部可选;不传 → 用默认值,与旧版行为一致(向后兼容)
+   * 注:即使不传这些选项,引擎仍会避免明显的硬切;
+   * 但"完整平滑过渡"必须显式打开对应的字段。
+   */
+  /** noise 阶段开头渐入时长(秒)· 默认 0.2。0 = 关闭 */
+  noiseFadeInDuration?: number;
+  /** 阶段间过渡时长(秒)· 默认 0.15。0 = 关闭 */
+  phaseTransitionDuration?: number;
+  /** per-cell 锁定/解锁后亮度 ease 时长(秒)· 默认 0.12。0 = 关闭 */
+  cellLockEaseDuration?: number;
+  /** 主题切换 HSL 插值时长(秒)· 默认 0.4。0 = 关闭 */
+  themeTransitionDuration?: number;
+  /** 切 variant 时雨速/密度插值时长(秒)· 默认 0.3。0 = 关闭 */
+  variantTransitionDuration?: number;
+
   /** 变体(改主循环行为) */
   variant?: VariantName;
 
@@ -432,9 +449,21 @@ export interface MatrixRainInstance {
     convergeDuration?: number;
     lockOrder?: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft';
     lockStability?: number;
+    /** 可选:切换 phase 时,跨阶段过渡时长(秒)。不传则走实例默认 phaseTransitionDuration */
+    phaseTransitionDuration?: number;
   }): void;
   /** 立即淑出(提前结束显示) */
   clearTargetBitmap(): void;
+
+  /**
+   * 软淡入/淡出 alpha(0=全透明,1=全不透明)
+   * - 用于:路由切换/页面离开时优雅淡出;新实例淡入
+   * - 不影响性能:在 LUT 输出端乘 alpha,无额外 LUT 重建
+   * - alpha=1 时完全等价于未启用
+   */
+  setTransitionAlpha(alpha: number): void;
+  /** 读取当前 transition alpha(测试用) */
+  getTransitionAlpha?(): number;
 
   /** 读取当前 fps */
   getFPS(): number;
@@ -459,6 +488,9 @@ export interface MatrixRainInstance {
    * - phase: 'idle' | 'noise' | 'converge' | 'hold' | 'dissolve'
    * - elapsed: 相对 targetStartTime 的墙钟秒数
    * - lockedCount / totalTargets: 目标区已锁 cell 数 / 总数
+   * - transitionAlpha: 当前 instance-level 软淡入/淡出 alpha
+   * - phaseTransition / themeTransition / themeParamsTransition / variantTransition:
+   *   过渡进行中时返回 { fromPhase?, progress, dur };null = 不在过渡
    */
   getTargetState?(): {
     active: boolean;
@@ -473,6 +505,11 @@ export interface MatrixRainInstance {
     convergeDuration: number;
     lockStability: number;
     targetDissolveStartTime: number;
+    transitionAlpha: number;
+    phaseTransition: { fromPhase: 'fade' | 'noise-converge'; progress: number; dur: number } | null;
+    themeTransition: { progress: number; dur: number } | null;
+    themeParamsTransition: { progress: number; dur: number } | null;
+    variantTransition: { progress: number; dur: number } | null;
   };
 
   /** 读取 clickBurst 当前状态(测试用) */
