@@ -72,7 +72,7 @@
 
           <h3>Target · 文本</h3>
           <label>Target Text
-            <input type="text" v-model="targetText" maxlength="20" @input="onTextInput" placeholder="MATRIX">
+            <input type="text" v-model="targetText" maxlength="20" placeholder="MATRIX">
           </label>
           <button class="btn btn-block" @click="regenerate">应用</button>
         </aside>
@@ -98,9 +98,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import ThemeSwitcher from '@/components/ThemeSwitcher.vue';
-import { matrixRain, textToBitmap, type MatrixRainInstance, type ThemeName, type VariantName } from '@xietuier/matrix-rain';
+import { textToBitmap, type MatrixRainOptions, type ThemeName, type VariantName } from '@xietuier/matrix-rain';
+import { useMatrixRain } from '@/composables/useMatrixRain';
 
 const themes: ThemeName[] = ['silicon-valley', 'matrix-green', 'lava-red', 'cyber-blue', 'pure-mono'];
 const lockOrders = ['random', 'topdown', 'bottomup', 'center', 'edge', 'leftright', 'rightleft'] as const;
@@ -138,9 +139,32 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 const targetText = ref('MATRIX');
 const phase = ref<'idle' | 'noise' | 'converge' | 'hold' | 'dissolve'>('idle');
 const elapsed = ref(0);
-let instance: MatrixRainInstance | null = null;
 let inputRaf: number | null = null;
 let phaseRaf = 0;
+
+/**
+ * 完整 options 传给 useMatrixRain
+ * - useMatrixRain 内部 deep watch,任意字段变化 → 销毁旧实例 + 重建
+ * - brightness 包在 themeParams 里(引擎约定)
+ */
+const matrixOptions = computed<MatrixRainOptions>(() => ({
+  theme: params.theme,
+  variant: params.variant,
+  fontSize: params.fontSize,
+  trailAlpha: params.trailAlpha,
+  maxDPR: params.maxDPR,
+  themeParams: { brightness: params.brightness },
+  targetPhase: params.targetPhase,
+  targetNoiseDuration: params.targetNoiseDuration,
+  targetConvergeDuration: params.targetConvergeDuration,
+  targetLockStability: params.targetLockStability,
+  targetLockOrder: params.targetLockOrder,
+  targetFadeIn: 0.3,
+  targetHold: 3.0,
+  targetFadeOut: 2.0
+}));
+
+const instance = useMatrixRain(matrixOptions, canvasRef);
 
 const codeString = computed(() => {
   const opts: Record<string, unknown> = {
@@ -178,29 +202,22 @@ rain.setTargetBitmap(bitmap, {
 
 function setLockOrder(o: typeof params.targetLockOrder) {
   params.targetLockOrder = o;
-  regenerate();
+  // regenerate 由下方 watcher 自动触发(useMatrixRain 重建 + rAF 后重新 setTargetBitmap)
 }
 
 function regenerate() {
-  if (!instance || !canvasRef.value) return;
+  const inst = instance.value;
+  if (!inst || !canvasRef.value) return;
   const cols = Math.max(8, Math.floor(canvasRef.value.width / params.fontSize));
   const rows = Math.max(6, Math.floor(canvasRef.value.height / params.fontSize));
   const text = (targetText.value || ' ').trim() || ' ';
   const bm = textToBitmap(text, cols, rows);
-  instance.setTargetBitmap(bm, {
+  inst.setTargetBitmap(bm, {
     phase: params.targetPhase,
     noiseDuration: params.targetNoiseDuration,
     convergeDuration: params.targetConvergeDuration,
     lockOrder: params.targetLockOrder,
     lockStability: params.targetLockStability
-  });
-}
-
-function onTextInput() {
-  if (inputRaf !== null) cancelAnimationFrame(inputRaf);
-  inputRaf = requestAnimationFrame(() => {
-    inputRaf = null;
-    regenerate();
   });
 }
 
@@ -213,12 +230,13 @@ function copyCode() {
 function resetParams() {
   Object.assign(params, defaults);
   targetText.value = 'MATRIX';
-  setTimeout(regenerate, 50);
+  // regenerate 由下方 watcher 自动触发
 }
 
 function phaseTick() {
-  if (instance && typeof (instance as any).getTargetState === 'function') {
-    const state = (instance as any).getTargetState();
+  const inst = instance.value;
+  if (inst && typeof (inst as any).getTargetState === 'function') {
+    const state = (inst as any).getTargetState();
     if (state) {
       phase.value = state.phase;
       elapsed.value = state.elapsed;
@@ -227,25 +245,31 @@ function phaseTick() {
   phaseRaf = requestAnimationFrame(phaseTick);
 }
 
+/**
+ * 关键修复:原版直接调 matrixRain() 后没有 watch params,
+ * 导致 theme/variant/fontSize/trailAlpha/maxDPR/brightness/phase/duration/lockStability/lockOrder 全部不生效。
+ *
+ * 现在 useMatrixRain 已 deep watch matrixOptions → 任意 param 变化触发重建。
+ * 但重建后新实例没有 target bitmap,必须再 setTargetBitmap 才能保持涌现效果。
+ * 监听 targetText + 所有 params,rAF 节流后调 regenerate()。
+ */
+watch(
+  [() => targetText.value,
+   () => params.theme, () => params.variant, () => params.fontSize,
+   () => params.trailAlpha, () => params.maxDPR, () => params.brightness,
+   () => params.targetPhase, () => params.targetLockOrder,
+   () => params.targetNoiseDuration, () => params.targetConvergeDuration,
+   () => params.targetLockStability],
+  () => {
+    if (inputRaf !== null) cancelAnimationFrame(inputRaf);
+    inputRaf = requestAnimationFrame(() => {
+      inputRaf = null;
+      regenerate();
+    });
+  }
+);
+
 onMounted(() => {
-  if (!canvasRef.value) return;
-  instance = matrixRain({
-    canvas: canvasRef.value,
-    theme: params.theme,
-    variant: params.variant,
-    fontSize: params.fontSize,
-    trailAlpha: params.trailAlpha,
-    maxDPR: params.maxDPR,
-    themeParams: { brightness: params.brightness },
-    targetPhase: params.targetPhase,
-    targetNoiseDuration: params.targetNoiseDuration,
-    targetConvergeDuration: params.targetConvergeDuration,
-    targetLockStability: params.targetLockStability,
-    targetLockOrder: params.targetLockOrder,
-    targetFadeIn: 0.3,
-    targetHold: 3.0,
-    targetFadeOut: 2.0
-  });
   setTimeout(regenerate, 250);
   phaseTick();
 });
@@ -253,8 +277,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (inputRaf !== null) cancelAnimationFrame(inputRaf);
   cancelAnimationFrame(phaseRaf);
-  instance?.destroy();
-  instance = null;
+  // instance 销毁由 useMatrixRain 自动处理
 });
 </script>
 
