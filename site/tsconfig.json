@@ -15,7 +15,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@xietuier/matrix-rain": ["../dist/index.d.ts"]
+      "@xietuier/matrix-rain": ["../dist/index.d.ts"],
+      "@xietuier/matrix-rain/element": ["../dist/element.d.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts"]

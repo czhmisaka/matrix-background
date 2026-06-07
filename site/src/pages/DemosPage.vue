@@ -1,14 +1,48 @@
 <template>
-  <div class="demos">
+  <div class="demos-page">
     <div class="container">
       <header class="page-header">
-        <span class="tag">PHASE 3 · 6 DEMOS</span>
-        <h1>DemosPage 占位</h1>
-        <p class="lead">阶段 3 接入:6 卡片矩阵,每张含真实缩略 canvas 跑 bitmap 涌现。</p>
+        <span class="tag">Demos</span>
+        <h1>5 主题 · 4 变体 · 真实场景</h1>
+        <p class="lead">每个 demo 都跑真实 matrix-rain 实例。改参数、触发事件、读状态机 — 全部可在浏览器里直接玩。</p>
       </header>
+
+      <div class="demos-grid">
+        <DemoCard to="/demos/element" tag="Web Component"
+                  title="多实例 &lt;matrix-rain&gt;" subtitle="Web Component 包装,DOM 节点直接用,4 实例独立配置"
+                  bitmap-text="multi" />
+        <DemoCard to="/demos/events" tag="Events"
+                  title="4 事件回调" subtitle="onFrame / onResize / onThemeChange / onTargetFinish"
+                  bitmap-text="events" />
+        <DemoCard to="/demos/themes" tag="Themes"
+                  title="冷暖主题混合" subtitle="coldFrom × warmFrom 双主题混搭,5 推荐组合"
+                  bitmap-text="mix" />
+        <DemoCard to="/demos/noise-converge" tag="Emergence"
+                  title="噪声 → 收敛" subtitle="5 段状态机 · 7 lockOrder · 3 slider"
+                  bitmap-text="emerge" />
+        <DemoCard to="/demos/blog" tag="Real Scenario"
+                  title="博客背景" subtitle="canvas 全屏 + 文章前景 + 实时调参面板"
+                  bitmap-text="blog" />
+        <DemoCard to="/playground" tag="Playground"
+                  title="实时调参" subtitle="改 theme / fontSize / 各参数,canvas 立即更新"
+                  bitmap-text="play" />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import DemoCard from '@/components/DemoCard.vue';
 </script>
+
+<style scoped>
+.demos-page { padding-bottom: 80px; }
+.demos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+.demos-page .lead { margin-top: 16px; }
+@media (max-width: 920px) { .demos-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .demos-grid { grid-template-columns: 1fr; } }
+</style>
