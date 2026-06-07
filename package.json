@@ -79,6 +79,7 @@
     "test:canvas-remove": "node test/canvas-remove.mjs",
     "test:esm": "node test/esm-load.mjs",
     "test:usability": "node test/usability.mjs",
+    "test:e2e:demos": "/Users/chenzhihan/anaconda3/bin/python3 scripts/e2e-demos.py",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
