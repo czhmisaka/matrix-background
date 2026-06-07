@@ -362,7 +362,7 @@ export default function MatrixBg() {
 | `resume()` | `() => void` | 恢复动画 |
 | `getFPS()` | `() => number` | 当前 FPS(30 帧滑动平均) |
 | **主题/变体/色板** | | |
-| `setTheme(name)` | `(ThemeName) => void` | 切换主题(5 预设)·热更新 |
+| `setTheme(name, opts?)` | `(ThemeName, { keepPaletteParams?: boolean }) => void` | 切换主题(5 预设)· `keepPaletteParams:true` 保留 ctp/wtp 自定义 |
 | `setThemeParams(p)` | `(Partial<ThemeParams>) => void` | 热更新主题参数 7 字段 |
 | `setColdThemeParams(p)` | `(Partial<ThemeParams>) => void` | 热更新冷色板独立参数 |
 | `setWarmThemeParams(p)` | `(Partial<ThemeParams>) => void` | 热更新暖色板独立参数 |
@@ -377,8 +377,8 @@ export default function MatrixBg() {
 | `setPhaseFunc(code)` | `(string \| null) => void` | 热更新相位增量函数 |
 | `setCharsetFunc(code)` | `(string \| null) => void` | 热更新字符分布函数 |
 | **文字/图片目标位图** | | |
-| `setTargetBitmap(bmp, opts?)` | `(Float32Array \| null, {fadeIn?, hold?, fadeOut?, chaos?}) => void` | 设置目标位图 + 状态机参数 |
-| `clearTargetBitmap()` | `() => void` | 立即淑出(提前结束显示) |
+| `setTargetBitmap(bmp, opts?)` | `(Float32Array \| null, {fadeIn?, hold?, fadeOut?, chaos?, anchor?, motion?, motionSpeed?}) => void` | 设置目标位图 + 状态机参数 |
+| `clearTargetBitmap()` | `() => void` | 立即渐出(提前结束显示) |
 
 ---
 
