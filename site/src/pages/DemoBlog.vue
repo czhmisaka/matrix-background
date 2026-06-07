@@ -31,14 +31,22 @@
     </div>
 
     <div class="control-floating">
-      <h4>背景调参</h4>
+      <h2>背景调参</h2>
       <label>Brightness
-        <input type="range" min="0.5" max="2" step="0.05" v-model.number="brightness">
-        <span class="cv">{{ brightness.toFixed(2) }}</span>
+        <input type="range" min="0.5" max="2" step="0.05" v-model.number="brightness"
+               aria-label="背景亮度"
+               :aria-valuemin="0.5" :aria-valuemax="2"
+               :aria-valuenow="brightness"
+               :aria-valuetext="brightness.toFixed(2)">
+        <span class="cv" aria-hidden="true">{{ brightness.toFixed(2) }}</span>
       </label>
       <label>Flicker Speed
-        <input type="range" min="0" max="3" step="0.1" v-model.number="flicker">
-        <span class="cv">{{ flicker.toFixed(1) }}x</span>
+        <input type="range" min="0" max="3" step="0.1" v-model.number="flicker"
+               aria-label="闪烁速度"
+               :aria-valuemin="0" :aria-valuemax="3"
+               :aria-valuenow="flicker"
+               :aria-valuetext="`${flicker.toFixed(1)} 倍`">
+        <span class="cv" aria-hidden="true">{{ flicker.toFixed(1) }}x</span>
       </label>
     </div>
   </div>
@@ -112,13 +120,14 @@ article { color: var(--text); }
   backdrop-filter: blur(12px);
   box-shadow: var(--shadow-2);
 }
-.control-floating h4 {
+.control-floating h4, .control-floating h2 {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--accent);
   margin: 0 0 14px;
+  font-weight: 500;
 }
 .control-floating label {
   display: flex;

@@ -13,7 +13,7 @@
             <span class="legacy-tag">{{ item.tag }}</span>
             <span class="legacy-status">{{ item.status }}</span>
           </div>
-          <h3>{{ item.title }}</h3>
+          <h2 class="legacy-card-title">{{ item.title }}</h2>
           <p>{{ item.desc }}</p>
           <div class="legacy-replace">
             <span class="replace-label">现代版:</span>
@@ -95,9 +95,10 @@ const legacy = [
   color: #ff5c7c;
   letter-spacing: 0.08em;
 }
-.legacy-card h3 {
+.legacy-card h3, .legacy-card h2.legacy-card-title {
   font-size: 18px;
   margin: 0 0 8px;
+  font-weight: 500;
 }
 .legacy-card p {
   color: var(--text-muted);

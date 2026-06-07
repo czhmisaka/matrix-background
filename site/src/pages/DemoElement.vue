@@ -24,7 +24,7 @@
       </div>
 
       <section class="code-sample">
-        <h3>用法</h3>
+        <h2>用法</h2>
         <p class="lead">直接 <code>&lt;script&gt;</code> 引入 dist 里的 element 入口,即可用 <code>&lt;matrix-rain&gt;</code> 标签。</p>
         <pre><code><span class="tk-tag">&lt;script</span> <span class="tk-attr">type</span>=<span class="tk-st">"module"</span> <span class="tk-attr">src</span>=<span class="tk-st">"/dist/element.js"</span><span class="tk-tag">&gt;&lt;/script&gt;</span>
 
@@ -135,7 +135,7 @@ watch(theme, (t) => {
 }
 
 .code-sample { padding-top: var(--gap-7); border-top: 1px solid var(--border); }
-.code-sample h3 { margin-bottom: 12px; }
+.code-sample h3, .code-sample h2 { margin-bottom: 12px; font-size: 22px; font-weight: 500; }
 .code-sample .lead { margin-bottom: 24px; }
 
 @media (max-width: 700px) {

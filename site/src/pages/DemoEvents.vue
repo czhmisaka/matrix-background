@@ -9,7 +9,7 @@
 
       <div class="layout">
         <div class="canvas-wrap">
-          <canvas ref="canvasRef"></canvas>
+          <canvas ref="canvasRef" aria-hidden="true"></canvas>
           <div class="overlay-msg">
             <span class="msg-dot"></span>
             <span class="msg-text">{{ lastEvent }}</span>
@@ -23,7 +23,7 @@
         </div>
 
         <aside class="log-panel">
-          <h3>事件计数</h3>
+          <h2>事件计数</h2>
           <div class="counter" v-for="c in counters" :key="c.name">
             <div class="counter-info">
               <span class="counter-name">{{ c.name }}</span>
@@ -32,10 +32,10 @@
             <span class="counter-value">{{ c.value }}</span>
           </div>
 
-          <h3 class="mt-32">最近事件</h3>
-          <pre class="log-stream">{{ lastEvent }}</pre>
+          <h2 class="mt-32">最近事件</h2>
+          <pre class="log-stream" tabindex="0" aria-label="最近事件日志流">{{ lastEvent }}</pre>
 
-          <h3 class="mt-32">说明</h3>
+          <h2 class="mt-32">说明</h2>
           <p class="hint">onFrame 由内部 30Hz 节流,正常运行会持续增加;其他 3 个事件需手动触发或自动触发(onResize 200ms debounce,onTargetFinish 在 noise-converge 完成后)。</p>
         </aside>
       </div>
@@ -188,7 +188,7 @@ watch(theme, (t) => inst?.setTheme(t));
   border-radius: var(--radius);
   padding: 24px;
 }
-.log-panel h3 { font-size: 16px; margin: 0 0 12px; }
+.log-panel h2, .log-panel h3 { font-size: 16px; margin: 0 0 12px; font-weight: 500; }
 .mt-32 { margin-top: 32px !important; }
 .counter {
   display: flex;

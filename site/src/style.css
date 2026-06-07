@@ -12,8 +12,8 @@
 
   --text: #e9e9f1;
   --text-muted: #9ea0b4;
-  --text-dim: #5a5d75;
-  --text-faint: #3b3e54;
+  --text-dim: #8a8faa;
+  --text-faint: #8a8faa;
 
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.14);
@@ -89,6 +89,67 @@ a:hover { color: var(--accent); }
 img, svg, canvas { display: block; max-width: 100%; }
 
 ::selection { background: var(--accent); color: var(--bg); }
+
+/* =========================================================
+ * 可访问性 (a11y) · 2026-06-08
+ * - skip-to-content 链接
+ * - 全局 :focus-visible 焦点环
+ * - prefers-reduced-motion 抑制动画
+ * - 链接 hover/focus 加下划线(色觉障碍用户第二通道)
+ * ========================================================= */
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 1000;
+  padding: 10px 18px;
+  background: var(--accent);
+  color: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 0 0 6px 0;
+  text-decoration: none;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  left: 0;
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+
+*:focus { outline: none; }
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+a:hover,
+a:focus-visible {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
@@ -248,7 +309,7 @@ pre code { background: none; border: none; padding: 0; color: var(--text); }
 .tk-fn { color: #7af7d4; }
 .tk-st { color: #fbbf24; }
 .tk-num { color: #a8a3ff; }
-.tk-com { color: #5a5d75; font-style: italic; }
+.tk-com { color: #7a7d95; font-style: italic; }
 .tk-tag { color: #ff6b9a; }
 .tk-attr { color: #fbbf24; }
 .tk-prop { color: #a8a3ff; }
@@ -290,6 +351,14 @@ input[type="text"]:focus,
 input[type="number"]:focus,
 select:focus,
 textarea:focus { border-color: var(--accent); }
+input[type="text"]:focus-visible,
+input[type="number"]:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
 
 input[type="range"] {
   width: 100%;
