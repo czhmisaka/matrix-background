@@ -18,6 +18,7 @@ import type {
 import { VARIANT_DEFAULTS } from './variant-defaults';
 import { themes } from './themes';
 import { compileUserFunction } from './curves/sandbox';
+import { PaletteLUT, applyTP, type RGBALUT } from './palette-lut';
 
 const DEFAULTS: Required<Omit<MatrixRainOptions, 'canvas' | 'container' | 'onReady' | 'theme' | 'variant' | 'charset' | 'coldPalette' | 'warmPalette' | 'flickerRates' | 'flickerSpeed' | 'lightCenter' | 'driftSpeed' | 'themeParams' | 'variantParams' | 'brightnessCurve' | 'flickerCurve' | 'phaseFunc' | 'charsetFunc' | 'coldThemeParams' | 'warmThemeParams' | 'hueRotateSpeed' | 'hueRotateAmount' | 'colorOverrides' | 'colorCurve' | 'targetBitmap' | 'targetCols' | 'targetRows' | 'targetAnchor' | 'targetMotion' | 'targetMotionSpeed' | 'targetFadeIn' | 'targetHold' | 'targetFadeOut' | 'targetChaos'>> = {
   fontSize: 14,
@@ -130,87 +131,24 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
   let targetHold = options.targetHold ?? Infinity;
   let targetFadeOut = options.targetFadeOut ?? 2.0;
   let targetChaos = options.targetChaos ?? 0.5;
-  let targetStartFrame = 0;   // 启用时 f 值
+  let targetStartFrame = 0;   // 启用时 f 值(保留用于 userFunc/调试)
+  let targetStartTime = 0;    // 启用时 wallTime(秒) · 用于 dt-based 状态机
   let targetActive = targetBitmap !== null;
 
 
-  // HSV 转换辅助(应用 brightness + chroma + hueShift 到一个 RGB)
-  const applyTP = (r: number, g: number, b: number, useTP?: ThemeParams, extraHue: number = 0): [number, number, number] => {
-    const p = useTP || tp;
-    const hueExtra = extraHue;
-    // brightness
-    r *= p.brightness; g *= p.brightness; b *= p.brightness;
-    // contrast(在 128 中心点拉伸,0=全灰,1=原,2=极端)
-    if (p.contrast !== 1) {
-      r = 128 + (r - 128) * p.contrast;
-      g = 128 + (g - 128) * p.contrast;
-      b = 128 + (b - 128) * p.contrast;
-    }
-    // lightnessShift(±255 加成, clamp 0-255)
-    if (p.lightnessShift !== 0) {
-      r += p.lightnessShift * 255;
-      g += p.lightnessShift * 255;
-      b += p.lightnessShift * 255;
-    }
-    // saturationShift(±1: -1=全灰, 0=原, +1=最大饱和)
-    if (p.saturationShift !== 0) {
-      const avg = (r + g + b) / 3;
-      const m = 1 + p.saturationShift; // 0 表示全灰
-      r = avg + (r - avg) * m;
-      g = avg + (g - avg) * m;
-      b = avg + (b - avg) * m;
-    }
-    // chroma(0=灰阶, 1=原色)
-    if (p.chroma < 1) {
-      const avg = (r + g + b) / 3;
-      r = avg + (r - avg) * p.chroma;
-      g = avg + (g - avg) * p.chroma;
-      b = avg + (b - avg) * p.chroma;
-    }
-    // hueShift(HSL 上的 H 偏移)
-    if (p.hueShift !== 0) {
-      const max = Math.max(r, g, b), min = Math.min(r, g, b);
-      const l = (max + min) / 2;
-      if (max !== min) {
-        const d = max - min;
-        let h: number;
-        if (max === r) h = ((g - b) / d) % 6;
-        else if (max === g) h = (b - r) / d + 2;
-        else h = (r - g) / d + 4;
-        h = h * 60 + p.hueShift + hueExtra; // 度数
-        h = ((h % 360) + 360) % 360;
-        const c = (1 - Math.abs(2 * l / 255 - 1)) * (max - min);
-        const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-        const m2 = l - c / 2;
-        let nr = 0, ng = 0, nb = 0;
-        if (h < 60) { nr = c; ng = x; nb = 0; }
-        else if (h < 120) { nr = x; ng = c; nb = 0; }
-        else if (h < 180) { nr = 0; ng = c; nb = x; }
-        else if (h < 240) { nr = 0; ng = x; nb = c; }
-        else if (h < 300) { nr = x; ng = 0; nb = c; }
-        else { nr = c; ng = 0; nb = x; }
-        r = (nr + m2); g = (ng + m2); b = (nb + m2);
-      }
-    }
-    // invertHue(0=正常, 1=反色)
-    if (p.invertHue > 0) {
-      const k = p.invertHue;
-      r = r * (1 - k) + (255 - r) * k;
-      g = g * (1 - k) + (255 - g) * k;
-      b = b * (1 - k) + (255 - b) * k;
-    }
-    return [
-      Math.max(0, Math.min(255, Math.round(r))),
-      Math.max(0, Math.min(255, Math.round(g))),
-      Math.max(0, Math.min(255, Math.round(b)))
-    ];
-  };
+  // 注:applyTP 来自 palette-lut.ts(模块级),不再在 engine.ts 闭包内定义
 
   const charset: string = options.charset || '0123456789';
   const flicker = { ...DEFAULT_FLICKER, ...(options.flickerRates || {}) };
   // flickerSpeed 存进 cfg 以便热更新;不需重建
   const lightCenter = options.lightCenter || { x: 0.7, y: 0.3 };
   const driftSpeed = options.driftSpeed || { x: 0.008, y: 0.006 };
+
+  // ==================== Palette LUT(性能优化)====================
+  // 256 项 RGBA 表,把 HSL→RGBA + applyTP 从 per-cell 转为 per-frame
+  // 失效: setPalettes / setTheme / setThemeParams / setColdThemeParams / setWarmThemeParams / setHueRotate / colorCurve
+  const paletteLUT = new PaletteLUT();
+  paletteLUT.setPalettes(coldPalette, warmPalette);
 
   const variant: VariantName = options.variant || 'classic';
 
@@ -262,6 +200,9 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
   let rafId: number | null = null;
   let resizeTimer: number | null = null;
   let lastFrameTime = performance.now();
+  const startTime = lastFrameTime;
+  let wallTime = 0;            // 累积墙钟(秒) · 用于 dt-based 动画
+  let lastDt = 1 / 60;          // 上一帧 dt(秒) · 用于相位累积
   let fps = 60;
   let isPaused = false;
   let isDestroyed = false;
@@ -324,6 +265,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       }
       b.push(row);
     }
+    syncFrameCtxSize();
   };
 
   const onResize = () => {
@@ -338,6 +280,43 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     ro = new ResizeObserver(() => onResize());
     ro.observe(canvas);
   }
+
+  // ==================== 共享 sandbox 工具(模块级常驻,避免 per-cell 分配)====================
+  const sandboxNoise = (x: number): number => {
+    const n = Math.sin(x * 12.9898 + 78.233) * 43758.5453;
+    return n - Math.floor(n);
+  };
+  const sandboxClamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
+  const sandboxLerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+
+  // ==================== __frameCtx:per-cell userFunc 共享 ctx 缓存(性能优化)====================
+  // 每帧复用同一对象,userFunc 调前 mutate 字段 → 消除 ~20K obj/帧的 GC 压力
+  const __frameCtx: import('./curves/sandbox').SandboxContext = {
+    t: 0,
+    phase: 0,
+    h: 0,
+    s: 0,
+    r: 0,
+    f: 0,
+    W: 0,
+    H: 0,
+    L: 0,
+    ch: 0,
+    sin: Math.sin,
+    cos: Math.cos,
+    tan: Math.tan,
+    noise: sandboxNoise,
+    PI: Math.PI,
+    E: Math.E,
+    clamp: sandboxClamp,
+    lerp: sandboxLerp,
+    ease: null as any
+  };
+  // 同步 grid 尺寸到 ctx(避免 userFunc 读到旧 W/H)
+  const syncFrameCtxSize = () => {
+    __frameCtx.W = r;
+    __frameCtx.H = i;
+  };
 
   const draw = () => {
     if (isPaused || isDestroyed) return;
@@ -358,14 +337,38 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     computeFPS();
     f++;
 
-    // 本帧动态色相偏移(时间驱动色相旋转,每帧重算)
-    dynamicHue = hueRotateSpeed !== 0 ? (f * 0.016 * hueRotateSpeed) % hueRotateAmount : 0;
-    // colorCurve userFunc 计算额外色相偏移
+    // ==================== dt / wallTime(统一时间基准)====================
+    // dt 累积 + 限幅:防止切 tab 后 huge dt 引起 phase 爆炸
+    const nowMs = performance.now();
+    const rawDt = (nowMs - lastFrameTime) / 1000;
+    lastFrameTime = nowMs;
+    lastDt = Math.min(0.1, Math.max(0, rawDt));   // 上限 100ms,下限 0
+    wallTime += lastDt;
+
+    // 本帧动态色相偏移(wallTime 驱动,60fps 时与 f*0.016 等价)
+    dynamicHue = hueRotateSpeed !== 0 ? (wallTime * hueRotateSpeed) % hueRotateAmount : 0;
+    // colorCurve userFunc 计算额外色相偏移(t 用 wallTime)
     if (colorCurve) {
-      dynamicColorHue = Number(colorCurve({ t: f * 0.016, phase: 0, h: 0, s: 0, r: Math.random(), f, W: r, H: i, L: 0, ch: 0, sin: Math.sin, cos: Math.cos, tan: Math.tan, noise: (x: number) => { const n = Math.sin(x * 12.9898 + 78.233) * 43758.5453; return n - Math.floor(n); }, PI: Math.PI, E: Math.E, clamp: (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v)), lerp: (a: number, b: number, t: number) => a + (b - a) * t, ease: null as any })) || 0;
+      __frameCtx.t = wallTime;
+      __frameCtx.phase = 0;
+      __frameCtx.h = 0;
+      __frameCtx.s = 0;
+      __frameCtx.r = Math.random();
+      __frameCtx.f = f;
+      __frameCtx.W = r;
+      __frameCtx.H = i;
+      __frameCtx.L = 0;
+      __frameCtx.ch = 0;
+      dynamicColorHue = Number(colorCurve(__frameCtx)) || 0;
     } else {
       dynamicColorHue = 0;
     }
+    const totalHue = dynamicHue + dynamicColorHue;
+
+    // ==================== Palette LUT(每帧一次)====================
+    // 拿冷暖两色终态 LUT:TP 或 hue 变化时内部 hash 失配会自动重建
+    const coldFinal = paletteLUT.getColdFinal(ctp, totalHue);
+    const warmFinal = paletteLUT.getWarmFinal(wtp, totalHue);
 
     // ① 残影拖尾
     ctx!.fillStyle = `rgba(8, 8, 18, ${cfg.trailAlpha})`;
@@ -375,103 +378,95 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     ctx!.textBaseline = 'middle';
     ctx!.textAlign = 'center';
 
-    // ② 温度光心(Lissajous 漂移)
-    const M = r * lightCenter.x + Math.cos(f * driftSpeed.x) * r * 0.2;
-    const p = i * lightCenter.y + Math.sin(f * driftSpeed.y) * i * 0.2;
+    // ② 温度光心(Lissajous 漂移,wallTime 驱动;×60 与原 f*driftSpeed 等价)
+    const M = r * lightCenter.x + Math.cos(wallTime * driftSpeed.x * 60) * r * 0.2;
+    const p = i * lightCenter.y + Math.sin(wallTime * driftSpeed.y * 60) * i * 0.2;
 
     // ③ 绘制
     if (variant === 'classic' || variant === 'ascii') {
-      drawClassic(M, p);
+      drawClassic(M, p, coldFinal, warmFinal);
     } else if (variant === 'avalanche') {
-      drawAvalanche(M, p);
+      drawAvalanche(M, p, coldFinal, warmFinal);
     } else if (variant === 'ripple') {
-      drawRipple(M, p);
+      drawRipple(M, p, coldFinal, warmFinal);
     }
 
     rafId = requestAnimationFrame(draw);
   };
 
-  // HSL 调色板 → RGBA 公式生成(连续 0-1 亮度, 256 颗粒度)
-  // 返回 [r, g, b, a]
-  const hslToRGBA = (palette: import('../types').HSLPalette, l: number): [number, number, number, number] => {
-    const li = Math.max(0, Math.min(1, l));
-    // lMin/lMax 之间线性插值
-    const L = palette.lMin + (palette.lMax - palette.lMin) * li;
-    const S = palette.s;
-    const H = palette.h / 360;
-    const aMax = palette.aMax ?? 1.0;
-    // alpha: 从 l=0 透明 渐到 lMax 完全不透明
-    const a = aMax * (0.1 + 0.9 * li);
-    if (S === 0) {
-      const v = Math.round(L * 255);
-      return [v, v, v, a];
+  // ==================== drawInner:三变体共享热路径(性能优化)====================
+  // 输入:c(单元格) · h/s(网格坐标) · y(像素 y) · l(亮度 0-1) · M/p(光心)
+  //      coldFinal/warmFinal(本帧 LUT) · totalHue(动态色相)
+  // 流程:warmth 阻尼 → 颜色覆盖快路径 → LUT 查表冷暖 → blend → applyTP(tp) → fillText
+  // 注:colorOverride 完全覆盖某档颜色,跳过 blend/LUT
+  const drawInner = (c: Cell, h: number, s: number, y: number, l: number, M: number, p: number, coldFinal: RGBALUT, warmFinal: RGBALUT, totalHue: number) => {
+    // warmth 阻尼
+    const C = h - M, A = s - p;
+    const B = Math.sqrt(C * C + A * A);
+    const H = Math.max(0, 1 - B / (i * cfg.warmthRadius));
+    c.warmth += (H - c.warmth) * cfg.warmthLerp;
+    const d = Math.max(0, Math.min(1, c.warmth));
+
+    // l < 0.02 肉眼几乎不可见,直接跳过(省 fillStyle + fillText 调用)
+    if (l < 0.02) return;
+
+    // colorOverride 完全覆盖某档颜色(跳过 blend / LUT 查表)
+    const __lIdx = (l * 9) | 0;
+    if (colorOverrides && colorOverrides[__lIdx]) {
+      const o = colorOverrides[__lIdx]!;
+      ctx!.fillStyle = `rgba(${o[0]}, ${o[1]}, ${o[2]}, 0.9)`;
+      ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
+      return;
     }
-    const c = (1 - Math.abs(2 * L - 1)) * S;
-    const hh = H * 6;
-    const x = c * (1 - Math.abs((hh % 2) - 1));
-    let r = 0, g = 0, b = 0;
-    if (hh < 1) { r = c; g = x; b = 0; }
-    else if (hh < 2) { r = x; g = c; b = 0; }
-    else if (hh < 3) { r = 0; g = c; b = x; }
-    else if (hh < 4) { r = 0; g = x; b = c; }
-    else if (hh < 5) { r = x; g = 0; b = c; }
-    else { r = c; g = 0; b = x; }
-    const m = L - c / 2;
-    return [
-      Math.round((r + m) * 255),
-      Math.round((g + m) * 255),
-      Math.round((b + m) * 255),
-      a
-    ];
+
+    // LUT 查表(已应用 ctp/wtp/hue)→ 冷暖混合 → applyTP(tp, hue)
+    const lIdx = (l * 255) | 0;
+    const gR = coldFinal.r[lIdx], gG = coldFinal.g[lIdx], gB = coldFinal.b[lIdx];
+    const wR = warmFinal.r[lIdx], wG = warmFinal.g[lIdx], wB = warmFinal.b[lIdx];
+    const gA = coldFinal.a[lIdx], wA = warmFinal.a[lIdx];
+    const oneMinusD = 1 - d;
+    const rc = gR * oneMinusD + wR * d;
+    const gc = gG * oneMinusD + wG * d;
+    const bc = gB * oneMinusD + wB * d;
+    const k = (gA * oneMinusD + wA * d) / 255;
+    const [R2, G2, B2] = applyTP(rc, gc, bc, tp, totalHue);
+    ctx!.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${k})`;
+    ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
   };
 
-  // Sandbox context builder(每帧调用,供 userFunc 使用)
-  const buildCtx = (h: number, s: number, c: Cell, L: number): import('./curves/sandbox').SandboxContext => ({
-    t: f * 0.016,
-    phase: c.phase,
-    h,
-    s,
-    r: Math.random(),
-    f,
-    W: r,
-    H: i,
-    L,
-    ch: c.ch,
-    sin: Math.sin,
-    cos: Math.cos,
-    tan: Math.tan,
-    noise: (x: number) => {
-      const n = Math.sin(x * 12.9898 + 78.233) * 43758.5453;
-      return n - Math.floor(n);
-    },
-    PI: Math.PI,
-    E: Math.E,
-    clamp: (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v)),
-    lerp: (a: number, b: number, t: number) => a + (b - a) * t,
-    ease: null as any  // ease 依赖 sandbox eval,在 user code 内 import 不到;保留为 null
-  });
-
-  const drawClassic = (M: number, p: number) => {
+  const drawClassic = (M: number, p: number, coldFinal: RGBALUT, warmFinal: RGBALUT) => {
+    // 每帧共享状态:wallTime-derived 值,放外层避免 per-cell 重算
+    const totalHue = dynamicHue + dynamicColorHue;
+    // sin/cos 系数每次画都依赖 f · 用 wallTime*1.2/wallTime*0.9 替代 f*0.02/wallTime*0.9
+    // 60fps 等价:f*0.02 = wallTime*1.2 (因 f 每帧 +1,wallTime 每帧 +1/60,×60+1.2)
+    const fBase1 = wallTime * 1.2;
+    const fBase2 = wallTime * 0.9;
+    // 同步 __frameCtx 的 f(给 userFunc 用)
+    __frameCtx.f = f;
+    __frameCtx.t = wallTime;
     for (let s = 0; s < i; s++) {
       const y = s * ef * 1.1 + ef * 0.55;
       for (let h = 0; h < r; h++) {
         const c = b[s][h];
-        // phase 增量
+        // phase 增量(dt-based:60fps 时与原 f-step 等价)
         const basePhaseInc = (vp.phaseStep + Math.random() * vp.phaseJitter) * (cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT);
         if (userFuncs.phaseFunc) {
-          const ctxObj = buildCtx(h, s, c, c.bright);
-          c.phase += Number(userFuncs.phaseFunc(ctxObj)) || 0;
+          __frameCtx.h = h; __frameCtx.s = s; __frameCtx.phase = c.phase;
+          __frameCtx.L = c.bright; __frameCtx.ch = c.ch; __frameCtx.r = Math.random();
+          c.phase += Number(userFuncs.phaseFunc(__frameCtx)) || 0;
         } else {
-          c.phase += basePhaseInc;
+          c.phase += basePhaseInc * lastDt * 60;
         }
         const W =
           Math.sin(c.phase) * vp.sinWeightA +
-          Math.sin((h + s) * 0.05 + f * 0.02) * vp.sinWeightB +
-          Math.sin(h * 0.1 - s * 0.07 + f * 0.015) * vp.sinWeightC;
+          Math.sin((h + s) * 0.05 + fBase1) * vp.sinWeightB +
+          Math.sin(h * 0.1 - s * 0.07 + fBase2) * vp.sinWeightC;
         // 亮度
         let l: number;
         if (userFuncs.brightnessCurve) {
-          const u = Number(userFuncs.brightnessCurve(buildCtx(h, s, c, c.bright)));
+          __frameCtx.h = h; __frameCtx.s = s; __frameCtx.phase = c.phase;
+          __frameCtx.L = c.bright; __frameCtx.ch = c.ch; __frameCtx.r = Math.random();
+          const u = Number(userFuncs.brightnessCurve(__frameCtx));
           l = Math.max(0, Math.min(1, isNaN(u) ? 0 : u));
         } else {
           l = Math.max(0, Math.min(1, (W + 1) * 0.5));
@@ -481,67 +476,47 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
 
         // 目标位图覆盖(文字/图片) · 颜色不变,只改亮度
         if (targetBitmap && targetActive) {
-          // **位置/运动**计算
-          // **重要**: engine 里的 s 走 i (行),h 走 r (列)
-          // s = 行索引, h = 列索引
-          // ox = 列偏移(横向), oy = 行偏移(纵向)
           let ox = 0, oy = 0;
           if (targetAnchor === 'center') {
-            ox = Math.floor((r - targetCols) / 2);
-            oy = Math.floor((i - targetRows) / 2);
+            ox = (r - targetCols) >> 1;
+            oy = (i - targetRows) >> 1;
           } else if (targetAnchor === 'topRight') {
-            ox = r - targetCols;
-            oy = 0;
+            ox = r - targetCols; oy = 0;
           } else if (targetAnchor === 'bottomLeft') {
-            ox = 0;
-            oy = i - targetRows;
+            ox = 0; oy = i - targetRows;
           } else if (targetAnchor === 'bottomRight') {
-            ox = r - targetCols;
-            oy = i - targetRows;
+            ox = r - targetCols; oy = i - targetRows;
           }
-          // **运动**:每帧微调 origin
           if (targetMotion === 'drift') {
-            // 匀速横向漂(包边)
             const period = (r + targetCols) / Math.max(0.1, targetMotionSpeed);
-            const t = (f - targetStartFrame) * 0.016;
+            const t = wallTime - targetStartTime;
             const phase = (t % period) / period;
             ox = Math.floor(ox + phase * (r + targetCols)) - targetCols;
           } else if (targetMotion === 'bounce') {
-            // 贪食蛇 式反弹
             const period = (2 * (r - targetCols)) / Math.max(0.1, targetMotionSpeed);
-            const t = (f - targetStartFrame) * 0.016;
+            const t = wallTime - targetStartTime;
             const phase = (t % period) / period;
-            const d = phase < 0.5 ? phase * 2 : 2 - phase * 2;
-            ox = Math.floor(d * (r - targetCols));
+            const d2 = phase < 0.5 ? phase * 2 : 2 - phase * 2;
+            ox = Math.floor(d2 * (r - targetCols));
           } else if (targetMotion === 'float') {
-            // 上下浮动(柔)
-            const t = (f - targetStartFrame) * 0.016;
+            const t = wallTime - targetStartTime;
             oy = Math.floor(oy + Math.sin(t * targetMotionSpeed * 2) * 3);
           }
-          // **正确映射**: grid (行=s, 列=h) → bitmap (行=by, 列=bx)
-          // bx = 列 = h - 列偏移 ox
-          // by = 行 = s - 行偏移 oy
           const bx = h - ox;
           const by = s - oy;
           if (bx >= 0 && bx < targetCols && by >= 0 && by < targetRows) {
             const g = targetBitmap[by * targetCols + bx];
-            if (g !== undefined && g > 0) {
-              // 状态机计算可见性 0-1 (淑入/保持/淑出)
-              const elapsed = (f - targetStartFrame) * 0.016;
+            if (g > 0) {
+              const elapsed = wallTime - targetStartTime;
               let vis = 1;
               if (elapsed < targetFadeIn) vis = elapsed / targetFadeIn;
               else if (elapsed > targetFadeIn + targetHold) vis = Math.max(0, 1 - (elapsed - targetFadeIn - targetHold) / targetFadeOut);
-              // 淑出完成 → 清除
               if (elapsed > targetFadeIn + targetHold + targetFadeOut) {
                 targetActive = false;
                 targetBitmap = null;
               } else {
-                // 混沌: 在淑入/淑出阶段加快速字符变化
                 const chaosFactor = (1 - vis) * targetChaos;
-                // **调色板自适应**:bitmap 区 l 提升 g·0.7·vis(避免硬叠加至 1,保持主题色相)
-                // 这样字形与周围雨同色相(同 cold/warm d 调色)但亮度更高
                 l = Math.max(0, Math.min(1, l + g * 0.7 * vis));
-                // 混沌时让字符疯狂更新
                 if (chaosFactor > 0 && Math.random() < chaosFactor) {
                   c.ch = Math.floor(Math.random() * charset.length);
                 }
@@ -550,126 +525,118 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
           }
         }
 
-        const C = h - M, A = s - p;
-        const B = Math.sqrt(C * C + A * A);
-        const H = Math.max(0, 1 - B / (i * cfg.warmthRadius));
-        c.warmth += (H - c.warmth) * cfg.warmthLerp;
-
-        const d = Math.max(0, Math.min(1, c.warmth));
-        // 闪烁
+        // 闪烁 / 字符更新
         let F: number;
         if (userFuncs.flickerCurve) {
-          F = Number(userFuncs.flickerCurve(buildCtx(h, s, c, l))) || 0;
+          __frameCtx.h = h; __frameCtx.s = s; __frameCtx.phase = c.phase;
+          __frameCtx.L = l; __frameCtx.ch = c.ch; __frameCtx.r = Math.random();
+          F = Number(userFuncs.flickerCurve(__frameCtx)) || 0;
         } else {
-          F = l >= 6 ? flicker.high : l >= 3 ? flicker.mid : l >= 1 ? flicker.low : flicker.dark;
+          F = l >= 0.66 ? flicker.high : l >= 0.33 ? flicker.mid : l >= 0.05 ? flicker.low : flicker.dark;
         }
         if (Math.random() < F) c.ch = Math.floor(Math.random() * charset.length);
         if (vp.chUpdateProb > 0 && Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
-        // 字符
         if (userFuncs.charsetFunc) {
-          const u = Number(userFuncs.charsetFunc(buildCtx(h, s, c, l)));
+          __frameCtx.h = h; __frameCtx.s = s; __frameCtx.phase = c.phase;
+          __frameCtx.L = l; __frameCtx.ch = c.ch; __frameCtx.r = Math.random();
+          const u = Number(userFuncs.charsetFunc(__frameCtx));
           if (!isNaN(u)) c.ch = Math.max(0, Math.min(charset.length - 1, Math.floor(u)));
         }
 
-        if (l === 0) continue;
-        // colorOverrides: 完全覆盖某档颜色(跳过 blend)
-        const __lIdx = Math.floor(l * 9);
-        if (colorOverrides && colorOverrides[__lIdx]) {
-          const [oR, oG, oB] = colorOverrides[__lIdx];
-          const k = 0.9;
-          ctx!.fillStyle = `rgba(${oR}, ${oG}, ${oB}, ${k})`;
-          ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
-          continue;
-        }
-        const g = hslToRGBA(coldPalette, l), w = hslToRGBA(warmPalette, l);
-        // 冷暖色板分别独立调参(在 blend 之前)
-        const __totalHue = dynamicHue + dynamicColorHue;
-        const [gR, gG, gB] = applyTP(g[0], g[1], g[2], ctp, __totalHue);
-        const [wR, wG, wB] = applyTP(w[0], w[1], w[2], wtp, __totalHue);
-        const rc = Math.floor(gR * (1 - d) + wR * d);
-        const gc = Math.floor(gG * (1 - d) + wG * d);
-        const bc = Math.floor(gB * (1 - d) + wB * d);
-        const k = g[3] * (1 - d) + w[3] * d;
-        const [R2, G2, B2] = applyTP(rc, gc, bc, tp, __totalHue);
-        ctx!.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${k})`;
-        ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
+        drawInner(c, h, s, y, l, M, p, coldFinal, warmFinal, totalHue);
       }
     }
   };
 
-  const drawAvalanche = (M: number, p: number) => {
+  const drawAvalanche = (M: number, p: number, coldFinal: RGBALUT, warmFinal: RGBALUT) => {
+    const totalHue = dynamicHue + dynamicColorHue;
+    __frameCtx.f = f;
+    __frameCtx.t = wallTime;
+    const yPosSpeed = vp.avalancheSpeed;
     for (let s = 0; s < i; s++) {
       for (let h = 0; h < r; h++) {
         const c = b[s][h];
-        c.yPos! += c.speed! * vp.avalancheSpeed;
+        // yPos 移动(dt-based;60fps 等价)
+        c.yPos! += c.speed! * yPosSpeed * lastDt * 60;
         if (c.yPos! > i) c.yPos = 0;
 
         const distFromHead = Math.abs(s - Math.floor(c.yPos!));
         const l = Math.max(0, Math.min(1, (c.headBright! - Math.pow(distFromHead, vp.headFalloff)) / 8));
         c.bright = l;
 
+        if (Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
+        if (l < 0.02) continue;  // 走老路径的 continue,仅 brightness 计算
+
+        const d = Math.max(0, Math.min(1, c.warmth));
         const C = h - M, A = s - p;
         const B = Math.sqrt(C * C + A * A);
         const H = Math.max(0, 1 - B / (i * cfg.warmthRadius));
         c.warmth += (H - c.warmth) * cfg.warmthLerp;
 
-        if (Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
-        if (l === 0) continue;
-
-        const d = Math.max(0, Math.min(1, c.warmth));
-        const g = hslToRGBA(coldPalette, l), w = hslToRGBA(warmPalette, l);
-        const __totalHue = dynamicHue + dynamicColorHue;
-        const [gR, gG, gB] = applyTP(g[0], g[1], g[2], ctp, __totalHue);
-        const [wR, wG, wB] = applyTP(w[0], w[1], w[2], wtp, __totalHue);
-        const rc = Math.floor(gR * (1 - d) + wR * d);
-        const gc = Math.floor(gG * (1 - d) + wG * d);
-        const bc = Math.floor(gB * (1 - d) + wB * d);
-        const k = g[3] * (1 - d) + w[3] * d;
-        const [R2, G2, B2] = applyTP(rc, gc, bc, tp, __totalHue);
-        ctx!.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${k})`;
         const y = c.yPos! * ef * 1.1;
+        const __lIdx = (l * 9) | 0;
+        if (colorOverrides && colorOverrides[__lIdx]) {
+          const o = colorOverrides[__lIdx]!;
+          ctx!.fillStyle = `rgba(${o[0]}, ${o[1]}, ${o[2]}, 0.9)`;
+          ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
+          continue;
+        }
+        const lIdx = (l * 255) | 0;
+        const gR = coldFinal.r[lIdx], gG = coldFinal.g[lIdx], gB = coldFinal.b[lIdx];
+        const wR = warmFinal.r[lIdx], wG = warmFinal.g[lIdx], wB = warmFinal.b[lIdx];
+        const gA = coldFinal.a[lIdx], wA = warmFinal.a[lIdx];
+        const oneMinusD = 1 - d;
+        const rc = gR * oneMinusD + wR * d;
+        const gc = gG * oneMinusD + wG * d;
+        const bc = gB * oneMinusD + wB * d;
+        const k = (gA * oneMinusD + wA * d) / 255;
+        const [R2, G2, B2] = applyTP(rc, gc, bc, tp, totalHue);
+        ctx!.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${k})`;
         ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
       }
     }
   };
 
-  const drawRipple = (M: number, p: number) => {
+  const drawRipple = (M: number, p: number, coldFinal: RGBALUT, warmFinal: RGBALUT) => {
+    const totalHue = dynamicHue + dynamicColorHue;
+    __frameCtx.f = f;
+    __frameCtx.t = wallTime;
     for (let s = 0; s < i; s++) {
       const y = s * ef * 1.1 + ef * 0.55;
       for (let h = 0; h < r; h++) {
         const c = b[s][h];
-        c.phase += (vp.phaseStep + Math.random() * vp.phaseJitter) * (cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT);
+        c.phase += (vp.phaseStep + Math.random() * vp.phaseJitter) * (cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT) * lastDt * 60;
         const W = Math.sin(c.phase) * vp.sinWeightA + 0.5;
         const l = Math.max(0, Math.min(1, W));
         c.bright = l;
 
+        if (Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
+        if (l < 0.02) continue;
+
+        // 走简化路径(无 colorOverride 文档提及的 ripple 路径,但保留兼容)
         const C = h - M, A = s - p;
         const B = Math.sqrt(C * C + A * A);
         const H = Math.max(0, 1 - B / (i * cfg.warmthRadius));
         c.warmth += (H - c.warmth) * cfg.warmthLerp;
-
-        if (Math.random() < vp.chUpdateProb) c.ch = Math.floor(Math.random() * charset.length);
-        if (l === 0) continue;
-
         const d = Math.max(0, Math.min(1, c.warmth));
-        // colorOverrides: 完全覆盖某档颜色(跳过 blend)
-        const __lIdx = Math.floor(l * 9);
+
+        const __lIdx = (l * 9) | 0;
         if (colorOverrides && colorOverrides[__lIdx]) {
-          const [oR, oG, oB] = colorOverrides[__lIdx];
-          const k = 0.9;
-          ctx!.fillStyle = `rgba(${oR}, ${oG}, ${oB}, ${k})`;
+          const o = colorOverrides[__lIdx]!;
+          ctx!.fillStyle = `rgba(${o[0]}, ${o[1]}, ${o[2]}, 0.9)`;
           ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
           continue;
         }
-        const g = hslToRGBA(coldPalette, l), w = hslToRGBA(warmPalette, l);
-        const __totalHue = dynamicHue + dynamicColorHue;
-        const [gR, gG, gB] = applyTP(g[0], g[1], g[2], ctp, __totalHue);
-        const [wR, wG, wB] = applyTP(w[0], w[1], w[2], wtp, __totalHue);
-        const rc = Math.floor(gR * (1 - d) + wR * d);
-        const gc = Math.floor(gG * (1 - d) + wG * d);
-        const bc = Math.floor(gB * (1 - d) + wB * d);
-        const k = g[3] * (1 - d) + w[3] * d;
-        const [R2, G2, B2] = applyTP(rc, gc, bc, tp, __totalHue);
+        const lIdx = (l * 255) | 0;
+        const gR = coldFinal.r[lIdx], gG = coldFinal.g[lIdx], gB = coldFinal.b[lIdx];
+        const wR = warmFinal.r[lIdx], wG = warmFinal.g[lIdx], wB = warmFinal.b[lIdx];
+        const gA = coldFinal.a[lIdx], wA = warmFinal.a[lIdx];
+        const oneMinusD = 1 - d;
+        const rc = gR * oneMinusD + wR * d;
+        const gc = gG * oneMinusD + wG * d;
+        const bc = gB * oneMinusD + wB * d;
+        const k = (gA * oneMinusD + wA * d) / 255;
+        const [R2, G2, B2] = applyTP(rc, gc, bc, tp, totalHue);
         ctx!.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${k})`;
         ctx!.fillText(charset[c.ch], h * ef + ef / 2, y);
       }
@@ -694,6 +661,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     resume() {
       if (isPaused && !isDestroyed) {
         isPaused = false;
+        // 防止 pause 期间累积的 dt 引发 phase 跳跃:重置 lastFrameTime,wallTime 继续累积
         lastFrameTime = performance.now();
         rafId = requestAnimationFrame(draw);
       }
@@ -713,9 +681,12 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         contrast: t.contrast ?? 1
       };
       if (options.themeParams) tp = { ...tp, ...options.themeParams };
+      // LUT 失效:静态 LUT 重建(cold/warm 引用变了),终态 LUT dirty
+      paletteLUT.setPalettes(coldPalette, warmPalette);
     },
     setThemeParams(params: Partial<ThemeParams>) {
       tp = { ...tp, ...params };
+      // 终态 LUT dirty(下次 getColdFinal/getWarmFinal 内部 hash 失配)
     },
     setColdThemeParams(params: Partial<ThemeParams>) {
       ctp = { ...ctp, ...params };
@@ -731,7 +702,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       colorOverrides = overrides;
     },
     setColorCurve(code: string | null) {
-      colorCurve = code ? compileUserFunction(code) : null;
+      if (!code) { colorCurve = null; return; }
+      try { colorCurve = compileUserFunction(code); } catch (e) { console.warn('[matrix-rain] colorCurve:', e); colorCurve = null; }
     },
     setTargetBitmap(bitmap: Float32Array | { cols: number; rows: number; data: Float32Array } | null, opts?: { fadeIn?: number; hold?: number; fadeOut?: number; chaos?: number; anchor?: 'topLeft'|'center'|'topRight'|'bottomLeft'|'bottomRight'; motion?: 'static'|'drift'|'bounce'|'float'; motionSpeed?: number }) {
       // **兼容**两种传参:直接 Float32Array 或 BitmapSource 包装对象
@@ -757,6 +729,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       if (opts?.motionSpeed !== undefined) targetMotionSpeed = opts.motionSpeed;
       if (data) {
         targetStartFrame = f;
+        targetStartTime = wallTime;   // dt-based 状态机起点
         targetActive = true;
       } else {
         targetActive = false;
@@ -770,20 +743,26 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       vp = { ...vp, ...params };
     },
     setBrightnessCurve(code: string | null) {
-      userFuncs.brightnessCurve = code ? compileUserFunction(code) : null;
+      if (!code) { userFuncs.brightnessCurve = null; return; }
+      try { userFuncs.brightnessCurve = compileUserFunction(code); } catch (e) { console.warn('[matrix-rain] brightnessCurve:', e); userFuncs.brightnessCurve = null; }
     },
     setFlickerCurve(code: string | null) {
-      userFuncs.flickerCurve = code ? compileUserFunction(code) : null;
+      if (!code) { userFuncs.flickerCurve = null; return; }
+      try { userFuncs.flickerCurve = compileUserFunction(code); } catch (e) { console.warn('[matrix-rain] flickerCurve:', e); userFuncs.flickerCurve = null; }
     },
     setPhaseFunc(code: string | null) {
-      userFuncs.phaseFunc = code ? compileUserFunction(code) : null;
+      if (!code) { userFuncs.phaseFunc = null; return; }
+      try { userFuncs.phaseFunc = compileUserFunction(code); } catch (e) { console.warn('[matrix-rain] phaseFunc:', e); userFuncs.phaseFunc = null; }
     },
     setCharsetFunc(code: string | null) {
-      userFuncs.charsetFunc = code ? compileUserFunction(code) : null;
+      if (!code) { userFuncs.charsetFunc = null; return; }
+      try { userFuncs.charsetFunc = compileUserFunction(code); } catch (e) { console.warn('[matrix-rain] charsetFunc:', e); userFuncs.charsetFunc = null; }
     },
     setPalettes(cold: Palette, warm: Palette) {
       coldPalette = cold;
       warmPalette = warm;
+      // LUT 静态表重建 + 终态表 dirty
+      paletteLUT.setPalettes(coldPalette, warmPalette);
     },
     setFlickerSpeed(speed: number) {
       cfg = { ...cfg, flickerSpeed: Math.max(0, speed) };
@@ -791,6 +770,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     setTargetFPS(fps: number) {
       targetFPS = Math.max(0, fps);
       fpsAccumMs = 0;  // 重置节流累加器,避免改后限频不准
+      // 同步 lastFrameTime,避免 first frame elapsed 累积(P-10)
+      lastFrameTime = performance.now();
     },
     setDensity(fontSize: number) {
       cfg = { ...cfg, fontSize };
