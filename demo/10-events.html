@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0a0a14">
 <title>@xietuier/matrix-rain · Demo 10 · Events</title>
 <meta name="description" content="事件系统展示:onFrame / onResize / onThemeChange / onTargetFinish。">
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="../dist/fonts/fonts.css">
 <link rel="stylesheet" href="../dist/matrix-rain.css">
 <style>
   * { box-sizing: border-box; }
@@ -33,7 +33,7 @@
 </head>
 <body>
 
-<div class="crumbs"><a href="../">@xietuier/matrix-rain</a> / 10 · Events</div>
+<div class="crumbs"><a href="../">@xietuier/matrix-rain</a> / <a href="00-index.html">All Demos</a> / 10 · Events</div>
 <h1>Event <em>System</em></h1>
 <p class="sub">4 个事件回调:onFrame(30Hz 节流) / onResize(200ms debounce) / onThemeChange / onTargetFinish</p>
 
@@ -69,7 +69,7 @@
 <div class="log" id="log"></div>
 
 <script type="module">
-import { matrixRain, textToBitmap } from '../dist/index.js?v=10';
+import { matrixRain, textToBitmap, themes } from '../dist/index.js?v=0.1.0';
 
 let frameCount = 0, themeCount = 0, targetCount = 0;
 let currentTheme = 'silicon-valley';
@@ -123,16 +123,16 @@ const rain = matrixRain({
   }
 });
 
-const themes = ['silicon-valley', 'matrix-green', 'lava-red', 'cyber-blue', 'pure-mono'];
+const themeNames = Object.keys(themes);
 let themeIdx = 0;
 document.getElementById('btn-cycle').onclick = () => {
-  themeIdx = (themeIdx + 1) % themes.length;
-  rain.setTheme(themes[themeIdx]);
+  themeIdx = (themeIdx + 1) % themeNames.length;
+  rain.setTheme(themeNames[themeIdx]);
 };
 
 document.getElementById('btn-target').onclick = () => {
   // 用 textToBitmap 生成一个小位图并设置,3 秒后自动淑出触发 onTargetFinish
-  const bm = textToBitmap('OK!', { cols: 8, rows: 4, font: '16px monospace' });
+  const bm = textToBitmap('OK!', 8, 4);
   document.getElementById('target-status').textContent = 'playing';
   rain.setTargetBitmap(bm, { fadeIn: 0.3, hold: 1.5, fadeOut: 1.0, anchor: 'center' });
   log(`<span class="tag">[target]</span> set target bitmap`);
@@ -143,13 +143,15 @@ document.getElementById('btn-clear').onclick = () => {
   log(`<span class="tag">[target]</span> cleared`);
 };
 
-// 模拟触发 resize:每 8 秒 dispatch 一次(便于观察 onResize)
-let resizeCounter = 0;
-setInterval(() => {
-  resizeCounter++;
+// 模拟触发 resize:每 8 秒 dispatch 一次(便于观察 onResize),跑 3 次后停止
+// 用 setTimeout 递归 + 计数器,避免 setInterval + clearInterval(this) 永驻 bug
+let resizeCount = 0;
+function fakeResize() {
+  resizeCount++;
   window.dispatchEvent(new Event('resize'));
-  if (resizeCounter > 3) clearInterval(this);  // eslint
-}, 8000);
+  if (resizeCount < 3) setTimeout(fakeResize, 8000);
+}
+setTimeout(fakeResize, 8000);
 
 log(`<span class="tag">[init]</span> events armed`);
 

@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0a0a14">
 <title>@xietuier/matrix-rain · Demo 12 · Noise Converge</title>
 <meta name="description" content="噪声→收敛涌现动画:全屏噪点 → 逐个锁定为图像 → 保持 → 反向解锁融化。">
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="../dist/fonts/fonts.css">
 <link rel="stylesheet" href="../dist/matrix-rain.css">
 <style>
   * { box-sizing: border-box; }
@@ -73,7 +73,7 @@
 </head>
 <body>
 
-<div class="crumbs"><a href="../">@xietuier/matrix-rain</a> / 12 · Noise Converge</div>
+<div class="crumbs"><a href="../">@xietuier/matrix-rain</a> / <a href="00-index.html">All Demos</a> / 12 · Noise Converge</div>
 <h1>Noise <em>Converge</em></h1>
 <p class="sub">5 段状态机:<b>noise</b>(0.5s 全屏噪点)→ <b>converge</b>(1.5s 逐个锁定)→ <b>hold</b>(∞)→ <b>dissolve</b>(2s 反向解锁融化)→ <b>idle</b>。下面切换 7 种锁定顺序与调参实时观察。</p>
 
@@ -145,7 +145,7 @@
 </div>
 
 <script type="module">
-import { matrixRain, textToBitmap, mountFpsOverlay } from '../dist/index.js?v=12';
+import { matrixRain, textToBitmap, mountFpsOverlay } from '../dist/index.js?v=0.1.0';
 
 // 启动 FPS overlay
 const fps = mountFpsOverlay();
@@ -173,14 +173,10 @@ const rain = matrixRain({
     log('<span class="tag">[target]</span> noise-converge 动画结束,onTargetFinish 触发');
   },
   onFrame: (info) => {
-    // 推断当前阶段
-    const elapsed = info.t;
-    let phase = 'idle';
-    if (info.fps > 0) {
-      // 通过读取 instance 的内部状态(只能推断)
-      phase = 'running';
-    }
-    document.getElementById('cur-time').textContent = `t = ${elapsed.toFixed(2)}s`;
+    // 读真实 instance 状态(由 src/engine.ts:1426 getTargetState() 提供)
+    const state = rain.getTargetState ? rain.getTargetState() : { active: false, phase: 'idle', elapsed: 0 };
+    document.getElementById('cur-phase').textContent = state.phase;
+    document.getElementById('cur-time').textContent = `t = ${state.elapsed.toFixed(2)}s`;
   }
 });
 
@@ -203,26 +199,22 @@ const applyBitmap = (text) => {
     anchor: 'center'
   });
   log(`<span class="tag">[target]</span> set bitmap "${text}" phase=${currentPhase} order=${currentLockOrder}`);
-  // 重置阶段指示器
-  document.getElementById('cur-phase').textContent = 'noise';
-  setTimeout(() => {
-    if (currentPhase === 'noise-converge') {
-      document.getElementById('cur-phase').textContent = 'converge';
-      setTimeout(() => {
-        document.getElementById('cur-phase').textContent = 'hold';
-      }, (noiseDur + convergeDur) * 1000);
-    } else {
-      document.getElementById('cur-phase').textContent = 'fade-in';
-    }
-  }, noiseDur * 1000);
+  // 阶段指示器由 onFrame 读 rain.getTargetState() 实时刷新,无需 setTimeout 模拟
 };
 
 // 初始应用
 applyBitmap('MATRIX');
 
+// 输入框防抖:每键击不立即重建(避免 5 字母连续触发 5 次全图重算)
+// 用 rAF 合并多次 input,确保最多 1 帧 1 次 applyBitmap
+let inputRaf = null;
 document.getElementById('input-text').addEventListener('input', (e) => {
   const text = e.target.value.trim() || ' ';
-  applyBitmap(text);
+  if (inputRaf !== null) cancelAnimationFrame(inputRaf);
+  inputRaf = requestAnimationFrame(() => {
+    inputRaf = null;
+    applyBitmap(text);
+  });
 });
 
 document.getElementById('btn-apply').addEventListener('click', () => {

@@ -54,11 +54,14 @@
   }
   pre.code .k { color: #00e5ff; }
   pre.code .v { color: #ffb84d; }
+  .crumbs { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .15em; color: rgba(200,196,184,.6); text-transform: uppercase; margin-bottom: 16px; }
+  .crumbs a { color: #00e5ff; text-decoration: none; }
 </style>
 </head>
 <body>
 
 <div class="wrap">
+  <div class="crumbs"><a href="../">@xietuier/matrix-rain</a> / <a href="00-index.html">All Demos</a> / 99 · Debug</div>
   <h1>Debug <em>Panel</em></h1>
   <p class="lead">
     浏览器控制台可用 <code>window.__matrixRainDebug</code> 检查所有活跃实例 · 聚合 FPS · 销毁所有。本页面提供 GUI 视图。
@@ -99,7 +102,7 @@
 </div>
 
 <script type="module">
-import { matrixRain, mountFpsOverlay, MatrixRainElement } from '../dist/index.js?v=99';
+import { matrixRain, mountFpsOverlay, MatrixRainElement } from '../dist/index.js?v=0.1.0';
 
 // 自动注册 Web Component
 if (!customElements.get('matrix-rain')) {

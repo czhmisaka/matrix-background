@@ -23,9 +23,13 @@
   .cell .label .theme { color: #00e5ff; }
   .cell .label .fps { color: rgba(255, 255, 255, 0.5); margin-left: 8px; }
   matrix-rain { display: block; width: 100%; height: 100%; }
+  .crumbs { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .15em; color: rgba(200,196,184,.6); text-transform: uppercase; padding: 16px 48px 0; }
+  .crumbs a { color: #00e5ff; text-decoration: none; }
 </style>
 </head>
 <body>
+
+<div class="crumbs"><a href="../">@xietuier/matrix-rain</a> / <a href="00-index.html">All Demos</a> / 10 · Element</div>
 
 <header>
   <h1><em>10-Element</em> Web Component Demo</h1>
@@ -50,7 +54,7 @@
 <div class="grid" id="grid"></div>
 
 <script type="module">
-import { matrixRain, mountFpsOverlay, MatrixRainElement } from '../dist/index.js?v=10';
+import { matrixRain, mountFpsOverlay, MatrixRainElement } from '../dist/index.js?v=0.1.0';
 
 // 自动注册 <matrix-rain> 标签
 if (!customElements.get('matrix-rain')) {

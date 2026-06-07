@@ -1,0 +1,31 @@
+/* @xietuier/matrix-rain · 自托管字体(原 Google Fonts · latin subset · variable)
+ * 3 个 variable woff2 文件覆盖全部需要的 weight,体积 ~125 KB(原 GFonts 一次性约 270 KB)
+ * 详见 docs/ROUTING-AUDIT-2026-06-07.md · 阶段 2 字体本地化
+ */
+
+/* Inter: variable font, 单文件覆盖 weight 400/500/600 */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./inter-variable.woff2') format('woff2');
+}
+
+/* Fraunces italic: variable font, 单文件覆盖 italic weight 400/600 */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fraunces-italic.woff2') format('woff2');
+}
+
+/* JetBrains Mono: variable font, 单文件覆盖 weight 400/500 */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('./jetbrains-mono.woff2') format('woff2');
+}

@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0a0a14">
 <title>@xietuier/matrix-rain · Demo 11 · Mixed Theme</title>
 <meta name="description" content="主题混合:coldFrom / warmFrom 自由拼色 + 4 种组合对比。">
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="../dist/fonts/fonts.css">
 <link rel="stylesheet" href="../dist/matrix-rain.css">
 <style>
   * { box-sizing: border-box; }
@@ -37,7 +37,7 @@
 </head>
 <body>
 
-<div class="crumbs"><a href="../">@xietuier/matrix-rain</a> / 11 · Mixed Theme</div>
+<div class="crumbs"><a href="../">@xietuier/matrix-rain</a> / <a href="00-index.html">All Demos</a> / 11 · Mixed Theme</div>
 <h1>Mixed <em>Theme</em></h1>
 <p class="sub">用 <code>coldFrom</code> / <code>warmFrom</code> 从 5 个 builtin 主题自由拼色 · 2^5 = 25 种组合</p>
 
@@ -56,7 +56,7 @@
 </div>
 
 <script type="module">
-import { matrixRain, themes } from '../dist/index.js?v=11';
+import { matrixRain, themes } from '../dist/index.js?v=0.1.0';
 
 const combinations = [
   { cold: 'cyber-blue',  warm: 'lava-red',     desc: '赛博冷蓝 × 熔岩红橙' },

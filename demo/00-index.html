@@ -6,9 +6,7 @@
 <meta name="theme-color" content="#0a0a14">
 <title>@xietuier/matrix-rain · All Demos Hub</title>
 <meta name="description" content="数字矩阵背景完整 Demo 集合 · 4 个真实场景 + 1 个完整教程 + 1 个 AI Mode 调参。">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:ital,wght@1,400;1,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../dist/fonts/fonts.css">
 <link rel="stylesheet" href="../dist/matrix-rain.css">
 <style>
   * { box-sizing: border-box; }
@@ -71,7 +69,7 @@
 </nav>
 
 <div class="wrap">
-  <!-- TODO 导航待优化:见 docs/ROUTING-AUDIT-2026-06-07.md — 6 个 demo (10/11/12/99/cdn) 缺 hub 入口卡片 -->
+  <!-- 6 个交互特性 demo 卡片已下沉到本页末尾"交互特性 demo"分组 -->
   <div class="crumbs"><a href="../">@xietuier/matrix-rain</a> / All Demos</div>
   <h1>All <em>Demos</em></h1>
   <p class="sub">1 篇博客 + 2 个中心页 + 2 个实战场景 · 覆盖从 npm 包使用到 AI 调参的全链路。</p>
@@ -131,7 +129,7 @@
       <p>滑块调字号 / 拖尾 / 光心 / 暖色半径 / 阻尼 / 字符集,导出 JSON</p>
       <div class="arrow">JUMP TO PLAYGROUND →</div>
     </a>
-    <a class="card" href="07-tutorial.html?tab=api">
+    <a class="card" href="07-tutorial.html?tab=api-options">
       <div class="num">→ 07</div>
       <h2>API 完整文档</h2>
       <p>MatrixRainOptions + MatrixRainInstance 全字段表 + 生命周期</p>
@@ -155,10 +153,51 @@
       <div class="arrow">GITHUB →</div>
     </a>
   </div>
+
+  <div class="divider"></div>
+  <h3 class="section-title">· 交互特性 demo · 深入引擎能力</h3>
+  <div class="grid">
+    <a class="card" href="10-element.html">
+      <div class="num">10</div>
+      <h2>Web Component · 多实例</h2>
+      <p>同页 10 个 &lt;matrix-rain&gt;,各自独立 theme/variant/fontSize/charset,验证实例化稳定性</p>
+      <div class="arrow">OPEN →</div>
+    </a>
+    <a class="card" href="10-events.html">
+      <div class="num">10</div>
+      <h2>4 事件回调 · onFrame/onResize/onTheme/onTarget</h2>
+      <p>30Hz 节流 + 200ms debounce + setTheme / setTargetBitmap 事件可视化</p>
+      <div class="arrow">OPEN →</div>
+    </a>
+    <a class="card" href="11-mixed-theme.html">
+      <div class="num">11</div>
+      <h2>主题拼色 · coldFrom × warmFrom</h2>
+      <p>5 个 builtin 主题任意拼色,2^5 = 25 种组合,4 卡片预览</p>
+      <div class="arrow">OPEN →</div>
+    </a>
+    <a class="card" href="12-noise-converge.html">
+      <div class="num">12</div>
+      <h2>噪声→收敛 · 5 段状态机</h2>
+      <p>noise → converge → hold → dissolve 涌现动画,7 种锁定顺序 + 实时调参</p>
+      <div class="arrow">OPEN →</div>
+    </a>
+    <a class="card" href="99-debug.html">
+      <div class="num">99</div>
+      <h2>Debug 面板</h2>
+      <p>window.__matrixRainDebug 全量实例 + 聚合 FPS + GUI 视图</p>
+      <div class="arrow">OPEN →</div>
+    </a>
+    <a class="card" href="cdn.html">
+      <div class="num">→</div>
+      <h2>IIFE · 浏览器原生标签</h2>
+      <p>用 &lt;script src&gt; 引入 dist/index.iife.js,无需 npm/bundler/build</p>
+      <div class="arrow">OPEN →</div>
+    </a>
+  </div>
 </div>
 
 <script type="module">
-import { matrixRain, MatrixRain } from '../dist/index.js?v=3';
+import { matrixRain, MatrixRain } from '../dist/index.js?v=0.1.0';
 matrixRain({ theme: 'silicon-valley', fontSize: 14 });
 
 // 跨页面/关闭时自动清理(避免跨页跳留 orphan rAF)

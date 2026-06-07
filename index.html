@@ -11,9 +11,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://matrix-rain.xietuier.ai/">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:ital,wght@1,400;1,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./dist/fonts/fonts.css">
 <link rel="stylesheet" href="./dist/matrix-rain.css">
 <style>
   * { box-sizing: border-box; }
@@ -421,7 +419,7 @@
 </footer>
 
 <script type="module">
-  import { matrixRain, MatrixRain } from './dist/index.js?v=3';
+  import { matrixRain, MatrixRain } from './dist/index.js?v=0.1.0';
 
   // 1) 全屏背景(参数低开销)
   matrixRain({ theme: 'silicon-valley', fontSize: 16, trailAlpha: 0.2 });

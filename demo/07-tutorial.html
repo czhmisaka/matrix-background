@@ -10,6 +10,7 @@
 <meta property="og:description" content="12 个 tab 单页应用,数字矩阵背景完整教程 + Demo">
 <meta property="og:type" content="website">
 <link rel="canonical" href="https://matrix-rain.xietuier.ai/demo/07-tutorial.html">
+<link rel="stylesheet" href="../dist/fonts/fonts.css">
 <link rel="stylesheet" href="../dist/matrix-rain.css">
 <style>
   * { box-sizing: border-box; }
@@ -1374,11 +1375,11 @@ rain.<span class="v">destroy</span>();</code></pre>
 
 <div class="footer">
   <div>@xietuier/matrix-rain v0.1.0 · MIT · by czhmisaka</div>
-  <div><a href="../README.md">README</a> · <a href="https://github.com/czhmisaka/matrix-rain" target="_blank">GitHub</a> · <a href="https://www.npmjs.com/package/@xietuier/matrix-rain" target="_blank">npm</a></div>
+  <div><a href="../README.md">README</a> · <a href="https://github.com/xietuier/matrix-rain" target="_blank">GitHub</a> · <a href="https://www.npmjs.com/package/@xietuier/matrix-rain" target="_blank">npm</a></div>
 </div>
 
 <script type="module">
-import { matrixRain, MatrixRain } from '../dist/index.js?v=3';
+import { matrixRain, MatrixRain } from '../dist/index.js?v=0.1.0';
 
 // ===== Tab 切换逻辑 =====
 const items = document.querySelectorAll('.menu-item');
@@ -1583,7 +1584,7 @@ function bootPlayground() {
 
   // 启动 rain(需要从全局拿,ESM 在 </body> 加载可能未就绪)
   // 用动态 import 保证不论脚本顺序都可用
-  import('../dist/index.js?v=3').then((mod) => {
+  import('../dist/index.js?v=0.1.0').then((mod) => {
     const { matrixRain } = mod;
     // 延迟 2 帧,确保 tab-pane active 后 container 有正确 clientWidth
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -1614,7 +1615,7 @@ function pgRebuild(opts = {}) {
 // 主题 (热切换) · 切换时同步 slider 到该主题的默认 themeParams
 let pgThemes = null;
 let pgVariantDefaults = null;
-import('../dist/index.js?v=3').then(mod => {
+import('../dist/index.js?v=0.1.0').then(mod => {
   pgThemes = mod.themes;
   pgVariantDefaults = mod.VARIANT_DEFAULTS;
 });
@@ -1827,7 +1828,7 @@ document.getElementById('pg-charset').addEventListener('input', e => {
 
 // ==================== 4 层用户函数驱动 (D 预设 / C 曲线 / B 波形 / A 沙箱) ====================
 // 准备 4 层所需的全局辅助(从 dist index 拉)
-import('../dist/index.js?v=3').then((mod) => {
+import('../dist/index.js?v=0.1.0').then((mod) => {
   const matrixRain = mod.matrixRain;
   const validateUserFunction = mod.validateUserFunction || ((code) => { try { new Function(code); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } });
   const PRESETS = mod.PRESETS || [
@@ -2173,7 +2174,7 @@ document.getElementById('pg-target-apply-text').addEventListener('click', async 
   const text = document.getElementById('pg-target-text').value || 'HELLO';
   const { cols, rows } = getGridSize();
   try {
-    const bm = window.matrixRain_bitmap || (await import('../dist/index.js?v=3'));
+    const bm = window.matrixRain_bitmap || (await import('../dist/index.js?v=0.1.0'));
     const { textToBitmap } = bm;
     const bmp = textToBitmap(text, cols, rows);
     applyTargetBitmap(bmp.data);
@@ -2201,7 +2202,7 @@ async function loadAndApplyImage(file) {
   }
   const { cols, rows } = getGridSize();
   try {
-    const bm = await import('../dist/index.js?v=3');
+    const bm = await import('../dist/index.js?v=0.1.0');
     const img = await bm.fileToImage(file);
     const bmp = bm.imageToBitmap(img, cols, rows);
     applyTargetBitmap(bmp.data);

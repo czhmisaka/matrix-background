@@ -18,11 +18,14 @@
   .actions { margin-top: 24px; display: flex; gap: 10px; flex-wrap: wrap; }
   .actions button { background: rgba(124, 92, 255, 0.15); border: 1px solid rgba(124, 92, 255, 0.4); color: #c5b8ff; padding: 8px 16px; border-radius: 6px; font-family: "JetBrains Mono", monospace; font-size: 12px; cursor: pointer; }
   .actions button:hover { background: rgba(124, 92, 255, 0.25); }
+  .crumbs { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .15em; color: rgba(200,196,184,.6); text-transform: uppercase; margin-bottom: 16px; }
+  .crumbs a { color: #00e5ff; text-decoration: none; }
 </style>
 </head>
 <body>
 
 <div class="wrap">
+  <div class="crumbs"><a href="../">@xietuier/matrix-rain</a> / <a href="00-index.html">All Demos</a> / CDN · IIFE</div>
   <h1>CDN · <em>IIFE</em></h1>
   <p class="lead">
     本页用 <code>&lt;script src&gt;</code> 引入 IIFE 产物,验证浏览器原生标签即用 · 无需 npm / bundler / build。
@@ -44,7 +47,7 @@
 </div>
 
 <!-- IIFE 引入:浏览器全局变量 window.MatrixRain -->
-<script src="../dist/index.iife.js?v=1"></script>
+<script src="../dist/index.iife.js?v=0.1.0"></script>
 <script>
   document.getElementById('status').innerHTML =
     '✅ window.MatrixRain = ' + Object.keys(window.MatrixRain).slice(0, 6).join(', ') + '…';
