@@ -31,6 +31,7 @@ import {
   lerpThemeParams,
   lerpVariantParams,
   easeInOut,
+  resolveEffectiveRenderScale,
   FIT_THRESHOLD,
 } from './engine/state';
 import {
@@ -540,6 +541,9 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         state.dynamicColorHue = 0;
       }
       const totalHue = state.dynamicHue + state.dynamicColorHue;
+
+      // 解析 effective renderScale(0.3.0+)· 'auto' + 位图激活时升档
+      state.renderScaleEffective = resolveEffectiveRenderScale(state);
 
       // 过渡系统:transitionAlpha
       if (state.transitionAlphaAnim) {

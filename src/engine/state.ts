@@ -904,3 +904,20 @@ export { FLICKER_SPEED_DEFAULT };
 
 /** 常量 export,便于 setter / orchestrator 引用 */
 export { DEFAULTS };
+
+/**
+ * 每帧解析 effective renderScale(0.3.0+):
+ * - 'auto' + targetActive && targetBitmap → 2
+ * - 'auto' + inactive → 1
+ * - number(已 normalize) → 同值
+ *
+ * 由 rAF draw 入口每帧调一次,结果写入 state.renderScaleEffective。
+ * 调时机:在 colorCurve / hueRotate 计算之后,任何 draw 变体之前(保证
+ * targetActive 已是当前帧最新值,updateTargetBitmapPhaseGlobal 不会改它)。
+ */
+export const resolveEffectiveRenderScale = (state: MatrixRainState): number => {
+  if (state.renderScaleUser === 'auto') {
+    return state.targetActive && state.targetBitmap !== null ? 2 : 1;
+  }
+  return state.renderScaleUser;
+};
