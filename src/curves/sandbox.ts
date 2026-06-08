@@ -12,6 +12,14 @@
  *   5. 字符串大小 5KB
  *   6. 类型守卫:返回必须 string|number,否则 throw
  *   7. 'use strict': 隐式 undefined this,阻止 with 等
+ *
+ * v0.3.0 加固(audit-security-2026-06-08 §2):
+ *   8. 黑名单补 constructor:堵 .constructor.constructor 拿回 Function 链路
+ *   9. 黑名单补 async/await:堵 Promise 异步链路
+ *   10. 黑名单补 function / yield / class:堵 generator + class 绕过
+ *   11. 黑名单补 __proto__ / prototype:堵原型链污染
+ *   12. 字符串拼接绕过防御:解码相邻字面量,检测拼接值是否命中黑名单
+ *      例: "win"+"dow" → "window" 命中
  */
 
 const MAX_STEPS = 10000;
@@ -20,70 +28,164 @@ const MAX_STR = 5 * 1024;
 /** 词级黑名单 —— 用 \b 边界匹配,避免子串误中 */
 const BLACKLIST = [
   // 全局对象 / DOM
-  'window', 'document', 'globalThis', 'self', 'top', 'parent', 'frames',
-  'navigator', 'location', 'history', 'postMessage', 'onmessage',
+  'window',
+  'document',
+  'globalThis',
+  'self',
+  'top',
+  'parent',
+  'frames',
+  'navigator',
+  'location',
+  'history',
+  'postMessage',
+  'onmessage',
   // 存储
-  'localStorage', 'sessionStorage', 'indexedDB',
+  'localStorage',
+  'sessionStorage',
+  'indexedDB',
   // 动态执行 / 加载
-  'eval', 'Function', 'import', 'require',
+  'eval',
+  'Function',
+  'import',
+  'require',
   // 网络
-  'fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'WebRTC',
+  'fetch',
+  'XMLHttpRequest',
+  'WebSocket',
+  'EventSource',
+  'WebRTC',
   // 定时器(可被串成 setTimeout(1, ...))
-  'setTimeout', 'setInterval', 'setImmediate', 'queueMicrotask',
-  'requestAnimationFrame', 'requestIdleCallback',
+  'setTimeout',
+  'setInterval',
+  'setImmediate',
+  'queueMicrotask',
+  'requestAnimationFrame',
+  'requestIdleCallback',
   // 进程 / Worker
-  'process', 'Worker', 'SharedWorker', 'ServiceWorker',
+  'process',
+  'Worker',
+  'SharedWorker',
+  'ServiceWorker',
   // 元编程(可绕过 Proxy/边界)
-  'Proxy', 'Reflect', 'Symbol', 'Promise',
+  'Proxy',
+  'Reflect',
+  'Symbol',
+  'Promise',
   // 标准库(可建 String/Array/Object 间接逃逸)
-  'Object', 'JSON', 'Date', 'RegExp', 'Error', 'TypeError', 'RangeError',
-  'Map', 'Set', 'WeakMap', 'WeakSet', 'ArrayBuffer', 'DataView',
-  'Uint8Array', 'Int8Array', 'Uint16Array', 'Int16Array',
-  'Uint32Array', 'Int32Array', 'Float32Array', 'Float64Array',
-  'BigInt64Array', 'BigUint64Array',
+  'Object',
+  'JSON',
+  'Date',
+  'RegExp',
+  'Error',
+  'TypeError',
+  'RangeError',
+  'Map',
+  'Set',
+  'WeakMap',
+  'WeakSet',
+  'ArrayBuffer',
+  'DataView',
+  'Uint8Array',
+  'Int8Array',
+  'Uint16Array',
+  'Int16Array',
+  'Uint32Array',
+  'Int32Array',
+  'Float32Array',
+  'Float64Array',
+  'BigInt64Array',
+  'BigUint64Array',
   // console(可泄露)
-  'console', 'alert', 'confirm', 'prompt',
+  'console',
+  'alert',
+  'confirm',
+  'prompt',
   // 关键字 / this / arguments
-  'this', 'arguments', 'with', 'debugger'
+  'this',
+  'arguments',
+  'with',
+  'debugger',
+  // Function constructor 链 (.constructor.constructor 拿回 Function)
+  'constructor',
+  // async/await(异步链路 + Promise 绕过)
+  'async',
+  'await',
+  // 生成器(function* + yield)
+  'function',
+  'yield',
+  // class(可建实例绕过类型守卫)
+  'class',
+  // 原型链污染(__proto__.constructor / prototype)
+  '__proto__',
+  'prototype',
 ];
 
 /** 词级黑名单(运行时检测) */
 const RUNTIME_BLOCKS = ['this', 'arguments', 'Function', 'eval', 'import', 'require'];
 
 /** 词级正则: 匹配整词 */
-const wordRegex = (w: string): RegExp => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+const wordRegex = (w: string): RegExp =>
+  new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
 
 /** 安全 Math: 白名单静态方法 + 常量(冻结对象) */
 const SAFE_MATH = Object.freeze({
   // 三角
-  sin: Math.sin, cos: Math.cos, tan: Math.tan,
-  asin: Math.asin, acos: Math.acos, atan: Math.atan, atan2: Math.atan2,
-  sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh,
+  sin: Math.sin,
+  cos: Math.cos,
+  tan: Math.tan,
+  asin: Math.asin,
+  acos: Math.acos,
+  atan: Math.atan,
+  atan2: Math.atan2,
+  sinh: Math.sinh,
+  cosh: Math.cosh,
+  tanh: Math.tanh,
   // 幂 / 对数 / 根
-  pow: Math.pow, sqrt: Math.sqrt, cbrt: Math.cbrt, hypot: Math.hypot,
-  exp: Math.exp, log: Math.log, log2: Math.log2, log10: Math.log10,
+  pow: Math.pow,
+  sqrt: Math.sqrt,
+  cbrt: Math.cbrt,
+  hypot: Math.hypot,
+  exp: Math.exp,
+  log: Math.log,
+  log2: Math.log2,
+  log10: Math.log10,
   // 取整 / 取值
-  abs: Math.abs, sign: Math.sign, floor: Math.floor, ceil: Math.ceil,
-  round: Math.round, trunc: Math.trunc, min: Math.min, max: Math.max,
+  abs: Math.abs,
+  sign: Math.sign,
+  floor: Math.floor,
+  ceil: Math.ceil,
+  round: Math.round,
+  trunc: Math.trunc,
+  min: Math.min,
+  max: Math.max,
   // 随机
   random: Math.random,
   // 常量
-  PI: Math.PI, E: Math.E
+  PI: Math.PI,
+  E: Math.E,
 } as const);
 
 /** 安全 Number 静态 */
 const SAFE_NUMBER = Object.freeze({
-  isFinite: Number.isFinite, isNaN: Number.isNaN, isInteger: Number.isInteger,
-  isSafeInteger: Number.isSafeInteger, parseFloat: Number.parseFloat, parseInt: Number.parseInt,
-  MAX_SAFE_INTEGER: Number.MAX_SAFE_INTEGER, MIN_SAFE_INTEGER: Number.MIN_SAFE_INTEGER,
-  MAX_VALUE: Number.MAX_VALUE, MIN_VALUE: Number.MIN_VALUE,
-  EPSILON: Number.EPSILON
+  isFinite: Number.isFinite,
+  isNaN: Number.isNaN,
+  isInteger: Number.isInteger,
+  isSafeInteger: Number.isSafeInteger,
+  parseFloat: Number.parseFloat,
+  parseInt: Number.parseInt,
+  MAX_SAFE_INTEGER: Number.MAX_SAFE_INTEGER,
+  MIN_SAFE_INTEGER: Number.MIN_SAFE_INTEGER,
+  MAX_VALUE: Number.MAX_VALUE,
+  MIN_VALUE: Number.MIN_VALUE,
+  EPSILON: Number.EPSILON,
 } as const);
 
 /** 安全 String 静态 */
 const SAFE_STRING = Object.freeze({
-  fromCharCode: String.fromCharCode, fromCodePoint: String.fromCodePoint,
-  raw: String.raw
+  fromCharCode: String.fromCharCode,
+  fromCodePoint: String.fromCodePoint,
+  raw: String.raw,
 } as const);
 
 /** 安全 Boolean 静态(实际只有构造函数) */
@@ -91,7 +193,9 @@ const SAFE_BOOLEAN = Object.freeze({} as const);
 
 /** 安全 Array 静态 */
 const SAFE_ARRAY = Object.freeze({
-  isArray: Array.isArray, from: Array.from, of: Array.of
+  isArray: Array.isArray,
+  from: Array.from,
+  of: Array.of,
 } as const);
 
 /** 沙箱内上下文:user 可见的字段 */
@@ -175,8 +279,8 @@ export const ease = {
   inQuart: (t: number) => t * t * t * t,
   outQuart: (t: number) => 1 - --t * t * t * t,
   inOutQuart: (t: number) => (t < 0.5 ? 8 * t * t * t * t : 1 - 8 * --t * t * t * t),
-  inSine: (t: number) => -Math.cos(t * Math.PI / 2) + 1,
-  outSine: (t: number) => Math.sin(t * Math.PI / 2),
+  inSine: (t: number) => -Math.cos((t * Math.PI) / 2) + 1,
+  outSine: (t: number) => Math.sin((t * Math.PI) / 2),
   inOutSine: (t: number) => -0.5 * (Math.cos(Math.PI * t) - 1),
   inExpo: (t: number) => (t === 0 ? 0 : Math.pow(2, 10 * (t - 1))),
   outExpo: (t: number) => (t === 1 ? 1 : -Math.pow(2, -10 * t) + 1),
@@ -187,7 +291,10 @@ export const ease = {
   },
   inCirc: (t: number) => -Math.sqrt(1 - t * t) + 1,
   outCirc: (t: number) => Math.sqrt(1 - (t - 1) * (t - 1)),
-  inOutCirc: (t: number) => (t < 0.5 ? -0.5 * (Math.sqrt(1 - 4 * t * t) - 1) : 0.5 * (Math.sqrt(1 - (2 * t - 2) * (2 * t - 2)) + 1)),
+  inOutCirc: (t: number) =>
+    t < 0.5
+      ? -0.5 * (Math.sqrt(1 - 4 * t * t) - 1)
+      : 0.5 * (Math.sqrt(1 - (2 * t - 2) * (2 * t - 2)) + 1),
   inBack: (t: number) => {
     const s = 1.70158;
     return t * t * ((s + 1) * t - s);
@@ -201,7 +308,7 @@ export const ease = {
     return t < 0.5
       ? 0.5 * (t * t * ((s + 1) * 2 * t - s))
       : 0.5 * ((2 * t - 2) * (2 * t - 2) * ((s + 1) * (2 * t - 2) + s) + 2);
-  }
+  },
 };
 
 /** 简单 1D 噪声(基于 sin 组合,纯函数) */
@@ -215,6 +322,97 @@ const checkBlacklist = (code: string): string | null => {
   for (const bad of BLACKLIST) {
     const re = wordRegex(bad);
     if (re.test(code)) return bad;
+  }
+  // 字符串拼接绕过防御: 抽出相邻字符串字面量,检查其拼接值是否命中黑名单
+  // 例: "win"+"dow" 拼接后 = "window"
+  const concatHit = checkStringConcatBlacklist(code);
+  if (concatHit) return concatHit;
+  return null;
+};
+
+/**
+ * 解码 JS 字符串字面量(支持 \n \r \t \' \" \\ \uXXXX \xXX)
+ * 不支持模板字符串 `${...}` —— 用户用普通字符串即可表达
+ */
+const decodeStringLiteral = (lit: string): string => {
+  if (lit.length < 2) return '';
+  const quote = lit[0];
+  if (lit[lit.length - 1] !== quote) return '';
+  let out = '';
+  let i = 1;
+  while (i < lit.length - 1) {
+    const c = lit[i];
+    if (c === '\\' && i + 1 < lit.length - 1) {
+      const next = lit[i + 1];
+      if (next === 'u' && i + 5 < lit.length) {
+        const hex = lit.slice(i + 2, i + 6);
+        out += String.fromCharCode(parseInt(hex, 16));
+        i += 6;
+      } else if (next === 'x' && i + 3 < lit.length) {
+        const hex = lit.slice(i + 2, i + 4);
+        out += String.fromCharCode(parseInt(hex, 16));
+        i += 4;
+      } else {
+        const map: Record<string, string> = {
+          n: '\n',
+          r: '\r',
+          t: '\t',
+          b: '\b',
+          f: '\f',
+          v: '\v',
+          '0': '\0',
+          '\\': '\\',
+          "'": "'",
+          '"': '"',
+          '`': '`',
+        };
+        out += map[next] ?? next;
+        i += 2;
+      }
+    } else {
+      out += c;
+      i++;
+    }
+  }
+  return out;
+};
+
+/** 提取源码中所有字符串字面量("..." / '...',跳过模板字符串) */
+const extractStringLiterals = (code: string): string[] => {
+  const re = /"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'/g;
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  let count = 0;
+  while ((m = re.exec(code)) !== null && count < 200) {
+    out.push(decodeStringLiteral(m[0]));
+    count++;
+  }
+  return out;
+};
+
+/**
+ * 字符串拼接绕过检测: 对相邻字面量做滑动窗口拼接(最多 5 个),
+ * 检查拼接结果是否包含黑名单任一词
+ */
+const checkStringConcatBlacklist = (code: string): string | null => {
+  const literals = extractStringLiterals(code);
+  if (literals.length === 0) return null;
+  // 单个字面量: 直接命中(防御 "window" 字面量)
+  for (const lit of literals) {
+    for (const bad of BLACKLIST) {
+      if (lit.includes(bad)) return bad;
+    }
+  }
+  // 滑动窗口拼接相邻字面量(最多 5 个)
+  const win = Math.min(5, literals.length);
+  for (let i = 0; i < literals.length; i++) {
+    let acc = '';
+    for (let j = i; j < i + win && j < literals.length; j++) {
+      acc += literals[j];
+      for (const bad of BLACKLIST) {
+        if (acc.includes(bad)) return bad;
+      }
+    }
   }
   return null;
 };
@@ -246,9 +444,30 @@ export const compileUserFunction = (code: string): ((ctx: SandboxContext) => num
   let fn: Function;
   try {
     fn = new Function(
-      't', 'phase', 'h', 's', 'r', 'f', 'W', 'H', 'L', 'ch',
-      'sin', 'cos', 'tan', 'noise', 'PI', 'E', 'clamp', 'lerp', 'ease',
-      'Math', 'Number', 'String', 'Boolean', 'Array',
+      't',
+      'phase',
+      'h',
+      's',
+      'r',
+      'f',
+      'W',
+      'H',
+      'L',
+      'ch',
+      'sin',
+      'cos',
+      'tan',
+      'noise',
+      'PI',
+      'E',
+      'clamp',
+      'lerp',
+      'ease',
+      'Math',
+      'Number',
+      'String',
+      'Boolean',
+      'Array',
       `'use strict';
 let __ret = (function() {
   let __steps = 0;
@@ -266,13 +485,30 @@ return __ret;`
   return (ctx: SandboxContext) => {
     try {
       return fn(
-        ctx.t, ctx.phase, ctx.h, ctx.s, ctx.r, ctx.f, ctx.W, ctx.H, ctx.L, ctx.ch,
-        Math.sin, Math.cos, Math.tan, noise,
-        Math.PI, Math.E,
+        ctx.t,
+        ctx.phase,
+        ctx.h,
+        ctx.s,
+        ctx.r,
+        ctx.f,
+        ctx.W,
+        ctx.H,
+        ctx.L,
+        ctx.ch,
+        Math.sin,
+        Math.cos,
+        Math.tan,
+        noise,
+        Math.PI,
+        Math.E,
         (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v)),
         (a: number, b: number, t: number) => a + (b - a) * t,
         ease,
-        SAFE_MATH, SAFE_NUMBER, SAFE_STRING, SAFE_BOOLEAN, SAFE_ARRAY
+        SAFE_MATH,
+        SAFE_NUMBER,
+        SAFE_STRING,
+        SAFE_BOOLEAN,
+        SAFE_ARRAY
       );
     } catch (e) {
       return 0;
@@ -290,9 +526,30 @@ export const validateUserFunction = (code: string): { ok: boolean; error?: strin
   if (runtimeBad) return { ok: false, error: `禁用: ${runtimeBad}` };
   try {
     new Function(
-      't', 'phase', 'h', 's', 'r', 'f', 'W', 'H', 'L', 'ch',
-      'sin', 'cos', 'tan', 'noise', 'PI', 'E', 'clamp', 'lerp', 'ease',
-      'Math', 'Number', 'String', 'Boolean', 'Array',
+      't',
+      'phase',
+      'h',
+      's',
+      'r',
+      'f',
+      'W',
+      'H',
+      'L',
+      'ch',
+      'sin',
+      'cos',
+      'tan',
+      'noise',
+      'PI',
+      'E',
+      'clamp',
+      'lerp',
+      'ease',
+      'Math',
+      'Number',
+      'String',
+      'Boolean',
+      'Array',
       `'use strict';\n${code}`
     );
     return { ok: true };
@@ -307,5 +564,5 @@ export const SAFE_GLOBALS = {
   Number: SAFE_NUMBER,
   String: SAFE_STRING,
   Boolean: SAFE_BOOLEAN,
-  Array: SAFE_ARRAY
+  Array: SAFE_ARRAY,
 } as const;

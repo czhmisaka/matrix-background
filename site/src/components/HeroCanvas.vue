@@ -3,14 +3,27 @@
     <canvas ref="canvasRef" class="hero-canvas" aria-hidden="true"></canvas>
     <div class="hero-overlay">
       <div class="container">
-        <h1>给做 <em class="grad">UI</em> 的人<br>5 行代码一个<br><em class="grad">会呼吸</em>的背景</h1>
-        <p class="hero-sub">Canvas 2D 渲染 · 5 主题 4 变体 · Web Component · SSR 友好 · 29 KB gzip</p>
+        <h1>
+          给做 <em class="grad">UI</em> 的人<br />5 行代码一个<br /><em class="grad">会呼吸</em
+          >的背景
+        </h1>
+        <p class="hero-sub">
+          Canvas 2D 渲染 · 5 主题 4 变体 · Web Component · SSR 友好 · 29 KB gzip
+        </p>
         <div class="hero-ctas">
           <router-link to="/playground" class="btn btn-primary">立即试用 →</router-link>
-          <a href="https://www.npmjs.com/package/@xietuier/matrix-rain" class="btn btn-ghost" target="_blank" rel="noopener">npm install</a>
+          <a
+            href="https://www.npmjs.com/package/@xietuier/matrix-rain"
+            class="btn btn-ghost"
+            target="_blank"
+            rel="noopener"
+            >npm install</a
+          >
         </div>
         <div class="hero-meta">
-          <span class="meta-item"><span class="meta-dot" style="--c: var(--c-silicon)"></span>noise-converge 涌现</span>
+          <span class="meta-item"
+            ><span class="meta-dot" style="--c: var(--c-silicon)"></span>noise-converge 涌现</span
+          >
           <span class="meta-item">·</span>
           <span class="meta-item">本地部署 · 0 CDN</span>
           <span class="meta-item">·</span>
@@ -22,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue';
 import { useMatrixRain } from '@/composables/useMatrixRain';
 import { useTheme } from '@/composables/useTheme';
 import { textToBitmap, type MatrixRainInstance } from '@xietuier/matrix-rain';
@@ -41,7 +54,7 @@ const options = computed(() => ({
   targetLockOrder: 'center' as const,
   targetFadeIn: 0.3,
   targetHold: 2.5,
-  targetFadeOut: 2.0
+  targetFadeOut: 2.0,
 }));
 
 const instance = useMatrixRain(options, canvasRef);
@@ -63,19 +76,51 @@ function regenerate() {
       lockStability: 0.8,
       fadeIn: 0.3,
       hold: 2.5,
-      fadeOut: 2.0
+      fadeOut: 2.0,
     });
   } catch (e) {
     // silent
   }
 }
 
+// 路由级 preload:Fraunces italic 仅 hero H1 用到,其他路由不需要主动预载
+let fontPreloadLink: HTMLLinkElement | null = null;
+let regenerateTimer: ReturnType<typeof setTimeout> | null = null;
+let regenerateInterval: ReturnType<typeof setInterval> | null = null;
+
 onMounted(() => {
-  setTimeout(regenerate, 250);
+  // 仅在 hero 路由插入 preload,避免 12/12 路由全局拉
+  if (typeof document !== 'undefined' && !document.querySelector('link[data-fraunces-preload]')) {
+    fontPreloadLink = document.createElement('link');
+    fontPreloadLink.rel = 'preload';
+    fontPreloadLink.as = 'font';
+    fontPreloadLink.type = 'font/woff2';
+    fontPreloadLink.href = '/dist/fonts/fraunces-italic.woff2';
+    fontPreloadLink.crossOrigin = 'anonymous';
+    fontPreloadLink.setAttribute('data-fraunces-preload', '');
+    document.head.appendChild(fontPreloadLink);
+  }
+
+  regenerateTimer = setTimeout(regenerate, 250);
   // 每 8s 重新涌现一次,但用户启用 reduced-motion 时跳过循环(前庭无障碍)
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (!reduce) {
-    setInterval(regenerate, 8000);
+    regenerateInterval = setInterval(regenerate, 8000);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (regenerateTimer) {
+    clearTimeout(regenerateTimer);
+    regenerateTimer = null;
+  }
+  if (regenerateInterval) {
+    clearInterval(regenerateInterval);
+    regenerateInterval = null;
+  }
+  if (fontPreloadLink && fontPreloadLink.parentNode) {
+    fontPreloadLink.parentNode.removeChild(fontPreloadLink);
+    fontPreloadLink = null;
   }
 });
 
@@ -133,22 +178,38 @@ h1 {
   color: var(--text-faint);
   flex-wrap: wrap;
 }
-.meta-item { display: inline-flex; align-items: center; gap: 6px; }
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .meta-dot {
-  width: 8px; height: 8px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--c, var(--accent));
   box-shadow: 0 0 6px var(--c, var(--accent));
   animation: pulse 2s ease-in-out infinite;
 }
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 @media (max-width: 768px) {
-  .hero-overlay { padding: 100px 0 80px; }
-  h1 br { display: none; }
-  h1 { font-size: clamp(34px, 9vw, 56px); }
+  .hero-overlay {
+    padding: 100px 0 80px;
+  }
+  h1 br {
+    display: none;
+  }
+  h1 {
+    font-size: clamp(34px, 9vw, 56px);
+  }
 }
 </style>

@@ -16,8 +16,13 @@ import { compileUserFunction, validateUserFunction } from '../dist/index.js';
 let passed = 0;
 let failed = 0;
 const assert = (cond, msg) => {
-  if (cond) { console.log('  ✅', msg); passed++; }
-  else { console.error('  ❌', msg); failed++; }
+  if (cond) {
+    console.log('  ✅', msg);
+    passed++;
+  } else {
+    console.error('  ❌', msg);
+    failed++;
+  }
 };
 
 const expectReject = (code, label) => {
@@ -105,14 +110,87 @@ console.log('\n[9] 步数限制(10000 步)');
   const fn = compileUserFunction(`return 0;`);
   // 简单调一次,不应 throw
   try {
-    fn({ t: 0, phase: 0, h: 0, s: 0, r: 0, f: 0, W: 10, H: 10, L: 0, ch: 0,
-         sin: Math.sin, cos: Math.cos, tan: Math.tan, noise: () => 0,
-         PI: Math.PI, E: Math.E, clamp: (v, lo, hi) => v, lerp: (a, b) => a,
-         ease: { inQuad: t => t },
-         Math: { sin: Math.sin, cos: Math.cos }, Number: {}, String: {}, Boolean: {}, Array: {} });
+    fn({
+      t: 0,
+      phase: 0,
+      h: 0,
+      s: 0,
+      r: 0,
+      f: 0,
+      W: 10,
+      H: 10,
+      L: 0,
+      ch: 0,
+      sin: Math.sin,
+      cos: Math.cos,
+      tan: Math.tan,
+      noise: () => 0,
+      PI: Math.PI,
+      E: Math.E,
+      clamp: (v, lo, hi) => v,
+      lerp: (a, b) => a,
+      ease: { inQuad: (t) => t },
+      Math: { sin: Math.sin, cos: Math.cos },
+      Number: {},
+      String: {},
+      Boolean: {},
+      Array: {},
+    });
     assert(true, '基本调用不 throw');
   } catch (e) {
     assert(false, `基本调用 throw: ${e.message}`);
+  }
+}
+
+// ==================== 10. Function constructor 链(.constructor.constructor)====================
+console.log('\n[10] Function constructor 链绕过');
+expectReject(`return ({}).constructor;`, '({}).constructor 引用 Function');
+expectReject(`return ({}).constructor.constructor;`, '({}).constructor.constructor');
+expectReject(`({}).constructor.constructor('return 1')(); return 0;`, 'Function 链调用');
+expectReject(`var o = {}; return o.constructor;`, 'obj.constructor');
+
+// ==================== 11. async / await ====================
+console.log('\n[11] async / await 异步链路');
+expectReject(`async function f() { return 1; } return 0;`, 'async function');
+expectReject(`return (async () => 1)();`, 'async arrow');
+expectReject(`await Promise.resolve(1); return 0;`, 'await 表达式');
+
+// ==================== 12. 生成器(function* + yield)====================
+console.log('\n[12] 生成器 function* / yield');
+expectReject(`function* g() { yield 1; } return 0;`, 'function* 生成器');
+expectReject(`function g() { return 1; } return g();`, 'function 关键字');
+
+// ==================== 13. class 声明 ====================
+console.log('\n[13] class 类声明');
+expectReject(`class Foo { bar() { return 1; } } return 0;`, 'class 声明');
+
+// ==================== 14. 原型链污染 ====================
+console.log('\n[14] 原型链污染 __proto__ / prototype');
+expectReject(`return ({}).__proto__;`, '__proto__ 直接访问');
+expectReject(`var o = {}; return o.prototype;`, 'prototype 访问');
+expectReject(`return ({}).__proto__.constructor;`, '__proto__.constructor 链');
+
+// ==================== 15. 字符串拼接绕过 ====================
+console.log('\n[15] 字符串拼接构造禁用词("win"+"dow")');
+expectReject(`var w = "win" + "dow"; return w;`, '两段拼接成 window');
+expectReject(`return "win" + "dow";`, '两段拼接返回值');
+expectReject(`var w = "wi" + "n" + "dow"; return w;`, '三段拼接成 window');
+expectReject(`return "global" + "This";`, '两段拼接成 globalThis');
+
+// ==================== 16. validateUserFunction 同步新词 ====================
+console.log('\n[16] validateUserFunction 同步新词');
+{
+  const cases = [
+    ['return ({}).constructor;', 'constructor'],
+    ['async function f() { return 1; } return 0;', 'async'],
+    ['function* g() { yield 1; } return 0;', 'function'],
+    ['class Foo {} return 0;', 'class'],
+    ['return ({}).__proto__;', '__proto__'],
+    ['var w = "win" + "dow"; return w;', 'window (concat)'],
+  ];
+  for (const [code, label] of cases) {
+    const r = validateUserFunction(code);
+    assert(r.ok === false, `validateUserFunction 拒绝 ${label}`);
   }
 }
 

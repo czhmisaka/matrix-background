@@ -544,9 +544,15 @@ export interface MatrixRainInstance {
   getClickBurstState?(): { active: boolean; x: number; y: number; t: number };
 }
 
+/** 视口宽度分档(<768 / 768-1024 / 1024-1440 / ≥1440) */
+export type ViewportBucket = 'mobile' | 'tablet' | 'desktop' | 'wide';
+
+/** 浏览器型号(粗粒度 · UA 正则) */
+export type BrowserName = 'Chrome' | 'Firefox' | 'Safari' | 'Edge' | 'Opera' | 'IE' | 'Unknown';
+
 /** 环境检测结果 */
 export interface EnvironmentInfo {
-  /** 是否移动端 */
+  /** 是否移动端(UA + 视口分档 + coarse pointer 综合判断) */
   isMobile: boolean;
   /** 偏好暗色模式 */
   isDarkMode: boolean;
@@ -556,6 +562,14 @@ export interface EnvironmentInfo {
   recommendedTargetFPS: number;
   /** 推荐 brightness 乘数(暗色模式 1.1) */
   recommendedBrightness: number;
+  /** 浏览器型号(SSR / 不识别时为 'Unknown') */
+  browser: BrowserName;
+  /** 视口宽度分档 */
+  viewport: ViewportBucket;
+  /** 当前视口宽度像素(SSR / 不可用时为 0) */
+  viewportWidth: number;
+  /** devicePixelRatio(SSR / 不可用时为 1) */
+  devicePixelRatio: number;
 }
 
 /** 默认主题导出 */
