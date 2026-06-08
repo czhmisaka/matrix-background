@@ -30,7 +30,7 @@ import {
   lerpHSLPalette,
   lerpThemeParams,
   lerpVariantParams,
-  easeInOut,
+  pickEasingFn,
   resolveEffectiveRenderScale,
   FIT_THRESHOLD,
 } from './engine/state';
@@ -555,7 +555,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         } else {
           state.transitionAlpha =
             state.transitionAlphaAnim.from +
-            (state.transitionAlphaAnim.to - state.transitionAlphaAnim.from) * easeInOut(tt);
+            (state.transitionAlphaAnim.to - state.transitionAlphaAnim.from) *
+              pickEasingFn(state, 'inOut', state.transitionAlphaAnim.easing)(tt);
         }
       }
 
@@ -570,7 +571,11 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         if (tt >= 1) {
           state.themeTransition = null;
         } else {
-          const eased = easeInOut(Math.min(1, Math.max(0, tt)));
+          const eased = pickEasingFn(
+            state,
+            'inOut',
+            state.themeTransition.easing
+          )(Math.min(1, Math.max(0, tt)));
           effectiveCold = lerpHSLPalette(state.themeTransition.fromCold, state.coldPalette, eased);
           effectiveWarm = lerpHSLPalette(state.themeTransition.fromWarm, state.warmPalette, eased);
           effectiveTp = lerpThemeParams(state.themeTransition.fromTp, state.tp, eased);
@@ -586,7 +591,11 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         if (tt >= 1) {
           state.themeParamsTransition = null;
         } else {
-          const eased = easeInOut(Math.min(1, Math.max(0, tt)));
+          const eased = pickEasingFn(
+            state,
+            'inOut',
+            state.themeParamsTransition.easing
+          )(Math.min(1, Math.max(0, tt)));
           effectiveTp = lerpThemeParams(state.themeParamsTransition.fromTp, state.tp, eased);
           effectiveCtp = lerpThemeParams(state.themeParamsTransition.fromCtp, state.ctp, eased);
           effectiveWtp = lerpThemeParams(state.themeParamsTransition.fromWtp, state.wtp, eased);
@@ -599,7 +608,11 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
           state.variantTransition = null;
           state.effectiveVp = state.vp;
         } else {
-          const eased = easeInOut(Math.min(1, Math.max(0, tt)));
+          const eased = pickEasingFn(
+            state,
+            'inOut',
+            state.variantTransition.easing
+          )(Math.min(1, Math.max(0, tt)));
           state.effectiveVp = lerpVariantParams(state.variantTransition.fromVp, state.vp, eased);
         }
       } else {
@@ -717,6 +730,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     setDensity: methods.setDensity,
     setRenderScale: methods.setRenderScale,
     getRenderScale: methods.getRenderScale,
+    setEasing: methods.setEasing,
+    getEasing: methods.getEasing,
     getFPS: methods.getFPS,
     getTransitionAlpha: methods.getTransitionAlpha,
     getDiagnostics: methods.getDiagnostics,

@@ -25,6 +25,7 @@ import type {
   ColorOverrideFn,
   ClickBurstOptions,
   HSLPalette,
+  EasingMode,
 } from '../../types';
 import {
   themes,
@@ -138,6 +139,7 @@ const DEFAULTS = {
   themeTransitionDuration: 0.4,
   variantTransitionDuration: 0.3,
   renderScale: 1 as number | 'auto',
+  easing: 'smooth' as EasingMode,
 } as const;
 
 const FLICKER_SPEED_DEFAULT = 1;
@@ -231,6 +233,8 @@ export interface MatrixRainState {
     flickerSpeed?: number;
     /** 局部子格渲染倍率(0.3.0+)· 用户原值(number | 'auto') */
     renderScale: number | 'auto';
+    /** 全局过渡曲线(0.4.0+)· 'smooth' | 'linear' */
+    easing: EasingMode;
   };
 
   /**
@@ -333,7 +337,14 @@ export interface MatrixRainState {
   // ============ 过渡系统状态 ============
   /** E1:实例级软 alpha(0=全透明,1=全不透明) */
   transitionAlpha: number;
-  transitionAlphaAnim: { start: number; dur: number; from: number; to: number } | null;
+  transitionAlphaAnim: {
+    start: number;
+    dur: number;
+    from: number;
+    to: number;
+    /** 0.4.0+ per-call easing 覆盖(未传 = undefined,使用全局 cfg.easing) */
+    easing?: EasingMode;
+  } | null;
   /** C1:主题切换 HSL 插值 */
   themeTransition: {
     fromCold: HSLPalette;
@@ -343,6 +354,8 @@ export interface MatrixRainState {
     fromWtp: ThemeParams;
     start: number;
     dur: number;
+    /** 0.4.0+ per-call easing 覆盖 */
+    easing?: EasingMode;
   } | null;
   /** C2:主题参数切换插值 */
   themeParamsTransition: {
@@ -351,12 +364,16 @@ export interface MatrixRainState {
     fromWtp: ThemeParams;
     start: number;
     dur: number;
+    /** 0.4.0+ per-call easing 覆盖 */
+    easing?: EasingMode;
   } | null;
   /** D1:变体参数切换插值 */
   variantTransition: {
     fromVp: VariantParams;
     start: number;
     dur: number;
+    /** 0.4.0+ per-call easing 覆盖 */
+    easing?: EasingMode;
   } | null;
   /** B1/B2:阶段切换 crossfade */
   phaseTransition: {
@@ -498,6 +515,7 @@ export const createMatrixRainState = (options: MatrixRainOptions): MatrixRainSta
     targetFPS: options.targetFPS ?? DEFAULTS.targetFPS,
     flickerSpeed: options.flickerSpeed,
     renderScale: options.renderScale ?? DEFAULTS.renderScale,
+    easing: options.easing ?? DEFAULTS.easing,
   };
 
   // ============ 主题解析 ============
@@ -920,4 +938,132 @@ export const resolveEffectiveRenderScale = (state: MatrixRainState): number => {
     return state.targetActive && state.targetBitmap !== null ? 2 : 1;
   }
   return state.renderScaleUser;
+};
+
+/**
+ * 取一条 ease 曲线(0.4.0+)· 根据 easing mode 决定 cubic 还是恒等
+ * @param state MatrixRainState
+ * @param kind 'in' | 'out' | 'inOut' —— 对应 easeIn / easeOut / easeInOut
+ *   (仅在 mode='smooth' 时有差异;'linear' 模式三种都返恒等)
+ * @param override 可选 per-call 覆盖(从 transition 自身的 easing 字段读)
+ *   优先级:override > state.cfg.easing
+ */
+export const pickEasingFn = (
+  state: MatrixRainState,
+  kind: 'in' | 'out' | 'inOut',
+  override?: EasingMode
+): ((t: number) => number) => {
+  const mode = override ?? state.cfg.easing;
+  if (mode === 'linear') {
+    // 恒等:clamp 到 [0, 1]
+    return (t: number) => Math.max(0, Math.min(1, t));
+  }
+  switch (kind) {
+    case 'in':
+      return easeIn;
+    case 'out':
+      return easeOut;
+    case 'inOut':
+      return easeInOut;
+  }
+};
+
+// ==================== 打断与回退:getEffective*State helpers(0.4.0+)====================
+/**
+ * 5-tuple of current displayed theme values.
+ * - If a themeTransition is active: return lerp(from, current, eased(t))
+ * - Otherwise: return current state values directly
+ *
+ * Used by `setTheme` / `setThemeParams` to capture the current displayed
+ * state as the new transition's `from` — enabling smooth interrupt/rollback.
+ */
+export interface EffectiveThemeState {
+  cold: Palette;
+  warm: Palette;
+  tp: ThemeParams;
+  ctp: ThemeParams;
+  wtp: ThemeParams;
+}
+
+export const getEffectiveThemeState = (state: MatrixRainState): EffectiveThemeState => {
+  if (!state.themeTransition) {
+    return {
+      cold: state.coldPalette,
+      warm: state.warmPalette,
+      tp: state.tp,
+      ctp: state.ctp,
+      wtp: state.wtp,
+    };
+  }
+  const tt = (state.wallTime - state.themeTransition.start) / state.themeTransition.dur;
+  if (tt >= 1) {
+    return {
+      cold: state.coldPalette,
+      warm: state.warmPalette,
+      tp: state.tp,
+      ctp: state.ctp,
+      wtp: state.wtp,
+    };
+  }
+  const eased = pickEasingFn(
+    state,
+    'inOut',
+    state.themeTransition.easing
+  )(Math.min(1, Math.max(0, tt)));
+  return {
+    cold: lerpHSLPalette(state.themeTransition.fromCold, state.coldPalette, eased),
+    warm: lerpHSLPalette(state.themeTransition.fromWarm, state.warmPalette, eased),
+    tp: lerpThemeParams(state.themeTransition.fromTp, state.tp, eased),
+    ctp: lerpThemeParams(state.themeTransition.fromCtp, state.ctp, eased),
+    wtp: lerpThemeParams(state.themeTransition.fromWtp, state.wtp, eased),
+  };
+};
+
+/**
+ * 3-tuple of current displayed ThemeParams (tp / ctp / wtp) · 供 setThemeParams
+ * 在打断时取当前显示值作新 from。
+ */
+export interface EffectiveThemeParamsState {
+  tp: ThemeParams;
+  ctp: ThemeParams;
+  wtp: ThemeParams;
+}
+
+export const getEffectiveThemeParamsState = (state: MatrixRainState): EffectiveThemeParamsState => {
+  if (!state.themeParamsTransition) {
+    return { tp: state.tp, ctp: state.ctp, wtp: state.wtp };
+  }
+  const tt = (state.wallTime - state.themeParamsTransition.start) / state.themeParamsTransition.dur;
+  if (tt >= 1) {
+    return { tp: state.tp, ctp: state.ctp, wtp: state.wtp };
+  }
+  const eased = pickEasingFn(
+    state,
+    'inOut',
+    state.themeParamsTransition.easing
+  )(Math.min(1, Math.max(0, tt)));
+  return {
+    tp: lerpThemeParams(state.themeParamsTransition.fromTp, state.tp, eased),
+    ctp: lerpThemeParams(state.themeParamsTransition.fromCtp, state.ctp, eased),
+    wtp: lerpThemeParams(state.themeParamsTransition.fromWtp, state.wtp, eased),
+  };
+};
+
+/**
+ * Current displayed variant params · 供 setVariantParams 打断时取当前显示值作新 from。
+ */
+export const getEffectiveVariantState = (state: MatrixRainState): VariantParams => {
+  if (!state.variantTransition) {
+    return state.vp;
+  }
+  const tt = (state.wallTime - state.variantTransition.start) / state.variantTransition.dur;
+  if (tt >= 1) {
+    return state.vp;
+  }
+  const eased = pickEasingFn(
+    state,
+    'inOut',
+    state.variantTransition.easing
+  )(Math.min(1, Math.max(0, tt)));
+  return lerpVariantParams(state.variantTransition.fromVp, state.vp, eased);
 };

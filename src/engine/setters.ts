@@ -23,9 +23,16 @@ import type {
   ColorOverrides,
   Palette,
   CursorOption,
+  EasingMode,
 } from '../../types';
 import { compileUserFunction } from '../core';
-import { MatrixRainState, MatrixRainHooks } from './state';
+import {
+  MatrixRainState,
+  MatrixRainHooks,
+  getEffectiveThemeState,
+  getEffectiveThemeParamsState,
+  getEffectiveVariantState,
+} from './state';
 import { computeTargetOrigin } from './draw-helpers';
 
 // ==================== 工厂 ====================
@@ -67,6 +74,8 @@ export const createSetters = (
   | 'setDensity'
   | 'setRenderScale'
   | 'getRenderScale'
+  | 'setEasing'
+  | 'getEasing'
   | 'getFPS'
   | 'getTransitionAlpha'
   | 'getDiagnostics'
@@ -105,7 +114,19 @@ export const createSetters = (
   };
 
   // ============ 主题 ============
-  const setTheme = (name: ThemeName, themeOptions?: { keepPaletteParams?: boolean }): void => {
+  /**
+   * 动态更新主题
+   * @param name 主题名
+   * @param themeOptions
+   *   - keepPaletteParams: 保留 ctp/wtp 自定义
+   *   - dur: 覆盖该次切换的过渡时长(秒)· 0 = 立即切换· 不传 = 走 cfg.themeTransitionDur
+   *   - easing: 覆盖该次曲线 · 不传 = 走 cfg.easing
+   * **支持打断与回退** —— mid-flight 调用时,from 取当前显示值(插值)
+   */
+  const setTheme = (
+    name: ThemeName,
+    themeOptions?: { keepPaletteParams?: boolean; dur?: number; easing?: EasingMode }
+  ): void => {
     if (!hooks.applyTheme(name)) {
       return;
     }
@@ -115,62 +136,82 @@ export const createSetters = (
       state.ctp = { ...state.tp };
       state.wtp = { ...state.tp };
     }
-    // C1 主题切换 HSL 插值
-    if (state.themeTransitionDur > 0) {
+    // 0.4.0+ per-call dur override(0 = 立即切换;正数 = 时长;负数 / 不传 = 走 cfg)
+    const dur =
+      themeOptions?.dur !== undefined && themeOptions.dur >= 0
+        ? themeOptions.dur
+        : state.themeTransitionDur;
+    // 打断与回退(0.4.0+):从当前显示值出发,而不是从 oldColdPalette 等旧快照出发
+    const eff = getEffectiveThemeState(state);
+    if (dur > 0) {
       state.themeTransition = {
-        fromCold: { ...state.oldColdPalette },
-        fromWarm: { ...state.oldWarmPalette },
-        fromTp: { ...state.oldTp },
-        fromCtp: { ...state.oldCtp },
-        fromWtp: { ...state.oldWtp },
+        fromCold: { ...eff.cold },
+        fromWarm: { ...eff.warm },
+        fromTp: { ...eff.tp },
+        fromCtp: { ...eff.ctp },
+        fromWtp: { ...eff.wtp },
         start: state.wallTime,
-        dur: state.themeTransitionDur,
+        dur,
+        easing: themeOptions?.easing,
       };
       // 立即 LUT 失效
       state.paletteLUT.setPalettes(state.coldPalette, state.warmPalette);
     } else {
+      // dur=0 立即切换 · 打断当前过渡
+      state.themeTransition = null;
       state.paletteLUT.setPalettes(state.coldPalette, state.warmPalette);
     }
     hooks.fireOnThemeChange(name);
   };
 
-  const setThemeParams = (params: Partial<ThemeParams>): void => {
-    if (state.themeTransitionDur > 0) {
+  /** setThemeParams 共享逻辑 · 中断与回退 */
+  const setThemeParamsImpl = (
+    mutator: (s: typeof state) => void,
+    options?: { dur?: number; easing?: EasingMode }
+  ): void => {
+    const dur =
+      options?.dur !== undefined && options.dur >= 0 ? options.dur : state.themeTransitionDur;
+    const eff = getEffectiveThemeParamsState(state);
+    if (dur > 0) {
       state.themeParamsTransition = {
-        fromTp: { ...state.tp },
-        fromCtp: { ...state.ctp },
-        fromWtp: { ...state.wtp },
+        fromTp: { ...eff.tp },
+        fromCtp: { ...eff.ctp },
+        fromWtp: { ...eff.wtp },
         start: state.wallTime,
-        dur: state.themeTransitionDur,
+        dur,
+        easing: options?.easing,
       };
+    } else {
+      state.themeParamsTransition = null;
     }
-    state.tp = { ...state.tp, ...params };
+    mutator(state);
   };
 
-  const setColdThemeParams = (params: Partial<ThemeParams>): void => {
-    if (state.themeTransitionDur > 0) {
-      state.themeParamsTransition = {
-        fromTp: { ...state.tp },
-        fromCtp: { ...state.ctp },
-        fromWtp: { ...state.wtp },
-        start: state.wallTime,
-        dur: state.themeTransitionDur,
-      };
-    }
-    state.ctp = { ...state.ctp, ...params };
+  const setThemeParams = (
+    params: Partial<ThemeParams>,
+    options?: { dur?: number; easing?: EasingMode }
+  ): void => {
+    setThemeParamsImpl((s) => {
+      s.tp = { ...s.tp, ...params };
+    }, options);
   };
 
-  const setWarmThemeParams = (params: Partial<ThemeParams>): void => {
-    if (state.themeTransitionDur > 0) {
-      state.themeParamsTransition = {
-        fromTp: { ...state.tp },
-        fromCtp: { ...state.ctp },
-        fromWtp: { ...state.wtp },
-        start: state.wallTime,
-        dur: state.themeTransitionDur,
-      };
-    }
-    state.wtp = { ...state.wtp, ...params };
+  const setColdThemeParams = (
+    params: Partial<ThemeParams>,
+    options?: { dur?: number; easing?: EasingMode }
+  ): void => {
+    setThemeParamsImpl((s) => {
+      s.ctp = { ...s.ctp, ...params };
+    }, options);
+  };
+
+  const setWarmThemeParams = (
+    params: Partial<ThemeParams>,
+    options?: { dur?: number; easing?: EasingMode }
+  ): void => {
+    setThemeParamsImpl((s) => {
+      s.wtp = { ...s.wtp, ...params };
+    }, options);
   };
 
   // ============ 动态调参 ============
@@ -342,13 +383,28 @@ export const createSetters = (
   };
 
   // ============ 变体参数 ============
-  const setVariantParams = (params: Partial<VariantParams>): void => {
-    if (state.variantTransitionDur > 0) {
+  /**
+   * 动态调变体参数
+   * **支持打断与回退** —— mid-flight 调用时,from 取当前显示值(插值)
+   * @param options.dur 覆盖该次过渡时长(秒)· 不传 = 走 cfg.variantTransitionDur
+   * @param options.easing 覆盖该次曲线 · 不传 = 走 cfg.easing
+   */
+  const setVariantParams = (
+    params: Partial<VariantParams>,
+    options?: { dur?: number; easing?: EasingMode }
+  ): void => {
+    const dur =
+      options?.dur !== undefined && options.dur >= 0 ? options.dur : state.variantTransitionDur;
+    const effVp = getEffectiveVariantState(state);
+    if (dur > 0) {
       state.variantTransition = {
-        fromVp: { ...state.vp },
+        fromVp: { ...effVp },
         start: state.wallTime,
-        dur: state.variantTransitionDur,
+        dur,
+        easing: options?.easing,
       };
+    } else {
+      state.variantTransition = null;
     }
     state.vp = { ...state.vp, ...params };
   };
@@ -435,20 +491,46 @@ export const createSetters = (
   };
 
   // ============ 过渡 alpha ============
-  const setTransitionAlpha = (alpha: number, dur?: number): void => {
+  /**
+   * 软淡入/淡出 alpha
+   * @param alpha 目标透明度 0-1
+   * @param opts 接受 `number`(向后兼容,当 dur 传)或 options 对象 `{ dur?, easing? }`
+   * **支持打断与回退** —— mid-flight 调用时,from 取当前 alpha 值(原有行为已正确)
+   */
+  const setTransitionAlpha = (
+    alpha: number,
+    opts?: number | { dur?: number; easing?: EasingMode }
+  ): void => {
     const a = Math.max(0, Math.min(1, alpha));
-    if (dur !== undefined && dur > 0) {
+    // 向后兼容:number 直接当 dur;options 对象 / undefined 走对象格式
+    const normalized: { dur?: number; easing?: EasingMode } =
+      typeof opts === 'number' ? { dur: opts } : (opts ?? {});
+    if (normalized.dur !== undefined && normalized.dur > 0) {
       state.transitionAlphaAnim = {
         start: state.wallTime,
-        dur,
-        from: state.transitionAlpha,
+        dur: normalized.dur,
+        from: state.transitionAlpha, // 打断:始终从当前 alpha 出发(无 bug)
         to: a,
+        easing: normalized.easing,
       };
     } else {
       state.transitionAlpha = a;
       state.transitionAlphaAnim = null;
     }
   };
+
+  // ============ 全局过渡曲线(0.4.0+)============
+  /**
+   * 热更新全局过渡曲线
+   * - 'smooth': cubic ease(默认)
+   * - 'linear': 纯线性(无启停加速感)
+   * 影响所有 8 个内部 ease 调用点 + 所有 setter 启动的过渡
+   */
+  const setEasing = (mode: EasingMode): void => {
+    state.cfg = { ...state.cfg, easing: mode };
+    state.options = { ...state.options, easing: mode };
+  };
+  const getEasing = (): EasingMode => state.cfg.easing;
 
   // ============ 性能开关 ============
   const setFlickerSpeed = (speed: number): void => {
@@ -689,6 +771,7 @@ export const createSetters = (
     themeTransitionDuration: state.themeTransitionDur,
     variantTransitionDuration: state.variantTransitionDur,
     renderScale: state.cfg.renderScale,
+    easing: state.cfg.easing,
     clickBurst: state.clickBurstCfg.radius > 0 ? { ...state.clickBurstCfg } : false,
     cursor: (state.canvas.style.cursor || undefined) as CursorOption,
   });
@@ -728,6 +811,8 @@ export const createSetters = (
     setDensity,
     setRenderScale,
     getRenderScale,
+    setEasing,
+    getEasing,
     getFPS,
     getTransitionAlpha,
     getDiagnostics,

@@ -18,7 +18,7 @@
  *  · 三个变体的 warmth 阻尼 / 闪烁 / charsetFunc / 噪声→收敛 逻辑不变
  */
 
-import { MatrixRainState, Cell, easeIn, easeOut, FLICKER_SPEED_DEFAULT } from './state';
+import { MatrixRainState, Cell, pickEasingFn, FLICKER_SPEED_DEFAULT } from './state';
 
 // ==================== 共享 fillRGBA helper ====================
 
@@ -257,7 +257,7 @@ export const applyTargetBitmapPhase = (
       1,
       Math.max(0, (elapsed - c.lockEaseStart) / Math.max(0.001, state.cellLockEaseDur))
     );
-    const eased = easeOut(t);
+    const eased = pickEasingFn(state, 'out')(t);
     const resultL = c.lockEaseFromL * (1 - eased) + c.lockEaseToL * eased;
     if (t >= 1) {
       c.lockEaseStart = undefined;
@@ -276,7 +276,7 @@ export const applyTargetBitmapPhase = (
       1,
       Math.max(0, (elapsed - c.unlockEaseStart) / Math.max(0.001, state.cellLockEaseDur))
     );
-    const eased = easeIn(t);
+    const eased = pickEasingFn(state, 'in')(t);
     const resultL = c.unlockEaseFromL * (1 - eased) + c.unlockEaseToL * eased;
     if (t >= 1) {
       c.unlockEaseStart = undefined;
@@ -296,7 +296,7 @@ export const applyTargetBitmapPhase = (
     if (state.noiseFadeInDur > 0) {
       const t = Math.min(1, Math.max(0, elapsed / state.noiseFadeInDur));
       if (t < 1) {
-        const eased = easeOut(t);
+        const eased = pickEasingFn(state, 'out')(t);
         return {
           l: l * (1 - eased) + noiseL * eased,
           ch: Math.floor(Math.random() * state.charset.length),
@@ -392,7 +392,7 @@ export const applyTargetBitmapPhase = (
       1,
       Math.max(0, (elapsed - c.unlockEaseStart) / Math.max(0.001, state.cellLockEaseDur))
     );
-    const eased = easeIn(t);
+    const eased = pickEasingFn(state, 'in')(t);
     const resultL = c.unlockEaseFromL * (1 - eased) + c.unlockEaseToL * eased;
     if (t >= 1) {
       c.unlockEaseStart = undefined;

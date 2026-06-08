@@ -40,6 +40,16 @@ export type ThemeName = 'silicon-valley' | 'matrix-green' | 'lava-red' | 'cyber-
 /** 内置变体名 */
 export type VariantName = 'avalanche' | 'ripple' | 'ascii' | 'classic';
 
+/**
+ * 过渡曲线(0.4.0+)
+ * - `'smooth'`: cubic ease(默认,easeIn / easeOut / easeInOut 三种,按过渡点自动选)
+ * - `'linear'`: 纯线性 `t` 恒等(无加速/减速)
+ *
+ * 全局模式通过 `MatrixRainOptions.easing` 设置,通过 `setEasing(mode)` 热更新。
+ * 也可在单次 setter 调用时用 `{ easing: 'linear' }` 临时覆盖(见 setTheme 等)。
+ */
+export type EasingMode = 'smooth' | 'linear';
+
 /** 主题参数(随主题预设) */
 export interface ThemeParams {
   /** 整体亮度乘数(0-2, 默认 1) */
@@ -383,6 +393,18 @@ export interface MatrixRainOptions {
   /** 父容器(默认 document.body) */
   container?: HTMLElement;
 
+  /**
+   * 全局过渡曲线(0.4.0+)· 决定所有 8 个内部 ease 调用点的曲线
+   * - `'smooth'` (默认): cubic ease — 看起来"自然"但启停略有加速
+   * - `'linear'`: 纯线性 t — 启停匀速,无加速感
+   *
+   * 单次 setter 调用可以用 `{ easing: 'linear' }` 临时覆盖全局模式。
+   * 详情见 [README §平滑过渡时长 / 中断与回退]。
+   *
+   * @since 0.4.0
+   */
+  easing?: EasingMode;
+
   /** 启动后回调 */
   onReady?: (instance: MatrixRainInstance) => void;
 
@@ -431,10 +453,23 @@ export interface MatrixRainInstance {
    * 动态更新主题
    * @param name 主题名(从 ThemeName 枚举)
    * @param options.keepPaletteParams 传 true 时保留 ctp/wtp 自定义;默认 false 重置为新主题的 tp
+   * @param options.dur 覆盖该次切换的过渡时长(秒)· 0 = 立即切换· 不传 = 走 `themeTransitionDuration`
+   * @param options.easing 覆盖该次切换的曲线(`'smooth' | 'linear'`)· 不传 = 走全局 `easing`
+   *
+   * **支持打断与回退** —— 若调用时上一次切换正在过渡中,新切换的 `from` 取当前显示值(插值)
+   * (不是上次的原值),保证视觉上平滑衔接(无突跳)。
+   *
+   * @since 0.4.0 dur + easing 选项
    */
-  setTheme(name: ThemeName, options?: { keepPaletteParams?: boolean }): void;
+  setTheme(
+    name: ThemeName,
+    options?: { keepPaletteParams?: boolean; dur?: number; easing?: EasingMode }
+  ): void;
 
-  /** 动态更新色板(高级) */
+  /**
+   * 动态更新色板(高级)· 不走主题过渡(立即切换 LUT)
+   * 备注:不走打断逻辑,因为 setPalettes 直接 setPalettes(cold, warm) 无 from
+   */
   setPalettes(cold: Palette, warm: Palette): void;
 
   /** 动态调密度 */
@@ -476,10 +511,24 @@ export interface MatrixRainInstance {
    */
   setTargetFPS(fps: number): void;
 
-  /** 动态调主题参数(亮度/饱和度/色相) */
-  setThemeParams(params: Partial<ThemeParams>): void;
-  setColdThemeParams(params: Partial<ThemeParams>): void;
-  setWarmThemeParams(params: Partial<ThemeParams>): void;
+  /**
+   * 动态调主题参数(亮度/饱和度/色相)· 支持打断与回退
+   * @param options.dur 覆盖该次过渡时长(秒)· 不传 = 走 `themeTransitionDuration`
+   * @param options.easing 覆盖该次曲线(`'smooth' | 'linear'`)· 不传 = 走全局 `easing`
+   * @since 0.4.0 dur + easing 选项
+   */
+  setThemeParams(
+    params: Partial<ThemeParams>,
+    options?: { dur?: number; easing?: EasingMode }
+  ): void;
+  setColdThemeParams(
+    params: Partial<ThemeParams>,
+    options?: { dur?: number; easing?: EasingMode }
+  ): void;
+  setWarmThemeParams(
+    params: Partial<ThemeParams>,
+    options?: { dur?: number; easing?: EasingMode }
+  ): void;
 
   /** 热更新时间驱动色相旋转速度 */
   setHueRotate(speed: number, amount?: number): void;
@@ -487,8 +536,16 @@ export interface MatrixRainInstance {
   /** 热更新颜色注入(传 null 清除) */
   setColorOverrides(overrides: ColorOverrides | null): void;
 
-  /** 动态调变体参数(phase/sin 振幅/avalanche 速度等) */
-  setVariantParams(params: Partial<VariantParams>): void;
+  /**
+   * 动态调变体参数(phase/sin 振幅/avalanche 速度等)· 支持打断与回退
+   * @param options.dur 覆盖该次过渡时长(秒)· 不传 = 走 `variantTransitionDuration`
+   * @param options.easing 覆盖该次曲线(`'smooth' | 'linear'`)· 不传 = 走全局 `easing`
+   * @since 0.4.0 dur + easing 选项
+   */
+  setVariantParams(
+    params: Partial<VariantParams>,
+    options?: { dur?: number; easing?: EasingMode }
+  ): void;
 
   /** 热更新亮度曲线(null 清除) */
   setBrightnessCurve(code: string | null): void;
@@ -537,13 +594,33 @@ export interface MatrixRainInstance {
    * - 用于:路由切换/页面离开时优雅淡出;新实例淡入
    * - 不影响性能:在 LUT 输出端乘 alpha,无额外 LUT 重建
    * - alpha=1 时完全等价于未启用
+   * - **支持打断与回退** —— 若调用时上一次过渡还在进行,新动画的 from 取当前 alpha 值
+   *
    * @param alpha 目标透明度 0-1
-   * @param dur 可选 · 渐变时长(秒)。不传 = 立即切换;>0 = 在 dur 秒内线性插值
+   * @param opts 可选 · 接受 `number`(向后兼容,当 dur 传)或 options 对象 `{ dur?, easing? }`
+   *   - `dur` 渐变时长(秒)· 不传或 0 = 立即切换;>0 = 在 dur 秒内插值
+   *   - `easing` 该次曲线(`'smooth' | 'linear'`)· 不传 = 走全局 `easing`
    * @since 0.2.0
+   * @since 0.4.0 options 对象支持 dur + easing
    */
-  setTransitionAlpha(alpha: number, dur?: number): void;
+  setTransitionAlpha(
+    alpha: number,
+    opts?: number | { dur?: number; easing?: EasingMode }
+  ): void;
   /** 读取当前 transition alpha(测试用) @since 0.2.0 */
   getTransitionAlpha?(): number;
+
+  /**
+   * 热更新全局过渡曲线(0.4.0+)
+   * @param mode 'smooth' = cubic ease(默认),'linear' = 纯线性
+   * @since 0.4.0
+   */
+  setEasing(mode: EasingMode): void;
+  /**
+   * 读取当前全局过渡曲线(0.4.0+)
+   * @since 0.4.0
+   */
+  getEasing(): EasingMode;
 
   /** 读取当前 fps */
   getFPS(): number;
