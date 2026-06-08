@@ -243,10 +243,15 @@ function setLockOrder(o: typeof params.targetLockOrder) {
 function regenerate() {
   const inst = instance.value;
   if (!inst || !canvasRef.value) return;
-  const cols = Math.max(8, Math.floor(canvasRef.value.width / params.fontSize));
-  const rows = Math.max(6, Math.floor(canvasRef.value.height / params.fontSize));
+  // **DPR-safe** 修复:用 clientWidth/clientHeight(CSS 像素)而不是 canvas.width/height(DPR-缩放 backing store)
+  // 旧版用 canvas.width/height 传 textToBitmap,DPR=2 时 cols 翻倍 → 文字"过大"溢出
+  // 详见 docs/playwright/text-overflow-report.md(阶段 1 报告,commit 1efa77d)
+  const cssW = canvasRef.value.clientWidth || canvasRef.value.width;
+  const cssH = canvasRef.value.clientHeight || canvasRef.value.height;
+  const cols = Math.max(8, Math.floor(cssW / params.fontSize));
+  const rows = Math.max(6, Math.floor(cssH / params.fontSize));
   const text = (targetText.value || ' ').trim() || ' ';
-  const bm = textToBitmap(text, cols, rows);
+  const bm = textToBitmap(text, cols, rows, undefined, 'contain');
   inst.setTargetBitmap(bm, {
     phase: params.targetPhase,
     noiseDuration: params.targetNoiseDuration,

@@ -20,6 +20,19 @@ export interface UseMatrixRainOptions {
   destroyFadeOutDuration?: number;
 }
 
+/**
+ * 关于 fitMode 透传:
+ * - matrixRain 支持 MatrixRainOptions.targetFitMode('contain' | 'cover' | 'actual' | 'auto',默认 'contain')
+ * - useMatrixRain 把整个 optionsRef 透传给 matrixRain,所以 consumer 只要在 optionsRef 里加 targetFitMode 即可
+ * - 详见 types/index.d.ts 中 FitMode 的注释
+ * - 默认 contain 会自动检测 targetBitmap 是否溢出 grid(扫描非零像素 bbox),
+ *   若 cols/rows > 0.95 × grid 自动等比缩放,确保文字始终在可视区内
+ * - 旧版 Playground / BackgroundMatrixRain 调用方 bug 修复:
+ *   旧代码用 canvas.width/height(DPR-缩放 backing store)算 cols/rows 传给 textToBitmap
+ *   新代码改用 canvas.clientWidth/Height(CSS 像素)—— 但 fitMode='contain' 仍是兜底
+ *   即使未来再出现类似 bug,引擎层也会自动拦截
+ */
+
 export function useMatrixRain(
   optionsRef: Ref<MatrixRainOptions> | MaybeRef<MatrixRainOptions>,
   canvasRef: Ref<HTMLCanvasElement | null>,

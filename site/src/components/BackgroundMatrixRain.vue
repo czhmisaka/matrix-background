@@ -55,9 +55,13 @@ async function create() {
   if (props.text) {
     setTimeout(() => {
       if (!inst || !canvasRef.value) return;
-      const cols = Math.max(8, Math.floor(canvasRef.value.width / 14));
-      const rows = Math.max(6, Math.floor(canvasRef.value.height / 14));
-      const bm = mod.textToBitmap(props.text, cols, rows);
+      // **DPR-safe** 修复:用 clientWidth/clientHeight(CSS 像素)而不是 canvas.width/height
+      // 旧版用 DPR-缩放后的 backing store 尺寸传 textToBitmap,文字"过大"溢出可视区
+      const cssW = canvasRef.value.clientWidth || canvasRef.value.width;
+      const cssH = canvasRef.value.clientHeight || canvasRef.value.height;
+      const cols = Math.max(8, Math.floor(cssW / 14));
+      const rows = Math.max(6, Math.floor(cssH / 14));
+      const bm = mod.textToBitmap(props.text, cols, rows, undefined, 'contain');
       inst.setTargetBitmap(bm, {
         phase: 'noise-converge',
         noiseDuration: 0.5,
