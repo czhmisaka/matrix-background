@@ -273,7 +273,7 @@ function triggerConverge() {
     phase: 'noise-converge',
     noiseDuration: noiseDur.value,
     convergeDuration: convergeDur.value,
-    noiseFadeInDuration: noiseFadeIn.value,
+    fadeIn: noiseFadeIn.value,
     lockOrder: 'random',
     lockStability: 0.85,
     hold: Infinity,
