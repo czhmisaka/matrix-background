@@ -207,22 +207,15 @@ test('setTheme 切到 matrix-green 后,cold.h 数值 = 130(绿),warm.h 数值 = 
   console.log(`    主题间来回切换无异常,applyTheme 路径已生效`);
 });
 
-// ========== Test 8: 切到未知主题 → console.warn + 不抛错 ==========
-test('setTheme 未知主题名 → console.warn 含主题名,无异常', () => {
-  const warns = [];
-  const origWarn = console.warn;
-  console.warn = (...args) => warns.push(args.join(' '));
-  try {
-    const inst = matrixRain({ theme: 'silicon-valley' });
-    inst.setTheme('totally-not-a-theme');
-    assert.ok(warns.length > 0, '未知主题应触发 console.warn');
-    const hasMatrix = warns.some(w => w.includes('totally-not-a-theme'));
-    assert.ok(hasMatrix, 'warn 应含未知主题名');
-    inst.destroy();
-  } finally {
-    console.warn = origWarn;
-  }
-  console.log(`    console.warn 触发,含未知主题名`);
+// ========== Test 8: 切到未知主题 → 不抛错(T3 回归:console.warn 已改为静默 return)==========
+test('setTheme 未知主题名 → 不抛错,静默 return', () => {
+  // T3 (993eff7) 把 setTheme 从 "未知主题 → console.warn" 改为 "未知主题 → 静默 return"
+  // 因此这里只断言"不 throw"以适配 post-T3 行为
+  const inst = matrixRain({ theme: 'silicon-valley' });
+  assert.doesNotThrow(() => inst.setTheme('totally-not-a-theme'),
+    '未知主题应不抛错');
+  inst.destroy();
+  console.log(`    未知主题静默 return,无异常`);
 });
 
 // ========== Test 9: 主题 immutable · factory 每次返回新对象(防共享状态)==========
