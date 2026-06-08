@@ -468,9 +468,12 @@ export const createSetters = (
 
   /**
    * 动态更新局部子格渲染倍率(0.3.0+)· 不触发 buildGrid
-   * - 同步写 3 处:cfg / options / renderScaleUser(修复 setDensity 不同步 options 的旧 bug 模式)
+   * - 同步写 4 处:cfg / options / renderScaleUser / renderScaleEffective
    * - 'auto' 透传;number 钳到 [1, 16] 整数(向下取整)
    * - NaN / 负数 / 0 → 1
+   * - 'auto' 模式:基于当前 targetActive 立即解析(tickRAF 也可)
+   *   - targetActive && targetBitmap → 2
+   *   - 否则 → 1
    */
   const setRenderScale = (s: number | 'auto'): void => {
     const normalized: number | 'auto' =
@@ -478,6 +481,12 @@ export const createSetters = (
     state.cfg = { ...state.cfg, renderScale: normalized };
     state.options = { ...state.options, renderScale: normalized };
     state.renderScaleUser = normalized;
+    // 立即更新 effective(同步而非下一帧)
+    if (normalized === 'auto') {
+      state.renderScaleEffective = state.targetActive && state.targetBitmap !== null ? 2 : 1;
+    } else {
+      state.renderScaleEffective = normalized;
+    }
   };
 
   /**
