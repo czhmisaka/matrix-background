@@ -26,9 +26,6 @@ import {
 export type { MatrixRainRenderer, RendererImpl, RendererType };
 export { resolveRenderer };
 
-export type { MatrixRainRenderer, RendererImpl, RendererType };
-export { resolveRenderer };
-
 /**
  * 创建 renderer 实例(同步, 不 init)
  * - canvas2d: 直接 `new Canvas2DRenderer()`
