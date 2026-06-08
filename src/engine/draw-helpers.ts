@@ -110,6 +110,54 @@ export const drawInner = (
 // ==================== noise-converge 状态机 ====================
 
 /**
+ * 当前帧是否应启用局部子格渲染(0.3.0+)。
+ * - targetActive + targetBitmap + renderScaleEffective > 1
+ * - 仅在 noise-converge / fade 任一 phase 都生效(子格不区分 phase)
+ */
+export const shouldLocalBoost = (state: MatrixRainState): boolean => {
+  return state.targetActive && state.targetBitmap !== null && state.renderScaleEffective > 1;
+};
+
+/**
+ * 子格在父格内的细分倍率(state.renderScaleEffective 已经 normalize 到 >=1 整数)。
+ */
+export const subCellCount = (state: MatrixRainState): number => state.renderScaleEffective;
+
+/**
+ * 父格 (h, s) 是否在位图覆盖区(由当前帧 computeTargetOrigin 的 {ox,oy} 决定)。
+ * - bx = h - ox ∈ [0, targetCols) 且 by = s - oy ∈ [0, targetRows)
+ */
+export const isParentInBitmapRegion = (
+  state: MatrixRainState,
+  h: number,
+  s: number,
+  ox: number,
+  oy: number
+): boolean => {
+  const bx = h - ox;
+  const by = s - oy;
+  return bx >= 0 && bx < state.targetCols && by >= 0 && by < state.targetRows;
+};
+
+/**
+ * 子格 (hh, ss) 是否在位图覆盖区(由父格 (floor(hh/eff), floor(ss/eff)) 决定)。
+ */
+export const isSubCellInBitmapRegion = (
+  state: MatrixRainState,
+  hh: number,
+  ss: number,
+  eff: number,
+  ox: number,
+  oy: number
+): boolean => {
+  const parentH = Math.floor(hh / eff);
+  const parentS = Math.floor(ss / eff);
+  const bx = parentH - ox;
+  const by = parentS - oy;
+  return bx >= 0 && bx < state.targetCols && by >= 0 && by < state.targetRows;
+};
+
+/**
  * 推导锚点偏移(每帧调一次,然后所有 cell 共享)
  * 性能优化:避免每个 cell 重算 if 链
  */
@@ -369,6 +417,11 @@ export const applyTargetBitmapPhase = (
 /**
  * Classic 变体:3 sin 相加 + phaseStep + brightnessCurve + 完整 flicker / charset
  * 行为 100% 等价于原 drawClassic · 'ascii' 变体直接走同一路径
+ *
+ * 0.3.0+ renderScale 局部子格:
+ * - 父格 (h, s) 在位图区 → 调 computeParentCellStateClassic 一次(更新 c.phase/bright/ch)
+ *   然后画 eff×eff 个子格(每个 fillText 调 applyTargetBitmapPhase(c, hh, ss, l, undefined, true))
+ * - 父格不在位图区 → 走 drawParentCellClassic 原 1x 路径(行为完全不变)
  */
 export const drawClassic = (state: MatrixRainState): void => {
   const totalHue = state.dynamicHue + state.dynamicColorHue;
@@ -380,173 +433,362 @@ export const drawClassic = (state: MatrixRainState): void => {
   // noise-converge 模式:每帧调一次全局状态
   state.hooks.updateTargetBitmapPhaseGlobal();
 
+  // 局部子格?(0.3.0+)
+  const localBoost = shouldLocalBoost(state);
+  const eff = subCellCount(state);
+  const subEf = localBoost ? state.ef / eff : state.ef;
+  // 子格模式 set font 一次(覆盖 rAF 入口的 state.ef 设置)
+  if (localBoost) {
+    state.ctx.font = `${subEf}px "JetBrains Mono", ui-monospace, monospace`;
+  }
+  // 取光心(per-frame 不变,各 cell 共享)
+  const M =
+    state.r * state.lightCenter.x +
+    Math.cos(state.wallTime * state.driftSpeed.x * 60) * state.r * 0.2;
+  const p =
+    state.i * state.lightCenter.y +
+    Math.sin(state.wallTime * state.driftSpeed.y * 60) * state.i * 0.2;
+  // 锚点缓存(子格检测用)· 本模块直接 import computeTargetOrigin 避免绕 hooks
+  const { ox, oy } = computeTargetOrigin(state);
+
   for (let s = 0; s < state.i; s++) {
     const y = s * state.ef * 1.1 + state.ef * 0.55;
     for (let h = 0; h < state.r; h++) {
-      const c = state.b[s][h];
-      // phase 增量(dt-based:60fps 时与原 f-step 等价)
-      const basePhaseInc =
-        (state.effectiveVp.phaseStep + Math.random() * state.effectiveVp.phaseJitter) *
-        (state.cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT);
-      if (state.userFuncs.phaseFunc) {
-        state.__frameCtx.h = h;
-        state.__frameCtx.s = s;
-        state.__frameCtx.phase = c.phase;
-        state.__frameCtx.L = c.bright;
-        state.__frameCtx.ch = c.ch;
-        state.__frameCtx.r = Math.random();
-        c.phase += Number(state.userFuncs.phaseFunc(state.__frameCtx)) || 0;
+      if (localBoost && isParentInBitmapRegion(state, h, s, ox, oy)) {
+        // === 子格路径 ===
+        computeParentCellStateClassic(state, state.b[s][h], h, s, fBase1, fBase2);
+        const c = state.b[s][h];
+        for (let ss = 0; ss < eff; ss++) {
+          for (let hh = 0; hh < eff; hh++) {
+            const ghh = h * eff + hh;
+            const gss = s * eff + ss;
+            drawSubCellClassic(state, c, ghh, gss, eff, subEf, totalHue);
+          }
+        }
       } else {
-        c.phase += basePhaseInc * state.lastDt * 60;
+        // === 1x 路径(行为 100% 等价于改前)===
+        drawParentCellClassic(state, state.b[s][h], h, s, y, M, p, totalHue, fBase1, fBase2);
       }
-      const W =
-        Math.sin(c.phase) * state.effectiveVp.sinWeightA +
-        Math.sin((h + s) * 0.05 + fBase1) * state.effectiveVp.sinWeightB +
-        Math.sin(h * 0.1 - s * 0.07 + fBase2) * state.effectiveVp.sinWeightC;
-      // 亮度
-      let l: number;
-      if (state.userFuncs.brightnessCurve) {
-        state.__frameCtx.h = h;
-        state.__frameCtx.s = s;
-        state.__frameCtx.phase = c.phase;
-        state.__frameCtx.L = c.bright;
-        state.__frameCtx.ch = c.ch;
-        state.__frameCtx.r = Math.random();
-        const u = Number(state.userFuncs.brightnessCurve(state.__frameCtx));
-        l = Math.max(0, Math.min(1, isNaN(u) ? 0 : u));
-      } else {
-        l = Math.max(0, Math.min(1, (W + 1) * 0.5));
-      }
-      if (Math.random() < state.cfg.sparkProbability) l = 1;
-      c.bright = l;
-
-      // 目标位图覆盖(文字/图片)
-      let skipCharset = false;
-      if (state.targetBitmap && state.targetActive) {
-        if (state.targetPhase === 'noise-converge') {
-          const result = state.hooks.applyTargetBitmapPhase(c, h, s, l);
-          if (result) {
-            l = result.l;
-            c.ch = result.ch;
-            skipCharset = result.skipCharset;
-          }
-        } else {
-          // 'fade' 模式:线性透明度淡入(向后兼容)
-          let ox = 0,
-            oy = 0;
-          if (state.targetAnchor === 'center') {
-            ox = (state.r - state.targetCols) >> 1;
-            oy = (state.i - state.targetRows) >> 1;
-          } else if (state.targetAnchor === 'topRight') {
-            ox = state.r - state.targetCols;
-            oy = 0;
-          } else if (state.targetAnchor === 'bottomLeft') {
-            ox = 0;
-            oy = state.i - state.targetRows;
-          } else if (state.targetAnchor === 'bottomRight') {
-            ox = state.r - state.targetCols;
-            oy = state.i - state.targetRows;
-          }
-          if (state.targetMotion === 'drift') {
-            const period = (state.r + state.targetCols) / Math.max(0.1, state.targetMotionSpeed);
-            const t = state.wallTime - state.targetStartTime;
-            const phase = (t % period) / period;
-            ox = Math.floor(ox + phase * (state.r + state.targetCols)) - state.targetCols;
-          } else if (state.targetMotion === 'bounce') {
-            const period =
-              (2 * (state.r - state.targetCols)) / Math.max(0.1, state.targetMotionSpeed);
-            const t = state.wallTime - state.targetStartTime;
-            const phase = (t % period) / period;
-            const d2 = phase < 0.5 ? phase * 2 : 2 - phase * 2;
-            ox = Math.floor(d2 * (state.r - state.targetCols));
-          } else if (state.targetMotion === 'float') {
-            const t = state.wallTime - state.targetStartTime;
-            oy = Math.floor(oy + Math.sin(t * state.targetMotionSpeed * 2) * 3);
-          }
-          const bx = h - ox;
-          const by = s - oy;
-          if (bx >= 0 && bx < state.targetCols && by >= 0 && by < state.targetRows) {
-            const g = state.targetBitmap[by * state.targetCols + bx];
-            if (g > 0) {
-              const elapsed2 = state.wallTime - state.targetStartTime;
-              let vis = 1;
-              if (elapsed2 < state.targetFadeIn) vis = elapsed2 / state.targetFadeIn;
-              else if (elapsed2 > state.targetFadeIn + state.targetHold)
-                vis = Math.max(
-                  0,
-                  1 - (elapsed2 - state.targetFadeIn - state.targetHold) / state.targetFadeOut
-                );
-              if (elapsed2 > state.targetFadeIn + state.targetHold + state.targetFadeOut) {
-                state.targetActive = false;
-                state.targetBitmap = null;
-                if (!state.targetFinishFired) {
-                  state.targetFinishFired = true;
-                  state.hooks.fireOnTargetFinish();
-                }
-              } else {
-                const chaosFactor = (1 - vis) * state.targetChaos;
-                l = Math.max(0, Math.min(1, l + g * 0.7 * vis));
-                if (chaosFactor > 0 && Math.random() < chaosFactor) {
-                  c.ch = Math.floor(Math.random() * state.charset.length);
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // 闪烁 / 字符更新(noise-converge 接管时跳过)
-      if (!skipCharset) {
-        let F: number;
-        if (state.userFuncs.flickerCurve) {
-          state.__frameCtx.h = h;
-          state.__frameCtx.s = s;
-          state.__frameCtx.phase = c.phase;
-          state.__frameCtx.L = l;
-          state.__frameCtx.ch = c.ch;
-          state.__frameCtx.r = Math.random();
-          F = Number(state.userFuncs.flickerCurve(state.__frameCtx)) || 0;
-        } else {
-          F =
-            l >= 0.66
-              ? state.flicker.high
-              : l >= 0.33
-                ? state.flicker.mid
-                : l >= 0.05
-                  ? state.flicker.low
-                  : state.flicker.dark;
-        }
-        if (Math.random() < F) c.ch = Math.floor(Math.random() * state.charset.length);
-        if (state.effectiveVp.chUpdateProb > 0 && Math.random() < state.effectiveVp.chUpdateProb)
-          c.ch = Math.floor(Math.random() * state.charset.length);
-        if (state.userFuncs.charsetFunc) {
-          state.__frameCtx.h = h;
-          state.__frameCtx.s = s;
-          state.__frameCtx.phase = c.phase;
-          state.__frameCtx.L = l;
-          state.__frameCtx.ch = c.ch;
-          state.__frameCtx.r = Math.random();
-          const u = Number(state.userFuncs.charsetFunc(state.__frameCtx));
-          if (!isNaN(u)) c.ch = Math.max(0, Math.min(state.charset.length - 1, Math.floor(u)));
-        }
-      }
-
-      // 取光心(M, p)从 orchestrator 缓存 · 这里直接从 state 重新计算(便宜)
-      const M =
-        state.r * state.lightCenter.x +
-        Math.cos(state.wallTime * state.driftSpeed.x * 60) * state.r * 0.2;
-      const p =
-        state.i * state.lightCenter.y +
-        Math.sin(state.wallTime * state.driftSpeed.y * 60) * state.i * 0.2;
-
-      drawInner(state, c, h, s, y, l, M, p, totalHue);
     }
   }
 };
 
 /**
+ * Classic 父格状态计算(0.3.0+ 子格路径用)
+ * - 父格 c.phase / c.bright 更新 1 次
+ * - lockedCh 随机化判断 1 次(子格循环里跳过 c.lockedCh 写)
+ * - 不调用 drawInner(留给 drawSubCellClassic)
+ */
+const computeParentCellStateClassic = (
+  state: MatrixRainState,
+  c: Cell,
+  h: number,
+  s: number,
+  fBase1: number,
+  fBase2: number
+): void => {
+  // phase 增量(dt-based:60fps 时与原 f-step 等价)
+  const basePhaseInc =
+    (state.effectiveVp.phaseStep + Math.random() * state.effectiveVp.phaseJitter) *
+    (state.cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT);
+  if (state.userFuncs.phaseFunc) {
+    state.__frameCtx.h = h;
+    state.__frameCtx.s = s;
+    state.__frameCtx.phase = c.phase;
+    state.__frameCtx.L = c.bright;
+    state.__frameCtx.ch = c.ch;
+    state.__frameCtx.r = Math.random();
+    c.phase += Number(state.userFuncs.phaseFunc(state.__frameCtx)) || 0;
+  } else {
+    c.phase += basePhaseInc * state.lastDt * 60;
+  }
+  const W =
+    Math.sin(c.phase) * state.effectiveVp.sinWeightA +
+    Math.sin((h + s) * 0.05 + fBase1) * state.effectiveVp.sinWeightB +
+    Math.sin(h * 0.1 - s * 0.07 + fBase2) * state.effectiveVp.sinWeightC;
+  // 亮度
+  let l: number;
+  if (state.userFuncs.brightnessCurve) {
+    state.__frameCtx.h = h;
+    state.__frameCtx.s = s;
+    state.__frameCtx.phase = c.phase;
+    state.__frameCtx.L = c.bright;
+    state.__frameCtx.ch = c.ch;
+    state.__frameCtx.r = Math.random();
+    const u = Number(state.userFuncs.brightnessCurve(state.__frameCtx));
+    l = Math.max(0, Math.min(1, isNaN(u) ? 0 : u));
+  } else {
+    l = Math.max(0, Math.min(1, (W + 1) * 0.5));
+  }
+  if (Math.random() < state.cfg.sparkProbability) l = 1;
+  c.bright = l;
+};
+
+/**
+ * Classic 父格 1x 绘制(从原 drawClassic 内联抽出,行为完全不变)
+ */
+const drawParentCellClassic = (
+  state: MatrixRainState,
+  c: Cell,
+  h: number,
+  s: number,
+  y: number,
+  M: number,
+  p: number,
+  totalHue: number,
+  fBase1: number,
+  fBase2: number
+): void => {
+  computeParentCellStateClassic(state, c, h, s, fBase1, fBase2);
+  // 用刚算的 c.bright 作为本 cell 的 l 起点(可能在 targetBitmap / fade 中被改写)
+  let l = c.bright;
+
+  // 目标位图覆盖(文字/图片)
+  let skipCharset = false;
+  if (state.targetBitmap && state.targetActive) {
+    if (state.targetPhase === 'noise-converge') {
+      const result = state.hooks.applyTargetBitmapPhase(c, h, s, l);
+      if (result) {
+        l = result.l;
+        c.ch = result.ch;
+        skipCharset = result.skipCharset;
+      }
+    } else {
+      // 'fade' 模式:线性透明度淡入(向后兼容)
+      let ox = 0,
+        oy = 0;
+      if (state.targetAnchor === 'center') {
+        ox = (state.r - state.targetCols) >> 1;
+        oy = (state.i - state.targetRows) >> 1;
+      } else if (state.targetAnchor === 'topRight') {
+        ox = state.r - state.targetCols;
+        oy = 0;
+      } else if (state.targetAnchor === 'bottomLeft') {
+        ox = 0;
+        oy = state.i - state.targetRows;
+      } else if (state.targetAnchor === 'bottomRight') {
+        ox = state.r - state.targetCols;
+        oy = state.i - state.targetRows;
+      }
+      if (state.targetMotion === 'drift') {
+        const period = (state.r + state.targetCols) / Math.max(0.1, state.targetMotionSpeed);
+        const t = state.wallTime - state.targetStartTime;
+        const phase = (t % period) / period;
+        ox = Math.floor(ox + phase * (state.r + state.targetCols)) - state.targetCols;
+      } else if (state.targetMotion === 'bounce') {
+        const period = (2 * (state.r - state.targetCols)) / Math.max(0.1, state.targetMotionSpeed);
+        const t = state.wallTime - state.targetStartTime;
+        const phase = (t % period) / period;
+        const d2 = phase < 0.5 ? phase * 2 : 2 - phase * 2;
+        ox = Math.floor(d2 * (state.r - state.targetCols));
+      } else if (state.targetMotion === 'float') {
+        const t = state.wallTime - state.targetStartTime;
+        oy = Math.floor(oy + Math.sin(t * state.targetMotionSpeed * 2) * 3);
+      }
+      const bx = h - ox;
+      const by = s - oy;
+      if (bx >= 0 && bx < state.targetCols && by >= 0 && by < state.targetRows) {
+        const g = state.targetBitmap[by * state.targetCols + bx];
+        if (g > 0) {
+          const elapsed2 = state.wallTime - state.targetStartTime;
+          let vis = 1;
+          if (elapsed2 < state.targetFadeIn) vis = elapsed2 / state.targetFadeIn;
+          else if (elapsed2 > state.targetFadeIn + state.targetHold)
+            vis = Math.max(
+              0,
+              1 - (elapsed2 - state.targetFadeIn - state.targetHold) / state.targetFadeOut
+            );
+          if (elapsed2 > state.targetFadeIn + state.targetHold + state.targetFadeOut) {
+            state.targetActive = false;
+            state.targetBitmap = null;
+            if (!state.targetFinishFired) {
+              state.targetFinishFired = true;
+              state.hooks.fireOnTargetFinish();
+            }
+          } else {
+            const chaosFactor = (1 - vis) * state.targetChaos;
+            l = Math.max(0, Math.min(1, l + g * 0.7 * vis));
+            if (chaosFactor > 0 && Math.random() < chaosFactor) {
+              c.ch = Math.floor(Math.random() * state.charset.length);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 闪烁 / 字符更新(noise-converge 接管时跳过)
+  if (!skipCharset) {
+    let F: number;
+    if (state.userFuncs.flickerCurve) {
+      state.__frameCtx.h = h;
+      state.__frameCtx.s = s;
+      state.__frameCtx.phase = c.phase;
+      state.__frameCtx.L = l;
+      state.__frameCtx.ch = c.ch;
+      state.__frameCtx.r = Math.random();
+      F = Number(state.userFuncs.flickerCurve(state.__frameCtx)) || 0;
+    } else {
+      F =
+        l >= 0.66
+          ? state.flicker.high
+          : l >= 0.33
+            ? state.flicker.mid
+            : l >= 0.05
+              ? state.flicker.low
+              : state.flicker.dark;
+    }
+    if (Math.random() < F) c.ch = Math.floor(Math.random() * state.charset.length);
+    if (state.effectiveVp.chUpdateProb > 0 && Math.random() < state.effectiveVp.chUpdateProb)
+      c.ch = Math.floor(Math.random() * state.charset.length);
+    if (state.userFuncs.charsetFunc) {
+      state.__frameCtx.h = h;
+      state.__frameCtx.s = s;
+      state.__frameCtx.phase = c.phase;
+      state.__frameCtx.L = l;
+      state.__frameCtx.ch = c.ch;
+      state.__frameCtx.r = Math.random();
+      const u = Number(state.userFuncs.charsetFunc(state.__frameCtx));
+      if (!isNaN(u)) c.ch = Math.max(0, Math.min(state.charset.length - 1, Math.floor(u)));
+    }
+  }
+
+  drawInner(state, c, h, s, y, l, M, p, totalHue);
+};
+
+/**
+ * Classic 子格绘制(0.3.0+)
+ * - 父 cell 状态(phase/bright/ch)已由 computeParentCellStateClassic 算好
+ * - 子格 (hh, ss) 调 applyTargetBitmapPhase(c, hh, ss, l, undefined, true)
+ *   → bx = floor(hh/eff) - ox 自动映射回父格 → 位图索引
+ * - 锁定:读 c.lockedCh(不写,父粒度已随机化)
+ * - 未锁:每次独立 ch = random(子格位置不同,字符不同)
+ * - fillText 用 subEf 字号
+ */
+const drawSubCellClassic = (
+  state: MatrixRainState,
+  c: Cell,
+  hh: number,
+  ss: number,
+  _eff: number,
+  subEf: number,
+  totalHue: number
+): void => {
+  // 子格继承父 l(c.bright)与 ch(c.ch)作为起点
+  let l = c.bright;
+  // 子格层调 applyTargetBitmapPhase(isSub=true)
+  if (state.targetBitmap && state.targetActive) {
+    if (state.targetPhase === 'noise-converge') {
+      const result = state.hooks.applyTargetBitmapPhase(c, hh, ss, l, undefined, true);
+      if (result) {
+        l = result.l;
+        // 子格 ch 由 applyTargetBitmapPhase 返回;不写回 c.ch
+        // (只画当前子格,4 子格 ch 独立)
+        drawInnerSub(
+          state,
+          c,
+          hh,
+          ss,
+          subEf,
+          ss * subEf * 1.1 + subEf * 0.55,
+          l,
+          totalHue,
+          result.ch
+        );
+        return;
+      }
+    } else {
+      // 'fade' 模式:子格不重新做 motion 逻辑(锚点每帧缓存)· 仅在位图区内叠加
+      // 为简洁:子格在 fade 模式直接读 g(若 > 0 叠加到 l)
+      const { ox, oy } = computeTargetOrigin(state);
+      const bx = Math.floor(hh / _eff) - ox;
+      const by = Math.floor(ss / _eff) - oy;
+      if (bx >= 0 && bx < state.targetCols && by >= 0 && by < state.targetRows) {
+        const g = state.targetBitmap[by * state.targetCols + bx];
+        if (g > 0) {
+          const elapsed2 = state.wallTime - state.targetStartTime;
+          let vis = 1;
+          if (elapsed2 < state.targetFadeIn) vis = elapsed2 / state.targetFadeIn;
+          else if (elapsed2 > state.targetFadeIn + state.targetHold)
+            vis = Math.max(
+              0,
+              1 - (elapsed2 - state.targetFadeIn - state.targetHold) / state.targetFadeOut
+            );
+          l = Math.max(0, Math.min(1, l + g * 0.7 * vis));
+        }
+      }
+    }
+  }
+  // 默认:用父 c.ch
+  drawInnerSub(state, c, hh, ss, subEf, ss * subEf * 1.1 + subEf * 0.55, l, totalHue, c.ch);
+};
+
+/**
+ * 子格版 drawInner(0.3.0+)
+ * - 不写 c.warmth(warmth 阻尼用父粒度,子格继承)
+ * - 不写 c.bright / c.ch(父已算好,子格只读)
+ * - fillText 坐标: (hh * subEf + subEf/2, ss * subEf * 1.1 + subEf * 0.55)
+ *   → 沿用 classic 的 1.1 行高 + 0.55 中心偏置公式
+ * - 颜色/blend:走第三层 LUT 路径(同 drawFillBlended)
+ * - colorOverride:子格用子格坐标 (hh, ss) + 父 cell 状态
+ */
+const drawInnerSub = (
+  state: MatrixRainState,
+  c: Cell,
+  hh: number,
+  ss: number,
+  subEf: number,
+  y: number,
+  l: number,
+  totalHue: number,
+  ch: number
+): void => {
+  if (l < 0.02) return;
+  // 子格只读父 cell 的 c.warmth(不写 c.warmth,避免每子格 4x 阻尼更新)
+  const d = Math.max(0, Math.min(1, c.warmth));
+
+  // colorOverride fast path
+  const __lIdx = (l * 9) | 0;
+  if (state.colorOverrideFn) {
+    const out = state.colorOverrideFn(__lIdx, hh, ss, {
+      ch,
+      warmth: d,
+      bright: c.bright,
+      phase: c.phase,
+    });
+    if (out) {
+      state.ctx.fillStyle = `rgba(${out[0]}, ${out[1]}, ${out[2]}, 0.9)`;
+      state.ctx.fillText(state.charset[ch], hh * subEf + subEf / 2, y);
+      return;
+    }
+  } else if (state.colorOverrides && typeof state.colorOverrides === 'object') {
+    const ov = (state.colorOverrides as Record<number, [number, number, number]>)[__lIdx];
+    if (ov) {
+      state.ctx.fillStyle = `rgba(${ov[0]}, ${ov[1]}, ${ov[2]}, 0.9)`;
+      state.ctx.fillText(state.charset[ch], hh * subEf + subEf / 2, y);
+      return;
+    }
+  }
+
+  // 第三层 LUT(冷暖 + applyTP 全部 bake 完)· 同 drawFillBlended
+  const blendedLUT = state.paletteLUT.getBlendedLUT(state.effectiveTp, totalHue, d);
+  const lIdx = (l * 255) | 0;
+  const R2 = blendedLUT.r[lIdx];
+  const G2 = blendedLUT.g[lIdx];
+  const B2 = blendedLUT.b[lIdx];
+  const k = blendedLUT.a[lIdx] / 255;
+  const finalA = k * state.transitionAlpha;
+  state.ctx.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${finalA})`;
+  state.ctx.fillText(state.charset[ch], hh * subEf + subEf / 2, y);
+};
+
+/**
  * Avalanche 变体:yPos 沿 row 方向下移 + headBright 距离衰减 + 简单 flicker
  * 行为 100% 等价于原 drawAvalanche · 走共享 drawInner 路径(走简化 colorOverride)
+ *
+ * 0.3.0+ renderScale:
+ * - 头亮 trail 按行对齐 · 子格只在列方向生效(横向更锐,纵向密度不变)
+ * - 子格 y 用 c.yPos! * subEf * 1.1(共享父 y,整行子格在同一水平线)
  */
 export const drawAvalanche = (state: MatrixRainState): void => {
   const totalHue = state.dynamicHue + state.dynamicColorHue;
@@ -555,52 +797,129 @@ export const drawAvalanche = (state: MatrixRainState): void => {
   const yPosSpeed = state.effectiveVp.avalancheSpeed;
   state.hooks.updateTargetBitmapPhaseGlobal();
 
+  const localBoost = shouldLocalBoost(state);
+  const eff = subCellCount(state);
+  const subEf = localBoost ? state.ef / eff : state.ef;
+  if (localBoost) {
+    state.ctx.font = `${subEf}px "JetBrains Mono", ui-monospace, monospace`;
+  }
   const M =
     state.r * state.lightCenter.x +
     Math.cos(state.wallTime * state.driftSpeed.x * 60) * state.r * 0.2;
   const p =
     state.i * state.lightCenter.y +
     Math.sin(state.wallTime * state.driftSpeed.y * 60) * state.i * 0.2;
+  const { ox, oy } = computeTargetOrigin(state);
 
   for (let s = 0; s < state.i; s++) {
     for (let h = 0; h < state.r; h++) {
       const c = state.b[s][h];
-      // yPos 移动(dt-based;60fps 等价)
-      c.yPos! += c.speed! * yPosSpeed * state.lastDt * 60;
-      if (c.yPos! > state.i) c.yPos = 0;
-
-      const distFromHead = Math.abs(s - Math.floor(c.yPos!));
-      let l = Math.max(
-        0,
-        Math.min(1, (c.headBright! - Math.pow(distFromHead, state.effectiveVp.headFalloff)) / 8)
-      );
-      c.bright = l;
-
-      // 噪声→收敛模式
-      let skipCharset = false;
-      if (state.targetBitmap && state.targetActive && state.targetPhase === 'noise-converge') {
-        const result = state.hooks.applyTargetBitmapPhase(c, h, s, l);
-        if (result) {
-          l = result.l;
-          c.ch = result.ch;
-          skipCharset = result.skipCharset;
+      if (localBoost && isParentInBitmapRegion(state, h, s, ox, oy)) {
+        // === 子格路径 ===
+        computeParentCellStateAvalanche(state, c, s, yPosSpeed);
+        for (let hh = 0; hh < eff; hh++) {
+          const ghh = h * eff + hh;
+          drawSubCellAvalanche(state, c, ghh, s, eff, subEf, totalHue);
         }
+      } else {
+        // === 1x 路径(行为 100% 等价于改前)===
+        drawParentCellAvalanche(state, c, h, s, yPosSpeed, M, p, totalHue);
       }
-
-      if (!skipCharset && Math.random() < state.effectiveVp.chUpdateProb)
-        c.ch = Math.floor(Math.random() * state.charset.length);
-      if (l < 0.02) continue;
-
-      // 走共享 drawInner(warmth 阻尼 + colorOverride + 第三层 LUT 全在其中)
-      const y = c.yPos! * state.ef * 1.1;
-      drawInner(state, c, h, s, y, l, M, p, totalHue);
     }
   }
 };
 
 /**
+ * Avalanche 父格状态计算(0.3.0+ 子格路径用)
+ * - yPos 推进 1 次(避免子格 4x 推进)
+ * - 头亮 l 算 1 次写入 c.bright
+ */
+const computeParentCellStateAvalanche = (
+  state: MatrixRainState,
+  c: Cell,
+  s: number,
+  yPosSpeed: number
+): void => {
+  c.yPos! += c.speed! * yPosSpeed * state.lastDt * 60;
+  if (c.yPos! > state.i) c.yPos = 0;
+
+  const distFromHead = Math.abs(s - Math.floor(c.yPos!));
+  const l = Math.max(
+    0,
+    Math.min(1, (c.headBright! - Math.pow(distFromHead, state.effectiveVp.headFalloff)) / 8)
+  );
+  c.bright = l;
+};
+
+/**
+ * Avalanche 父格 1x 绘制(从原 drawAvalanche 抽出,行为完全不变)
+ */
+const drawParentCellAvalanche = (
+  state: MatrixRainState,
+  c: Cell,
+  h: number,
+  s: number,
+  yPosSpeed: number,
+  M: number,
+  p: number,
+  totalHue: number
+): void => {
+  computeParentCellStateAvalanche(state, c, s, yPosSpeed);
+  let l = c.bright;
+
+  // 噪声→收敛模式
+  let skipCharset = false;
+  if (state.targetBitmap && state.targetActive && state.targetPhase === 'noise-converge') {
+    const result = state.hooks.applyTargetBitmapPhase(c, h, s, l);
+    if (result) {
+      l = result.l;
+      c.ch = result.ch;
+      skipCharset = result.skipCharset;
+    }
+  }
+
+  if (!skipCharset && Math.random() < state.effectiveVp.chUpdateProb)
+    c.ch = Math.floor(Math.random() * state.charset.length);
+  if (l < 0.02) return;
+
+  const y = c.yPos! * state.ef * 1.1;
+  drawInner(state, c, h, s, y, l, M, p, totalHue);
+};
+
+/**
+ * Avalanche 子格绘制(0.3.0+)
+ * - 父 cell 状态已由 computeParentCellStateAvalanche 算好
+ * - 子格 y = c.yPos! * subEf * 1.1(共享父 y,整行子格同水平线)
+ */
+const drawSubCellAvalanche = (
+  state: MatrixRainState,
+  c: Cell,
+  hh: number,
+  _ss: number,
+  _eff: number,
+  subEf: number,
+  totalHue: number
+): void => {
+  let l = c.bright;
+  if (state.targetBitmap && state.targetActive && state.targetPhase === 'noise-converge') {
+    const result = state.hooks.applyTargetBitmapPhase(c, hh, _ss, l, undefined, true);
+    if (result) {
+      l = result.l;
+      const y = c.yPos! * subEf * 1.1;
+      drawInnerSub(state, c, hh, _ss, subEf, y, l, totalHue, result.ch);
+      return;
+    }
+  }
+  const y = c.yPos! * subEf * 1.1;
+  drawInnerSub(state, c, hh, _ss, subEf, y, l, totalHue, c.ch);
+};
+
+/**
  * Ripple 变体:简化 phase + sin(phase) * 0.5 + 简单 flicker
  * 行为 100% 等价于原 drawRipple · 走共享 drawInner 路径
+ *
+ * 0.3.0+ renderScale:与 classic 共享同一子格 y 公式 (s * subEf * 1.1 + subEf * 0.55)
+ * → 直接复用 drawSubCellClassic(走 noise-converge 子格路径)
  */
 export const drawRipple = (state: MatrixRainState): void => {
   const totalHue = state.dynamicHue + state.dynamicColorHue;
@@ -608,43 +927,86 @@ export const drawRipple = (state: MatrixRainState): void => {
   state.__frameCtx.t = state.wallTime;
   state.hooks.updateTargetBitmapPhaseGlobal();
 
+  const localBoost = shouldLocalBoost(state);
+  const eff = subCellCount(state);
+  const subEf = localBoost ? state.ef / eff : state.ef;
+  if (localBoost) {
+    state.ctx.font = `${subEf}px "JetBrains Mono", ui-monospace, monospace`;
+  }
   const M =
     state.r * state.lightCenter.x +
     Math.cos(state.wallTime * state.driftSpeed.x * 60) * state.r * 0.2;
   const p =
     state.i * state.lightCenter.y +
     Math.sin(state.wallTime * state.driftSpeed.y * 60) * state.i * 0.2;
+  const { ox, oy } = computeTargetOrigin(state);
 
   for (let s = 0; s < state.i; s++) {
     const y = s * state.ef * 1.1 + state.ef * 0.55;
     for (let h = 0; h < state.r; h++) {
-      const c = state.b[s][h];
-      c.phase +=
-        (state.effectiveVp.phaseStep + Math.random() * state.effectiveVp.phaseJitter) *
-        (state.cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT) *
-        state.lastDt *
-        60;
-      const W = Math.sin(c.phase) * state.effectiveVp.sinWeightA + 0.5;
-      let l = Math.max(0, Math.min(1, W));
-      c.bright = l;
-
-      // 噪声→收敛模式
-      let skipCharset = false;
-      if (state.targetBitmap && state.targetActive && state.targetPhase === 'noise-converge') {
-        const result = state.hooks.applyTargetBitmapPhase(c, h, s, l);
-        if (result) {
-          l = result.l;
-          c.ch = result.ch;
-          skipCharset = result.skipCharset;
+      if (localBoost && isParentInBitmapRegion(state, h, s, ox, oy)) {
+        // === 子格路径 · 复用 classic 子格 helper(同 y 公式)===
+        computeParentCellStateRipple(state, state.b[s][h]);
+        const c = state.b[s][h];
+        for (let ss = 0; ss < eff; ss++) {
+          for (let hh = 0; hh < eff; hh++) {
+            const ghh = h * eff + hh;
+            const gss = s * eff + ss;
+            drawSubCellClassic(state, c, ghh, gss, eff, subEf, totalHue);
+          }
         }
+      } else {
+        // === 1x 路径(行为 100% 等价于改前)===
+        drawParentCellRipple(state, state.b[s][h], h, s, y, M, p, totalHue);
       }
-
-      if (!skipCharset && Math.random() < state.effectiveVp.chUpdateProb)
-        c.ch = Math.floor(Math.random() * state.charset.length);
-      if (l < 0.02) continue;
-
-      // 走共享 drawInner
-      drawInner(state, c, h, s, y, l, M, p, totalHue);
     }
   }
+};
+
+/**
+ * Ripple 父格状态计算(0.3.0+ 子格路径用)
+ */
+const computeParentCellStateRipple = (state: MatrixRainState, c: Cell): void => {
+  c.phase +=
+    (state.effectiveVp.phaseStep + Math.random() * state.effectiveVp.phaseJitter) *
+    (state.cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT) *
+    state.lastDt *
+    60;
+  const W = Math.sin(c.phase) * state.effectiveVp.sinWeightA + 0.5;
+  const l = Math.max(0, Math.min(1, W));
+  c.bright = l;
+};
+
+/**
+ * Ripple 父格 1x 绘制(从原 drawRipple 抽出,行为完全不变)
+ */
+const drawParentCellRipple = (
+  state: MatrixRainState,
+  c: Cell,
+  h: number,
+  s: number,
+  y: number,
+  M: number,
+  p: number,
+  totalHue: number
+): void => {
+  computeParentCellStateRipple(state, c);
+  let l = c.bright;
+
+  // 噪声→收敛模式
+  let skipCharset = false;
+  if (state.targetBitmap && state.targetActive && state.targetPhase === 'noise-converge') {
+    const result = state.hooks.applyTargetBitmapPhase(c, h, s, l);
+    if (result) {
+      l = result.l;
+      c.ch = result.ch;
+      skipCharset = result.skipCharset;
+    }
+  }
+
+  if (!skipCharset && Math.random() < state.effectiveVp.chUpdateProb)
+    c.ch = Math.floor(Math.random() * state.charset.length);
+  if (l < 0.02) return;
+
+  drawInner(state, c, h, s, y, l, M, p, totalHue);
 };
