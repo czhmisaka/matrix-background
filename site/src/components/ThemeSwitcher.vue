@@ -43,7 +43,8 @@ function shortLabel(t: ThemeName) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 8px 14px;
+  min-height: 32px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 999px;
@@ -54,7 +55,10 @@ function shortLabel(t: ThemeName) {
   transition: all 160ms ease;
   white-space: nowrap;
 }
-.ts-btn:hover { color: var(--text); background: var(--bg-soft); }
+.ts-btn:hover {
+  color: var(--text);
+  background: var(--bg-soft);
+}
 .ts-btn.active {
   background: var(--bg-elev-2);
   color: var(--text);
@@ -62,7 +66,8 @@ function shortLabel(t: ThemeName) {
   box-shadow: 0 0 0 1px var(--swatch) inset;
 }
 .ts-dot {
-  width: 8px; height: 8px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--swatch);
   box-shadow: 0 0 6px var(--swatch);

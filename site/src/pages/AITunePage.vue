@@ -46,7 +46,9 @@
               title="折叠/展开"
               aria-label="折叠/展开 AI 对话"
               @click="overlayCollapsed = !overlayCollapsed"
-            >▾</button>
+            >
+              ▾
+            </button>
           </div>
           <ChatLog
             :messages="messages"
@@ -61,8 +63,15 @@
               placeholder="描述背景效果·如:熔岩红 雪崩下落 慢节奏"
               maxlength="200"
               aria-label="AI 调参指令"
+            />
+            <button
+              type="submit"
+              :disabled="!heroInput.trim() || isLoading"
+              title="发送"
+              aria-label="发送 AI 指令"
             >
-            <button type="submit" :disabled="!heroInput.trim() || isLoading" title="发送" aria-label="发送 AI 指令">→</button>
+              →
+            </button>
           </form>
         </div>
       </section>
@@ -87,7 +96,7 @@ const currentOptions = ref<Partial<MatrixRainOptions>>({
   variant: 'classic',
   fontSize: 14,
   trailAlpha: 0.18,
-  maxDPR: 2
+  maxDPR: 2,
 });
 
 // 创建实例(useMatrixRain deep-watch currentOptions → 任意字段变化重建)
@@ -107,7 +116,7 @@ const {
   applyPreset: applyPresetRaw,
   applyTextBitmap,
   applyImageBitmap,
-  clearBitmap
+  clearBitmap,
 } = useAitune({ instance, canvas: canvasRef, currentOptions });
 
 const mode = ref<LlmMode>('complex');
@@ -213,7 +222,9 @@ async function onSendFromOverlay() {
   font-size: 12px;
   font-family: var(--font-mono);
 }
-.back:hover { text-decoration: underline; }
+.back:hover {
+  text-decoration: underline;
+}
 .crumb {
   color: var(--text-faint);
   font-size: 11px;
@@ -221,7 +232,9 @@ async function onSendFromOverlay() {
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
-.spacer { flex: 1; }
+.spacer {
+  flex: 1;
+}
 .badge {
   padding: 4px 10px;
   border-radius: 4px;
@@ -298,11 +311,12 @@ async function onSendFromOverlay() {
   z-index: 10;
   border-radius: 14px;
   overflow: hidden;
-  background:
-    linear-gradient(180deg,
-      rgba(8, 8, 18, 0) 0%,
-      rgba(8, 8, 18, 0.55) 35%,
-      rgba(8, 8, 18, 0.92) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(8, 8, 18, 0) 0%,
+    rgba(8, 8, 18, 0.55) 35%,
+    rgba(8, 8, 18, 0.92) 100%
+  );
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(0, 229, 255, 0.12);
@@ -321,10 +335,7 @@ async function onSendFromOverlay() {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg,
-    transparent 0%,
-    rgba(0, 229, 255, 0.6) 50%,
-    transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(0, 229, 255, 0.6) 50%, transparent 100%);
   pointer-events: none;
 }
 .ai-overlay-header {
@@ -357,12 +368,25 @@ async function onSendFromOverlay() {
   font-size: 12px;
   cursor: pointer;
   padding: 0 4px;
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
-  transition: transform 0.25s, color 0.2s;
+  transition:
+    transform 0.25s,
+    color 0.2s;
 }
-.ai-overlay-toggle:hover { color: rgb(0, 229, 255); }
-.ai-overlay.collapsed .ai-overlay-toggle { transform: rotate(180deg); }
-.ai-overlay.collapsed :deep(.chat-log) { display: none; }
+.ai-overlay-toggle:hover {
+  color: rgb(0, 229, 255);
+}
+.ai-overlay.collapsed .ai-overlay-toggle {
+  transform: rotate(180deg);
+}
+.ai-overlay.collapsed :deep(.chat-log) {
+  display: none;
+}
 
 .ai-overlay-form {
   display: flex;
@@ -383,9 +407,13 @@ async function onSendFromOverlay() {
   padding: 6px 10px;
   border-radius: 6px;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
-.ai-overlay-form input::placeholder { color: var(--text-faint); }
+.ai-overlay-form input::placeholder {
+  color: var(--text-faint);
+}
 .ai-overlay-form input:focus {
   border-color: rgba(0, 229, 255, 0.6);
   box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.2);
@@ -412,22 +440,49 @@ async function onSendFromOverlay() {
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0, 229, 255, 0.4);
 }
-.ai-overlay-form button:active { transform: translateY(0); }
-.ai-overlay-form button:disabled { opacity: 0.5; cursor: not-allowed; }
+.ai-overlay-form button:active {
+  transform: translateY(0);
+}
+.ai-overlay-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 @keyframes ai-overlay-rise {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes ai-overlay-pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(0, 229, 255, 0.8); }
-  50% { opacity: 0.4; box-shadow: 0 0 3px rgba(0, 229, 255, 0.4); }
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(0, 229, 255, 0.8);
+  }
+  50% {
+    opacity: 0.4;
+    box-shadow: 0 0 3px rgba(0, 229, 255, 0.4);
+  }
 }
 
 @media (max-width: 768px) {
-  .layout { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
-  .ai-panel { border-right: 0; border-top: 1px solid var(--border); max-height: 50vh; }
-  .stage { grid-row: 1; }
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+  .ai-panel {
+    border-right: 0;
+    border-top: 1px solid var(--border);
+    max-height: 50vh;
+  }
+  .stage {
+    grid-row: 1;
+  }
 }
 @media (max-width: 480px) {
   /* 320px 移动端:AI 对话叠加层占满 canvas 底部全宽,避免被挤压无法阅读 */

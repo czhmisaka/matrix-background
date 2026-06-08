@@ -4,7 +4,9 @@
     <div class="panel-header">
       <span class="tag">🪄 AI</span>
       <h2>调参</h2>
-      <button class="clear-btn" title="清空对话" aria-label="清空对话" @click="$emit('clear-chat')">×</button>
+      <button class="clear-btn" title="清空对话" aria-label="清空对话" @click="$emit('clear-chat')">
+        ×
+      </button>
     </div>
 
     <!-- 模式选择 -->
@@ -31,7 +33,15 @@
           class="text-input"
           aria-label="目标文字(将涌现的内容)"
         ></textarea>
-        <button class="apply-fab" title="生成" aria-label="生成文字位图" :disabled="!textInput.trim()" @click="onApplyText">✦</button>
+        <button
+          class="apply-fab"
+          title="生成"
+          aria-label="生成文字位图"
+          :disabled="!textInput.trim()"
+          @click="onApplyText"
+        >
+          ✦
+        </button>
       </div>
       <div class="opts-row">
         <label class="opts-label">位置</label>
@@ -53,22 +63,17 @@
     </div>
 
     <!-- 图片 → bitmap -->
-    <ImageUploader
-      @apply="onApplyImage"
-      @clear="$emit('clear-bitmap')"
-    />
+    <ImageUploader @apply="onApplyImage" @clear="$emit('clear-bitmap')" />
 
     <!-- LLM 配置(折叠) -->
-    <LlmConfigCard
-      :cfg="llmConfig"
-      :llm-configured="llmConfigured()"
-      :llm-status="llmStatus()"
-    />
+    <LlmConfigCard :cfg="llmConfig" :llm-configured="llmConfigured()" :llm-status="llmStatus()" />
 
     <!-- 阶段 pill -->
     <div class="phase-strip">
       <span class="phase-label">PHASE</span>
-      <span :class="['phase-pill', `phase-${phase}`]" role="status" aria-live="polite">{{ phase }}</span>
+      <span :class="['phase-pill', `phase-${phase}`]" role="status" aria-live="polite">{{
+        phase
+      }}</span>
       <span class="phase-time">{{ elapsed.toFixed(2) }}s</span>
     </div>
   </aside>
@@ -87,7 +92,7 @@ defineProps({
   llmConfigured: { type: Function as PropType<() => boolean>, required: true },
   llmStatus: { type: Function as PropType<() => string>, required: true },
   phase: { type: String, default: 'idle' },
-  elapsed: { type: Number, default: 0 }
+  elapsed: { type: Number, default: 0 },
 });
 const emit = defineEmits<{
   (e: 'apply-preset', preset: PresetConfig): void;
@@ -127,8 +132,12 @@ function onApplyImage(file: File, opts: { anchor: string; motion: string }) {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 229, 255, 0.35) transparent;
 }
-.ai-panel::-webkit-scrollbar { width: 6px; }
-.ai-panel::-webkit-scrollbar-track { background: transparent; }
+.ai-panel::-webkit-scrollbar {
+  width: 6px;
+}
+.ai-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
 .ai-panel::-webkit-scrollbar-thumb {
   background: rgba(0, 229, 255, 0.35);
   border-radius: 3px;
@@ -154,8 +163,10 @@ function onApplyImage(file: File, opts: { anchor: string; motion: string }) {
 }
 .clear-btn {
   margin-left: auto;
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text-muted);
@@ -251,7 +262,9 @@ function onApplyImage(file: File, opts: { anchor: string; motion: string }) {
   padding-right: 42px;
   padding-bottom: 38px;
 }
-.text-input:focus { border-color: rgba(0, 229, 255, 0.6); }
+.text-input:focus {
+  border-color: rgba(0, 229, 255, 0.6);
+}
 .apply-fab {
   position: absolute;
   right: 6px;
@@ -277,7 +290,10 @@ function onApplyImage(file: File, opts: { anchor: string; motion: string }) {
   border-color: rgb(0, 229, 255);
   transform: translateY(-1px);
 }
-.apply-fab:disabled { opacity: 0.4; cursor: not-allowed; }
+.apply-fab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 .opts-row {
   display: flex;
@@ -305,9 +321,16 @@ function onApplyImage(file: File, opts: { anchor: string; motion: string }) {
   cursor: pointer;
   height: 22px;
 }
-.opts-select:hover { border-color: rgba(0, 229, 255, 0.35); }
-.opts-select:focus { border-color: rgba(0, 229, 255, 0.6); }
-.opts-select option { background: var(--bg); color: var(--text); }
+.opts-select:hover {
+  border-color: rgba(0, 229, 255, 0.35);
+}
+.opts-select:focus {
+  border-color: rgba(0, 229, 255, 0.6);
+}
+.opts-select option {
+  background: var(--bg);
+  color: var(--text);
+}
 
 .phase-strip {
   display: flex;
@@ -335,11 +358,21 @@ function onApplyImage(file: File, opts: { anchor: string; motion: string }) {
   letter-spacing: 0.04em;
   background: rgba(0, 0, 0, 0.5);
 }
-.phase-pill.phase-idle { color: var(--text-muted); }
-.phase-pill.phase-noise { color: rgb(255, 92, 124); }
-.phase-pill.phase-converge { color: rgb(168, 163, 255); }
-.phase-pill.phase-hold { color: rgb(122, 247, 212); }
-.phase-pill.phase-dissolve { color: rgb(251, 191, 36); }
+.phase-pill.phase-idle {
+  color: var(--text-muted);
+}
+.phase-pill.phase-noise {
+  color: rgb(255, 92, 124);
+}
+.phase-pill.phase-converge {
+  color: rgb(168, 163, 255);
+}
+.phase-pill.phase-hold {
+  color: rgb(122, 247, 212);
+}
+.phase-pill.phase-dissolve {
+  color: rgb(251, 191, 36);
+}
 .phase-time {
   margin-left: auto;
   color: var(--accent);

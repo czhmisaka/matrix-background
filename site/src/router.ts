@@ -15,11 +15,6 @@ const routes: RouteRecordRaw[] = [
     name: 'demo-noise',
     component: () => import('./pages/DemoNoiseConverge.vue'),
   },
-  {
-    path: '/demos/image-converge',
-    name: 'demo-image-converge',
-    component: () => import('./pages/ImageConvergePage.vue'),
-  },
   { path: '/demos/blog', name: 'demo-blog', component: () => import('./pages/DemoBlog.vue') },
   {
     path: '/demos/ai-tune',
@@ -50,4 +45,18 @@ export const router = createRouter({
     if (to.hash) return { el: to.hash, behavior: 'smooth' };
     return { top: 0 };
   },
+});
+
+/**
+ * a11y P2-12 · 路由切换后把焦点移到 <main id="main" tabindex="-1">,
+ * 让屏幕阅读器用户听到新页面的 landmark + h1,而不是停留在 nav 链接。
+ * preventScroll: false 走 scrollBehavior 已设置的位置;true 会用 main 自身位置,
+ * 这里用 false 让路由的 scrollBehavior 决定滚动行为。
+ */
+router.afterEach(() => {
+  // 等待 RouterView 切换完成
+  setTimeout(() => {
+    const main = document.getElementById('main');
+    if (main) main.focus({ preventScroll: false });
+  }, 0);
 });

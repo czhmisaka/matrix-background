@@ -10,18 +10,31 @@
         </p>
       </header>
 
-      <nav class="tabs">
+      <div class="tabs" role="tablist" aria-label="Tutorial 章节" @keydown="onTabKeydown">
         <button
-          v-for="t in tabs"
+          v-for="(t, idx) in tabs"
           :key="t.id"
+          :ref="(el) => setTabRef(el, idx)"
+          :id="`tab-${t.id}`"
           :class="['tab', { active: active === t.id }]"
-          @click="active = t.id"
+          role="tab"
+          type="button"
+          :aria-selected="active === t.id"
+          :aria-controls="`panel-${t.id}`"
+          :tabindex="active === t.id ? 0 : -1"
+          @click="selectTab(t.id)"
         >
           {{ t.label }}
         </button>
-      </nav>
+      </div>
 
-      <section class="tab-content">
+      <section
+        class="tab-content"
+        role="tabpanel"
+        :id="`panel-${active}`"
+        :aria-labelledby="`tab-${active}`"
+        tabindex="0"
+      >
         <!-- 0 · Intro -->
         <article v-if="active === 'intro'">
           <h2>数字矩阵背景<br /><em class="grad">终端感 × 温度感</em></h2>
@@ -39,7 +52,7 @@
               <b>Web Component</b> — <code>&lt;matrix-rain&gt;</code> 标签即可挂载,Vue/React
               都能识别
             </li>
-            <li><b>噪声 → 收敛</b> — 5 段状态机,文字/图片从全屏噪点逐 cell 锁定为清晰图像</li>
+            <li><b>噪声 → 收敛</b> — 5 段状态机,文字从全屏噪点逐 cell 锁定为清晰图像</li>
             <li><b>事件驱动</b> — onFrame / onResize / onThemeChange / onTargetFinish</li>
             <li><b>SSR 友好</b> — 核心逻辑零 DOM 依赖,Node/Edge/Worker 中可安全 import</li>
           </ul>
@@ -390,79 +403,8 @@ rain.<span class="tk-fn">setTargetBitmap</span>(bitmap, { phase: <span class="tk
           </table>
         </article>
 
-        <!-- 11.5 · Image Noise-Converge -->
-        <article v-else-if="active === 'image-converge'">
-          <h2>图片<em class="grad">噪声 → 收敛</em></h2>
-          <p>
-            用户上传 / 拖入图片后,引擎把图片转成灰度位图,然后用 5 段状态机(noise → converge →
-            hold)让数字雨从全屏噪点逐渐收敛为图片轮廓。
-          </p>
-          <pre><code><span class="tk-kw">import</span> { <span class="tk-fn">matrixRain</span>, <span class="tk-fn">imageToBitmap</span>, <span class="tk-fn">fileToImage</span> } <span class="tk-kw">from</span> <span class="tk-st">'@xietuier/matrix-rain'</span>;
-
-<span class="tk-kw">const</span> canvas = document.<span class="tk-fn">querySelector</span>(<span class="tk-st">'canvas'</span>);
-<span class="tk-kw">const</span> rain = <span class="tk-fn">matrixRain</span>({
-  canvas,
-  theme: <span class="tk-st">'silicon-valley'</span>,
-  targetPhase: <span class="tk-st">'noise-converge'</span>
-});
-
-<span class="tk-com">// 1. 读取用户上传的文件</span>
-<span class="tk-kw">const</span> fileInput = document.<span class="tk-fn">querySelector</span>(<span class="tk-st">'input[type=file]'</span>);
-fileInput.<span class="tk-fn">addEventListener</span>(<span class="tk-st">'change'</span>, <span class="tk-kw">async</span> (e) =&gt; {
-  <span class="tk-kw">const</span> file = e.target.files[0];
-  <span class="tk-kw">const</span> img = <span class="tk-kw">await</span> <span class="tk-fn">fileToImage</span>(file);
-
-  <span class="tk-com">// 2. 图片 → 灰度位图</span>
-  <span class="tk-kw">const</span> cols = Math.<span class="tk-fn">floor</span>(canvas.width / 14);
-  <span class="tk-kw">const</span> rows = Math.<span class="tk-fn">floor</span>(canvas.height / 14);
-  <span class="tk-kw">const</span> bitmap = <span class="tk-fn">imageToBitmap</span>(img, cols, rows, <span class="tk-st">'contain'</span>);
-
-  <span class="tk-com">// 3. 喂给引擎(noise → converge → hold)</span>
-  rain.<span class="tk-fn">setTargetBitmap</span>(bitmap, {
-    phase: <span class="tk-st">'noise-converge'</span>,
-    noiseDuration: <span class="tk-num">0.5</span>,
-    convergeDuration: <span class="tk-num">1.5</span>,
-    noiseFadeInDuration: <span class="tk-num">0.3</span>,
-    lockOrder: <span class="tk-st">'random'</span>,
-    lockStability: <span class="tk-num">0.85</span>,
-    hold: <span class="tk-st">Infinity</span>,
-    fadeOut: <span class="tk-num">2.0</span>,
-    anchor: <span class="tk-st">'center'</span>
-  });
-});</code></pre>
-          <h3>5 段状态机</h3>
-          <ul>
-            <li><b>noise</b>(默认 0.5s):全屏噪点,目标区 0 cell 锁定</li>
-            <li>
-              <b>converge</b>(默认 1.5s):从中心向外 / 顶到底 / 随机 7 种顺序,逐 cell 锁定为图像
-            </li>
-            <li><b>hold</b>(Infinity):完整呈现图像,字符稳定(lockStability)</li>
-            <li><b>dissolve</b>(fadeOut 时长):反向解锁融化,回到纯雨</li>
-            <li><b>idle</b>:无 target,纯雨</li>
-          </ul>
-          <h3>可调参数</h3>
-          <ul>
-            <li>
-              <code>noiseDuration</code> · <code>convergeDuration</code> ·
-              <code>noiseFadeInDuration</code> — 三段时长独立调
-            </li>
-            <li>
-              <code>lockOrder</code> — 7 种顺序(random / topdown / bottomup / center / edge /
-              leftright / rightleft)
-            </li>
-            <li><code>lockStability</code> — 锁定后字符稳定性,0 = 类似正常雨,1 = 字符完全不变</li>
-            <li><code>fitMode</code> — contain / cover / actual / auto,控制图片如何填到 grid</li>
-          </ul>
-          <div class="pg-cta">
-            <router-link to="/demos/image-converge" class="btn btn-primary"
-              >打开图片涌现 Demo →</router-link
-            >
-          </div>
-        </article>
-
         <!-- 11 · Playground (link out) -->
         <article v-else-if="active === 'playground'">
-          <h2>配置项 <em class="grad">Playground</em></h2>
           <h2>配置项 <em class="grad">Playground</em></h2>
           <p>完整版 Playground 已独立成页 — 8 控件实时调参,canvas 立即更新,代码块一键复制。</p>
           <div class="pg-cta">
@@ -493,7 +435,7 @@ rain.<span class="tk-fn">setTargetBitmap</span>(textToBitmap(<span class="tk-st"
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, nextTick } from 'vue';
 
 const tabs = [
   { id: 'intro', label: '介绍' },
@@ -507,11 +449,48 @@ const tabs = [
   { id: 'cdn', label: 'CDN' },
   { id: 'api-options', label: 'API · 配置项' },
   { id: 'api-methods', label: 'API · 方法' },
-  { id: 'image-converge', label: '图片涌现' },
   { id: 'playground', label: 'Playground' },
 ];
 
 const active = ref('intro');
+const tabRefs = ref<HTMLButtonElement[]>([]);
+
+function setTabRef(el: Element | any, idx: number) {
+  // v-for 中把按钮元素收集到数组里,供键盘导航 focus 用
+  if (el) tabRefs.value[idx] = el as HTMLButtonElement;
+}
+
+function selectTab(id: string) {
+  active.value = id;
+  // tab 切换后,把焦点留在 tab 按钮上(aria-selected=true)
+  nextTick(() => {
+    const idx = tabs.findIndex((t) => t.id === id);
+    if (idx >= 0) tabRefs.value[idx]?.focus();
+  });
+}
+
+function onTabKeydown(e: KeyboardEvent) {
+  const idx = tabs.findIndex((t) => t.id === active.value);
+  if (idx < 0) return;
+  let nextIdx = idx;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+    nextIdx = (idx + 1) % tabs.length;
+    e.preventDefault();
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+    nextIdx = (idx - 1 + tabs.length) % tabs.length;
+    e.preventDefault();
+  } else if (e.key === 'Home') {
+    nextIdx = 0;
+    e.preventDefault();
+  } else if (e.key === 'End') {
+    nextIdx = tabs.length - 1;
+    e.preventDefault();
+  }
+  if (nextIdx !== idx) {
+    active.value = tabs[nextIdx].id;
+    nextTick(() => tabRefs.value[nextIdx]?.focus());
+  }
+}
 
 const themeList = [
   {

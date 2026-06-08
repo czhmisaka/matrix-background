@@ -7,10 +7,12 @@
             <span class="brand-mark">M</span>
             <span class="brand-name">matrix-rain</span>
           </div>
-          <p class="footer-tagline">Canvas 2D 渲染的 Matrix 数字雨背景库<br>5 主题 · 4 变体 · Web Component · 29 KB gzip</p>
+          <p class="footer-tagline">
+            Canvas 2D 渲染的 Matrix 数字雨背景库<br />5 主题 · 4 变体 · Web Component · 29 KB gzip
+          </p>
         </div>
-        <nav class="footer-col" aria-label="页脚导航">
-          <h2 class="footer-heading">Explore</h2>
+        <nav class="footer-col" aria-label="页脚导航 Explore">
+          <h3 class="footer-heading">Explore</h3>
           <ul>
             <li><RouterLink to="/demos">Demos</RouterLink></li>
             <li><RouterLink to="/tutorial">Tutorial</RouterLink></li>
@@ -18,21 +20,39 @@
             <li><RouterLink to="/legacy">Legacy</RouterLink></li>
           </ul>
         </nav>
-        <div class="footer-col">
-          <h2 class="footer-heading">Reference</h2>
+        <nav class="footer-col" aria-label="页脚导航 Reference">
+          <h3 class="footer-heading">Reference</h3>
           <ul>
             <li><RouterLink to="/docs">API Docs</RouterLink></li>
             <li><RouterLink to="/blog">Blog</RouterLink></li>
           </ul>
-        </div>
-        <div class="footer-col">
-          <h2 class="footer-heading">Resources</h2>
+        </nav>
+        <nav class="footer-col" aria-label="页脚导航 Resources">
+          <h3 class="footer-heading">Resources</h3>
           <ul>
-            <li><a href="https://www.npmjs.com/package/@xietuier/matrix-rain" target="_blank" rel="noopener">npm</a></li>
-            <li><a href="https://github.com/xietuier/matrix-rain" target="_blank" rel="noopener">GitHub</a></li>
-            <li><a href="https://github.com/xietuier/matrix-rain/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a></li>
+            <li>
+              <a
+                href="https://www.npmjs.com/package/@xietuier/matrix-rain"
+                target="_blank"
+                rel="noopener"
+                >npm</a
+              >
+            </li>
+            <li>
+              <a href="https://github.com/xietuier/matrix-rain" target="_blank" rel="noopener"
+                >GitHub</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://github.com/xietuier/matrix-rain/blob/main/LICENSE"
+                target="_blank"
+                rel="noopener"
+                >MIT License</a
+              >
+            </li>
           </ul>
-        </div>
+        </nav>
       </div>
       <div class="footer-bottom">
         <span>© 2026 czhmisaka · @xietuier</span>
@@ -43,8 +63,7 @@
   </footer>
 </template>
 
-<script setup lang="ts">
-</script>
+<script setup lang="ts"></script>
 
 <style scoped>
 .footer {
@@ -60,15 +79,24 @@
   margin-bottom: var(--gap-6);
 }
 .footer-brand .brand {
-  display: flex; align-items: center; gap: 10px;
-  font-family: var(--font-mono); font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 14px;
   margin-bottom: var(--gap-3);
 }
 .brand-mark {
-  display: inline-flex; width: 28px; height: 28px;
-  align-items: center; justify-content: center;
-  background: var(--grad); color: #0a0a14;
-  border-radius: 7px; font-weight: 700; font-size: 16px;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  background: var(--grad);
+  color: #0a0a14;
+  border-radius: 7px;
+  font-weight: 700;
+  font-size: 16px;
 }
 .footer-tagline {
   color: var(--text-muted);
@@ -76,7 +104,7 @@
   line-height: 1.6;
   margin: 0;
 }
-.footer-col h5,
+.footer-col h3,
 .footer-col .footer-heading {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -88,17 +116,30 @@
 }
 .sr-only {
   position: absolute;
-  width: 1px; height: 1px;
-  padding: 0; margin: -1px; overflow: hidden;
-  clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
-.footer-col ul { list-style: none; padding: 0; margin: 0; }
-.footer-col li { margin-bottom: 10px; }
+.footer-col ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.footer-col li {
+  margin-bottom: 10px;
+}
 .footer-col a {
   font-size: 14px;
   color: var(--text-muted);
 }
-.footer-col a:hover { color: var(--accent); }
+.footer-col a:hover {
+  color: var(--accent);
+}
 .footer-bottom {
   display: flex;
   align-items: center;
@@ -110,13 +151,17 @@
   color: var(--text-faint);
   letter-spacing: 0.04em;
 }
-.dot { opacity: 0.4; }
+.dot {
+  opacity: 0.4;
+}
 
 @media (max-width: 768px) {
   .footer-grid {
     grid-template-columns: 1fr 1fr;
     gap: var(--gap-5);
   }
-  .footer-brand { grid-column: 1 / -1; }
+  .footer-brand {
+    grid-column: 1 / -1;
+  }
 }
 </style>

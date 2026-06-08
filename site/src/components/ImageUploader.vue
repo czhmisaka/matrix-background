@@ -4,13 +4,9 @@
       <span class="badge">I</span>
       <span class="label">上传图片</span>
       <span class="sub">数字化轮廓</span>
-      <button
-        v-if="file"
-        class="clear-fab"
-        title="清除"
-        aria-label="清除已选图片"
-        @click="clear"
-      >×</button>
+      <button v-if="file" class="clear-fab" title="清除" aria-label="清除已选图片" @click="clear">
+        ×
+      </button>
     </div>
     <div class="upload-row">
       <label
@@ -19,23 +15,31 @@
         @dragleave.prevent="dragover = false"
         @drop.prevent="onDrop"
       >
-        <input
-          ref="fileInput"
-          type="file"
-          accept="image/*"
-          hidden
-          @change="onPick"
-        >
+        <input ref="fileInput" type="file" accept="image/*" hidden @change="onPick" />
         <div v-if="!file" class="empty">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 16V4M12 4l-4 4M12 4l4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path
+              d="M12 16V4M12 4l-4 4M12 4l4 4"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </svg>
           <div class="title">拖入图片 或 点击上传</div>
           <div class="hint">PNG / JPG / WebP · ≤ 4 MB</div>
         </div>
         <div v-else class="filled">
-          <img v-if="thumbUrl" :src="thumbUrl" class="thumb" alt="预览">
+          <img v-if="thumbUrl" :src="thumbUrl" class="thumb" alt="预览" />
           <div class="meta">
             <div class="name">{{ file.name }}</div>
             <div class="size">{{ formatBytes(file.size) }}</div>
@@ -48,7 +52,9 @@
         title="生成"
         aria-label="生成位图"
         @click="$emit('apply', file!, { anchor: anchor, motion: motion })"
-      >✦</button>
+      >
+        ✦
+      </button>
     </div>
     <div class="opts-row">
       <label class="opts-label">位置</label>
@@ -135,7 +141,7 @@ function formatBytes(b: number): string {
 defineExpose({
   getAnchor: () => anchor.value,
   getMotion: () => motion.value,
-  getFile: () => file.value
+  getFile: () => file.value,
 });
 </script>
 
@@ -184,8 +190,10 @@ defineExpose({
 }
 .clear-fab {
   margin-left: auto;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -354,7 +362,14 @@ defineExpose({
   cursor: pointer;
   height: 22px;
 }
-.opts-select:hover { border-color: rgba(0, 229, 255, 0.35); }
-.opts-select:focus { border-color: rgba(0, 229, 255, 0.6); }
-.opts-select option { background: var(--bg); color: var(--text); }
+.opts-select:hover {
+  border-color: rgba(0, 229, 255, 0.35);
+}
+.opts-select:focus {
+  border-color: rgba(0, 229, 255, 0.6);
+}
+.opts-select option {
+  background: var(--bg);
+  color: var(--text);
+}
 </style>
