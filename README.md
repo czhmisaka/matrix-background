@@ -832,6 +832,77 @@ rain.setTheme('matrix-green', {
 
 ---
 
+## 🎚️ 过渡曲线 + 中断与回退(0.4.0+)
+
+> 4 类过渡(setTheme / setThemeParams / setVariantParams / setTransitionAlpha)原本在 **mid-flight 调用时 from 取旧值或新值,会突跳**;0.4.0+ 改为 **从当前显示值出发**,并支持 **per-call `{ dur, easing }` 覆盖全局曲线**。
+
+### 全局曲线
+
+```ts
+// 启动时设置(默认 'smooth' = cubic ease)
+matrixRain({ easing: 'linear' }); // 全部 9 个内部 ease 点走线性
+
+// 热更新
+rain.setEasing('linear'); // 下一帧起生效,不影响正在进行的过渡
+rain.getEasing(); // → 'linear' | 'smooth'
+rain.getOptions().easing; // 同步
+```
+
+| `EasingMode`      | 行为                                                          | 视觉                    |
+| ----------------- | ------------------------------------------------------------- | ----------------------- |
+| `'smooth'` (默认) | cubic ease(`easeIn` / `easeOut` / `easeInOut` 按过渡点自动选) | 启停有缓动,看起来"自然" |
+| `'linear'`        | 恒等 `t` 映射                                                 | 启停匀速,无加速感       |
+
+### Per-call 覆盖(优先级 > 全局)
+
+```ts
+// 单次切换走线性(全局保持 smooth)
+rain.setTheme('lava-red', { dur: 0.6, easing: 'linear' });
+
+// 单次 alpha 淡出 0.1s 线性
+rain.setTransitionAlpha(0, { dur: 0.1, easing: 'linear' });
+
+// 立即切换(不走 transition)
+rain.setTheme('matrix-green', { dur: 0 });
+rain.setThemeParams({ brightness: 1.5 }, { dur: 0 });
+rain.setVariantParams({ phaseStep: 0.5 }, { dur: 0 });
+```
+
+### 中断与回退(自动)
+
+4 类过渡 setter 全部支持**mid-flight 打断**,`from` 自动取**当前显示值**而非旧快照或新值:
+
+```ts
+// 0.4s 主题切换 A → B,跑到 0.2s(50%) 切到 C
+rain.setTheme('A'); // 0.0s: from=A, to=B
+rain.setTheme('C'); // 0.2s 后: from=当前(A→B 50%)插值, to=C
+// 视觉上平滑衔接,无"A → A 50% → C"的两次跳变
+```
+
+修复的 3 个旧 bug:
+
+| Setter               | 旧行为 (0.3.x)                                | 新行为 (0.4.0+)                                   |
+| -------------------- | --------------------------------------------- | ------------------------------------------------- |
+| `setTheme`           | `from: state.oldColdPalette` (上次切换的旧值) | `from: getEffectiveThemeState()` 当前显示值       |
+| `setThemeParams`     | `from: state.tp` (刚覆盖的新值,等效 noop)     | `from: getEffectiveThemeParamsState()` 当前显示值 |
+| `setVariantParams`   | `from: state.vp` (同上)                       | `from: getEffectiveVariantState()` 当前显示值     |
+| `setTransitionAlpha` | `from: state.transitionAlpha` (原本就正确)    | (保持)                                            |
+
+### 参数表
+
+| Setter               | 旧签名                           | 新签名(0.4.0+)                                      |
+| -------------------- | -------------------------------- | --------------------------------------------------- |
+| `setTheme`           | `(name, { keepPaletteParams? })` | `(name, { keepPaletteParams?, dur?, easing? })`     |
+| `setThemeParams`     | `(params)`                       | `(params, { dur?, easing? })`                       |
+| `setColdThemeParams` | `(params)`                       | `(params, { dur?, easing? })`                       |
+| `setWarmThemeParams` | `(params)`                       | `(params, { dur?, easing? })`                       |
+| `setVariantParams`   | `(params)`                       | `(params, { dur?, easing? })`                       |
+| `setTransitionAlpha` | `(alpha, dur?)`                  | `(alpha, { dur?, easing? })` ← 向后兼容 number 签名 |
+
+> ⚠️ `setTransitionAlpha` 仍接受旧 number 签名(第 2 参当 `dur`),**新增** options 对象(更明确,推荐)。
+
+---
+
 ## 📞 生命周期回调 · 4 个 `on*` 选项
 
 | 字段             | 触发时机                 | 签名                            |

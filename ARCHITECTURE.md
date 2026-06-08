@@ -344,6 +344,47 @@ drawClassic / drawAvalanche / drawRipple
 | `easeInOut(t)`           | cubic                                                           | 通用                   |
 | `ease.*` (sandbox 13 种) | inQuad / outCubic / inOutSine / outBack / inOutExpo / outCirc … | A 层 userFunc 自由组合 |
 
+### 5.3 全局曲线 + 打断与回退(0.4.0+)
+
+**8 个内部 ease 调用点**(0.4.0+ 全部走 `pickEasingFn` 抽象):
+
+| 位置 | 文件:行                                | kind    | 过渡点                     |
+| ---- | -------------------------------------- | ------- | -------------------------- |
+| 1    | `src/engine.ts` (rAF tick)             | `inOut` | `transitionAlphaAnim`      |
+| 2    | `src/engine.ts` (rAF tick)             | `inOut` | `themeTransition` HSL 插值 |
+| 3    | `src/engine.ts` (rAF tick)             | `inOut` | `themeParamsTransition`    |
+| 4    | `src/engine.ts` (rAF tick)             | `inOut` | `variantTransition`        |
+| 5    | `src/engine/draw-helpers.ts` (A3)      | `out`   | `cellLockEase`             |
+| 6    | `src/engine/draw-helpers.ts` (A4)      | `in`    | `cellUnlockEase` (前段)    |
+| 7    | `src/engine/draw-helpers.ts` (Phase 1) | `out`   | `noiseFadeIn`              |
+| 8    | `src/engine/draw-helpers.ts` (A4)      | `in`    | `cellUnlockEase` (后段)    |
+
+**`pickEasingFn(state, kind, override?)` 抽象**(0.4.0+):
+
+- 优先级: `override` (per-transition 字段) > `state.cfg.easing` (全局)
+- `'linear'`: 返 `t => clamp(t, 0, 1)` 恒等
+- `'smooth'`: 返 `easeIn` / `easeOut` / `easeInOut` 按 kind 选
+
+**4 个 main transition state 都加 `easing?: EasingMode` 字段**,在 setter 启动新过渡时捕获 per-call 选项(若传)。`getEffective*` 内部也用 `pickEasingFn` 重算 from,保证中断时 easing 模式一致(不会"上段 smooth 段重计算时突然 linear")。
+
+**中断与回退 — 3 个 `getEffective*` helpers**(`src/engine/state.ts`):
+
+| Helper                                | 返回                                            | 用途                       |
+| ------------------------------------- | ----------------------------------------------- | -------------------------- |
+| `getEffectiveThemeState(state)`       | `{ cold, warm, tp, ctp, wtp }` 当前显示 5-tuple | `setTheme` 打断时取 from   |
+| `getEffectiveThemeParamsState(state)` | `{ tp, ctp, wtp }`                              | `setThemeParams/Cold/Warm` |
+| `getEffectiveVariantState(state)`     | `VariantParams`                                 | `setVariantParams`         |
+
+**修复的 3 个 0.3.x bug**:
+
+- `setTheme` 旧 `from: state.oldColdPalette` → 旧值,无视觉过渡
+- `setThemeParams` 旧 `from: state.tp`(刚覆盖)→ 0 步,无 lerp
+- `setVariantParams` 旧 `from: state.vp`(刚覆盖)→ 0 步,无 lerp
+
+修复后: 全部从 `getEffective*` 取当前显示值(含 active transition 的插值),视觉平滑衔接。
+
+**Per-call 选项优先级**: setter 第 2 参 `{ dur, easing }` > `state.cfg.*` (全局) > `DEFAULTS.*` (硬默认)
+
 ---
 
 ## 6 · Web Component 包装

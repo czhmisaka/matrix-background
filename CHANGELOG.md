@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **过渡曲线 + 打断与回退(0.4.0+)** —— 新增 `EasingMode = 'smooth' | 'linear'` 全局曲线模式,以及 4 个过渡 setter 的 `dur` + `easing` per-call 覆盖。所有过渡现在都正确**支持打断与回退**:mid-flight 调用时,`from` 取当前显示值(插值),不是旧快照,保证视觉上平滑衔接(无突跳)。
+  - 新增 `MatrixRainOptions.easing?: 'smooth' | 'linear'`(默认 `'smooth'` = cubic ease)
+  - 新增 `setEasing(mode)` / `getEasing()` 热更新
+  - **修复的 3 个 bug**:
+    - `setTheme` 之前从 `oldColdPalette` 旧快照出发(不是当前显示值)→ 现在用 `getEffectiveThemeState`
+    - `setThemeParams` / `setColdThemeParams` / `setWarmThemeParams` 之前从 `state.tp` 新值出发(0 步移动)→ 现在用 `getEffectiveThemeParamsState`
+    - `setVariantParams` 之前从 `state.vp` 新值出发 → 现在用 `getEffectiveVariantState`
+    - `setTransitionAlpha` 原本就正确(从 `state.transitionAlpha` 当前值出发),保持
+  - Per-call 选项(在 setter 第 2 参):
+    - `setTheme(name, { keepPaletteParams, dur, easing })`
+    - `setThemeParams(params, { dur, easing })`
+    - `setColdThemeParams / setWarmThemeParams` 同上
+    - `setVariantParams(params, { dur, easing })`
+    - `setTransitionAlpha(alpha, { dur, easing })` —— 向后兼容老 `number` 签名
+  - 9 个内部 ease 调用点抽成 `pickEasingFn(state, kind, override?)`:线性模式返恒等 `t`、smooth 模式返 easeIn/easeOut/easeInOut
+  - 配套 `test/easing.mjs`(14 用例):默认 smooth / setEasing 双向 / 构造时设置 / 中断与回退 / per-call linear 覆盖 / per-call dur 覆盖 / 鲁棒性 / 旧 number 签名兼容 / mid 切曲线不破坏过渡值
+
+- **`renderScale?: number | 'auto'`** —— 数字像素背景**动态分辨率**(类似"脏渲染")。启用后,目标位图激活时,**仅位图覆盖区**按倍率画子格(`renderScale=2` → 区内每个父格画 4 个子格 / 像素),位图区外 0 额外开销。文字/图片边缘锐度可肉眼对比提升,雨滴密度不变。
+
 - **`renderScale?: number | 'auto'`** —— 数字像素背景**动态分辨率**(类似"脏渲染")。启用后,目标位图激活时,**仅位图覆盖区**按倍率画子格(`renderScale=2` → 区内每个父格画 4 个子格 / 像素),位图区外 0 额外开销。文字/图片边缘锐度可肉眼对比提升,雨滴密度不变。
   - `1` (默认): 行为 100% 等价于无此选项(向后兼容)
   - `2` / `3` / `4`: 显式倍率,`>= 4` 性能急剧下降(仅适合短时演示)
