@@ -163,6 +163,27 @@ export interface MatrixRainOptions {
   /** DPR 缩放上限,默认 2。性能优先可设 1 */
   maxDPR?: number;
 
+  /**
+   * 局部子格渲染倍率(类似"脏渲染"):仅在目标位图激活时,位图覆盖区按此倍率
+   * 画子格(每个父格画 renderScale² 个子格),位图区外 0 开销。
+   * - 父格 = 基础网格 1 个 cell(state.r × state.i 不变)
+   * - 子格 = 父格细分,继承父 cell 状态,只画 fillText
+   * - 数字越大,位图边缘越锐利;CPU 开销 = renderScale²(2 → 4x, 4 → 16x)
+   *
+   * 取值:
+   * - `1` (默认): 行为 100% 等价于无此选项(向后兼容)
+   * - `2` / `3` / `4`: 显式倍率。`>= 4` 性能急剧下降,仅适合短时演示
+   * - `'auto'`: 自动模式 = `2`(位图未激活时回到 `1`)
+   * - 实际生效值被钳到 [1, 16] 整数范围(向下取整)
+   *
+   * ⚠️ `avalanche` 变体: 头亮 trail 按行对齐,子格仅在列方向生效
+   * (横向更锐,纵向密度不变)。
+   *
+   * @since 0.3.0
+   * @see setRenderScale
+   */
+  renderScale?: number | 'auto';
+
   /** 字符集,默认 '0123456789' */
   charset?: string;
 
@@ -418,6 +439,32 @@ export interface MatrixRainInstance {
 
   /** 动态调密度 */
   setDensity(fontSize: number): void;
+
+  /**
+   * 动态更新局部子格渲染倍率。
+   * - 不触发 buildGrid(基础网格 r/i 不变);只影响后续帧的子格路径
+   * - `setRenderScale('auto')` 立即生效,但 effective 数值在每帧重算
+   * - 输入校验: `number` 被钳到 [1, 16] 整数范围(向下取整);
+   *   NaN / 负数 / 0 → 1;`Infinity` → 16
+   *
+   * @example
+   * rain.setRenderScale(2);          // 2x 子格
+   * rain.setRenderScale('auto');     // 自动模式
+   * rain.setRenderScale(1);          // 关闭
+   *
+   * @since 0.3.0
+   */
+  setRenderScale(s: number | 'auto'): void;
+
+  /**
+   * 读取当前 effective renderScale(总 >= 1 的整数)。
+   * - 用户传 number → 返回同值(经钳位)
+   * - 用户传 'auto' → 返回当前解析值
+   *   (位图未激活时返回 1,激活时返回 2)
+   *
+   * @since 0.3.0
+   */
+  getRenderScale(): number;
 
   /** 动态调闪烁速度倍率(0=冻结, 1=默认, >1=加快) */
   setFlickerSpeed(speed: number): void;

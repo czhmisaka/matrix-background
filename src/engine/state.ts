@@ -125,7 +125,7 @@ export type LockOrder =
 // ==================== 数字选项 DEFAULTS(与原 engine.ts 一致)====================
 
 const DEFAULTS = {
-  fontSize: 14,
+  fontSize: 6,
   trailAlpha: 0.18,
   maxDPR: 2,
   warmthRadius: 0.6,
@@ -137,6 +137,7 @@ const DEFAULTS = {
   cellLockEaseDuration: 0.12,
   themeTransitionDuration: 0.4,
   variantTransitionDuration: 0.3,
+  renderScale: 1 as number | 'auto',
 } as const;
 
 const FLICKER_SPEED_DEFAULT = 1;
@@ -228,7 +229,18 @@ export interface MatrixRainState {
     sparkProbability: number;
     targetFPS: number;
     flickerSpeed?: number;
+    /** 局部子格渲染倍率(0.3.0+)· 用户原值(number | 'auto') */
+    renderScale: number | 'auto';
   };
+
+  /**
+   * renderScale 运行时状态(0.3.0+):
+   * - `renderScaleUser`: 用户原值(number 已 normalize,或 'auto' 字符串)
+   * - `renderScaleEffective`: 每帧由 resolveEffectiveRenderScale() 重算的数值
+   *   默认 1;'auto' + targetActive 时为 2;'auto' + inactive 时回 1
+   */
+  renderScaleUser: number | 'auto';
+  renderScaleEffective: number;
   /** 固定时间步长(SSR/测试用):dt 强制 1/60 */
   fixedTimeStep: boolean;
   /** 系统级 prefers-reduced-motion 探测 */
@@ -484,6 +496,7 @@ export const createMatrixRainState = (options: MatrixRainOptions): MatrixRainSta
     sparkProbability: options.sparkProbability ?? DEFAULTS.sparkProbability,
     targetFPS: options.targetFPS ?? DEFAULTS.targetFPS,
     flickerSpeed: options.flickerSpeed,
+    renderScale: options.renderScale ?? DEFAULTS.renderScale,
   };
 
   // ============ 主题解析 ============
@@ -683,6 +696,10 @@ export const createMatrixRainState = (options: MatrixRainOptions): MatrixRainSta
     themeTransitionDur: options.themeTransitionDuration ?? DEFAULTS.themeTransitionDuration,
     variantTransitionDur: options.variantTransitionDuration ?? DEFAULTS.variantTransitionDuration,
     FIXED_DT,
+
+    // renderScale(0.3.0+)· 用户原值 + 每帧解析的 effective 数值
+    renderScaleUser: cfg.renderScale,
+    renderScaleEffective: typeof cfg.renderScale === 'number' ? cfg.renderScale : 1,
 
     // geometry
     a: 0,

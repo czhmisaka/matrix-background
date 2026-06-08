@@ -65,6 +65,8 @@ export const createSetters = (
   | 'setFlickerSpeed'
   | 'setTargetFPS'
   | 'setDensity'
+  | 'setRenderScale'
+  | 'getRenderScale'
   | 'getFPS'
   | 'getTransitionAlpha'
   | 'getDiagnostics'
@@ -464,6 +466,28 @@ export const createSetters = (
     hooks.buildGrid();
   };
 
+  /**
+   * 动态更新局部子格渲染倍率(0.3.0+)· 不触发 buildGrid
+   * - 同步写 3 处:cfg / options / renderScaleUser(修复 setDensity 不同步 options 的旧 bug 模式)
+   * - 'auto' 透传;number 钳到 [1, 16] 整数(向下取整)
+   * - NaN / 负数 / 0 → 1
+   */
+  const setRenderScale = (s: number | 'auto'): void => {
+    const normalized: number | 'auto' =
+      s === 'auto' ? 'auto' : Math.min(16, Math.max(1, Math.floor(Number(s) || 1)));
+    state.cfg = { ...state.cfg, renderScale: normalized };
+    state.options = { ...state.options, renderScale: normalized };
+    state.renderScaleUser = normalized;
+  };
+
+  /**
+   * 读取当前 effective renderScale(总 >= 1 的整数)
+   * - 用户传 number → 返回同值(已 normalize)
+   * - 用户传 'auto' → 返回当前解析值
+   *   (位图未激活时返回 1,激活时返回 2)
+   */
+  const getRenderScale = (): number => state.renderScaleEffective;
+
   // ============ Getters ============
   const getFPS = (): number => Math.round(state.fps);
 
@@ -655,6 +679,7 @@ export const createSetters = (
     cellLockEaseDuration: state.cellLockEaseDur,
     themeTransitionDuration: state.themeTransitionDur,
     variantTransitionDuration: state.variantTransitionDur,
+    renderScale: state.cfg.renderScale,
     clickBurst: state.clickBurstCfg.radius > 0 ? { ...state.clickBurstCfg } : false,
     cursor: (state.canvas.style.cursor || undefined) as CursorOption,
   });
@@ -692,6 +717,8 @@ export const createSetters = (
     setFlickerSpeed,
     setTargetFPS,
     setDensity,
+    setRenderScale,
+    getRenderScale,
     getFPS,
     getTransitionAlpha,
     getDiagnostics,

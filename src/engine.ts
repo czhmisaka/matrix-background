@@ -146,7 +146,7 @@ const resampleBitmap = (
 /**
  * 创建一个数字矩阵背景实例
  * @example
- * const rain = matrixRain({ theme: 'silicon-valley', fontSize: 16 });
+ * const rain = matrixRain({ theme: 'silicon-valley', fontSize: 6 });
  * // ...用完:
  * rain.destroy();
  */
@@ -166,7 +166,21 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     state.canvas.width = Math.max(1, Math.round(state.a * state.n));
     state.canvas.height = Math.max(1, Math.round(state.o * state.n));
     state.ctx.setTransform(state.n, 0, 0, state.n, 0, 0);
-    state.ef = state.a < 600 ? Math.min(state.cfg.fontSize, 12) : state.cfg.fontSize;
+    // 默认 fontSize 按 canvas 宽度连续映射:720p(1280)→6,4K(3840)→16,中间线性
+    // < 720p 落到硬下限 4(产品决策,见 memory/feedback_min_font_size.md)
+    // > 4K 固定 16,不再放大
+    // 用户显式传 fontSize 时,以用户值为准(不被自适应公式覆盖)
+    const userOverride = state.options.fontSize;
+    let adaptiveSize: number;
+    if (state.a < 1280) {
+      adaptiveSize = 4; // < 720p:硬下限
+    } else if (state.a >= 3840) {
+      adaptiveSize = 16; // ≥ 4K:封顶
+    } else {
+      // 1280 → 6,3840 → 16,中间 10/2560 = 0.00390625 per pixel
+      adaptiveSize = Math.round(6 + ((state.a - 1280) * 10) / 2560);
+    }
+    state.ef = userOverride !== undefined ? userOverride : adaptiveSize;
     state.r = Math.ceil(state.a / state.ef);
     state.i = Math.ceil(state.o / state.ef);
 
@@ -696,6 +710,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     setFlickerSpeed: methods.setFlickerSpeed,
     setTargetFPS: methods.setTargetFPS,
     setDensity: methods.setDensity,
+    setRenderScale: methods.setRenderScale,
+    getRenderScale: methods.getRenderScale,
     getFPS: methods.getFPS,
     getTransitionAlpha: methods.getTransitionAlpha,
     getDiagnostics: methods.getDiagnostics,
