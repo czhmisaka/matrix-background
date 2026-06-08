@@ -51,7 +51,7 @@
           </div>
 
           <h2 class="mt-32">代码</h2>
-          <pre class="code" tabindex="0" aria-label="当前 matrixRain 调用代码"><code>matrixRain({{ '{' }}
+          <pre class="code" role="region" tabindex="0" aria-label="当前 matrixRain 调用代码"><code>matrixRain({{ '{' }}
   canvas: ...,
   theme: {{ '{' }} coldFrom: '{{ coldFrom }}', warmFrom: '{{ warmFrom }}' {{ '}' }}
 {{ '}' }});</code></pre>

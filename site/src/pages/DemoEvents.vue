@@ -33,7 +33,7 @@
           </div>
 
           <h2 class="mt-32">最近事件</h2>
-          <pre class="log-stream" tabindex="0" aria-label="最近事件日志流">{{ lastEvent }}</pre>
+          <pre class="log-stream" role="region" tabindex="0" aria-label="最近事件日志流">{{ lastEvent }}</pre>
 
           <h2 class="mt-32">说明</h2>
           <p class="hint">onFrame 由内部 30Hz 节流,正常运行会持续增加;其他 3 个事件需手动触发或自动触发(onResize 200ms debounce,onTargetFinish 在 noise-converge 完成后)。</p>

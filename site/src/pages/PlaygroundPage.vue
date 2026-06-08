@@ -125,7 +125,7 @@
 
       <section class="code-output">
         <h3>代码</h3>
-        <pre tabindex="0" aria-label="当前 matrixRain 调用代码"><code>{{ codeString }}</code></pre>
+        <pre role="region" tabindex="0" aria-label="当前 matrixRain 调用代码"><code>{{ codeString }}</code></pre>
         <p class="hint">点击「复制代码」可一键复制当前调用。改任一参数,代码块会实时刷新。</p>
       </section>
     </div>

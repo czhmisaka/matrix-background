@@ -16,7 +16,7 @@
         <a href="https://www.npmjs.com/package/@xietuier/matrix-rain" target="_blank" rel="noopener" class="nav-cta">npm ↗</a>
       </nav>
 
-      <button class="nav-toggle" @click="mobileOpen = !mobileOpen" :aria-expanded="mobileOpen" aria-label="toggle menu">
+      <button class="nav-toggle" @click="mobileOpen = !mobileOpen" :aria-expanded="mobileOpen" aria-label="切换菜单">
         <span></span><span></span><span></span>
       </button>
     </div>

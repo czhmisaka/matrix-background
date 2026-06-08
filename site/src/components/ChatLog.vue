@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-log" ref="bodyEl">
+  <div class="chat-log" ref="bodyEl" aria-live="polite" :aria-busy="loading ? 'true' : 'false'">
     <div v-if="messages.length === 0" class="empty">在这里与 AI 助手对话,助手回复会从底部渐入显示</div>
     <div
       v-for="m in messages"
