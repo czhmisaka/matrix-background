@@ -4,7 +4,7 @@
     <div class="panel-header">
       <span class="tag">🪄 AI</span>
       <h2>调参</h2>
-      <button class="clear-btn" title="清空对话" @click="$emit('clear-chat')">×</button>
+      <button class="clear-btn" title="清空对话" aria-label="清空对话" @click="$emit('clear-chat')">×</button>
     </div>
 
     <!-- 模式选择 -->
@@ -29,12 +29,13 @@
           rows="2"
           placeholder="例:MATRIX / 硅谷大蟹"
           class="text-input"
+          aria-label="目标文字(将涌现的内容)"
         ></textarea>
-        <button class="apply-fab" title="生成" :disabled="!textInput.trim()" @click="onApplyText">✦</button>
+        <button class="apply-fab" title="生成" aria-label="生成文字位图" :disabled="!textInput.trim()" @click="onApplyText">✦</button>
       </div>
       <div class="opts-row">
         <label class="opts-label">位置</label>
-        <select v-model="textAnchor" class="opts-select">
+        <select v-model="textAnchor" class="opts-select" aria-label="位置">
           <option value="center">居中</option>
           <option value="topLeft">左上</option>
           <option value="topRight">右上</option>
@@ -42,7 +43,7 @@
           <option value="bottomRight">右下</option>
         </select>
         <label class="opts-label">运动</label>
-        <select v-model="textMotion" class="opts-select">
+        <select v-model="textMotion" class="opts-select" aria-label="运动">
           <option value="static">静止</option>
           <option value="drift">横向漂</option>
           <option value="bounce">反弹</option>
@@ -67,7 +68,7 @@
     <!-- 阶段 pill -->
     <div class="phase-strip">
       <span class="phase-label">PHASE</span>
-      <span :class="['phase-pill', `phase-${phase}`]">{{ phase }}</span>
+      <span :class="['phase-pill', `phase-${phase}`]" role="status" aria-live="polite">{{ phase }}</span>
       <span class="phase-time">{{ elapsed.toFixed(2) }}s</span>
     </div>
   </aside>

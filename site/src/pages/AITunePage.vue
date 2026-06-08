@@ -27,7 +27,7 @@
         @clear-chat="clearMessages"
       />
 
-      <main class="stage" ref="stageRef">
+      <section class="stage" ref="stageRef" aria-label="画布与状态">
         <canvas ref="canvasRef"></canvas>
         <div class="stage-info">
           <span class="stage-tag">FPS: {{ fps.toFixed(0) }}</span>
@@ -44,6 +44,7 @@
             <button
               class="ai-overlay-toggle"
               title="折叠/展开"
+              aria-label="折叠/展开 AI 对话"
               @click="overlayCollapsed = !overlayCollapsed"
             >▾</button>
           </div>
@@ -59,11 +60,12 @@
               type="text"
               placeholder="描述背景效果·如:熔岩红 雪崩下落 慢节奏"
               maxlength="200"
+              aria-label="AI 调参指令"
             >
-            <button type="submit" :disabled="!heroInput.trim() || isLoading" title="发送">→</button>
+            <button type="submit" :disabled="!heroInput.trim() || isLoading" title="发送" aria-label="发送 AI 指令">→</button>
           </form>
         </div>
-      </main>
+      </section>
     </div>
   </div>
 </template>
@@ -426,5 +428,16 @@ async function onSendFromOverlay() {
   .layout { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
   .ai-panel { border-right: 0; border-top: 1px solid var(--border); max-height: 50vh; }
   .stage { grid-row: 1; }
+}
+@media (max-width: 480px) {
+  /* 320px 移动端:AI 对话叠加层占满 canvas 底部全宽,避免被挤压无法阅读 */
+  .ai-overlay {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    min-width: 100%;
+    max-width: none;
+  }
 }
 </style>

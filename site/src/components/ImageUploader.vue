@@ -8,6 +8,7 @@
         v-if="file"
         class="clear-fab"
         title="清除"
+        aria-label="清除已选图片"
         @click="clear"
       >×</button>
     </div>
@@ -45,12 +46,13 @@
         class="apply-fab"
         :disabled="!file"
         title="生成"
+        aria-label="生成位图"
         @click="$emit('apply', file!, { anchor: anchor, motion: motion })"
       >✦</button>
     </div>
     <div class="opts-row">
       <label class="opts-label">位置</label>
-      <select v-model="anchor" class="opts-select">
+      <select v-model="anchor" class="opts-select" aria-label="位置">
         <option value="center">居中</option>
         <option value="topLeft">左上</option>
         <option value="topRight">右上</option>
@@ -58,7 +60,7 @@
         <option value="bottomRight">右下</option>
       </select>
       <label class="opts-label">运动</label>
-      <select v-model="motion" class="opts-select">
+      <select v-model="motion" class="opts-select" aria-label="运动">
         <option value="static">静止</option>
         <option value="drift">横向漂</option>
         <option value="bounce">反弹</option>
