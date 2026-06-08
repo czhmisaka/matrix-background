@@ -69,6 +69,11 @@
     "build": "tsup && cp src/matrix-rain.css dist/matrix-rain.css && mkdir -p dist/fonts && cp src/fonts/*.woff2 src/fonts/*.css dist/fonts/",
     "dev": "tsup --watch",
     "type-check": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"site/src/**/*.{ts,tsx,vue}\"",
+    "lint:fix": "eslint --fix \"src/**/*.{ts,tsx}\" \"site/src/**/*.{ts,tsx,vue}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,json,md}\" \"site/src/**/*.{ts,tsx,vue,css,json,md}\" \"*.{json,md,cjs,js}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json,md}\" \"site/src/**/*.{ts,tsx,vue,css,json,md}\" \"*.{json,md,cjs,js}\"",
+    "prepare": "husky",
     "test": "node test/smoke.mjs && node test/leak.mjs && node test/frame-rate.mjs && node test/events.mjs && node test/sandbox.mjs && node test/noise-converge.mjs && node test/canvas-remove.mjs && node test/transitions.mjs && node test/text-fit.mjs",
     "test:smoke": "node test/smoke.mjs",
     "test:leak": "node test/leak.mjs",
@@ -85,9 +90,20 @@
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
     "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "eslint-plugin-vue": "^9.27.0",
+    "globals": "^15.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0",
     "tsup": "^8.5.1",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vue-eslint-parser": "^9.4.0"
   },
   "engines": {
     "node": ">=18"

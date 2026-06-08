@@ -1,0 +1,13 @@
+dist/
+node_modules/
+site/dist/
+site/node_modules/
+coverage/
+*.min.js
+src/fonts/
+package-lock.json
+docs/audit-*.md
+docs/AUDIT-*.md
+docs/A11Y-AUDIT-*.md
+sitemap.xml
+robots.txt
