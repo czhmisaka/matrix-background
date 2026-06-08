@@ -334,7 +334,9 @@ export class PaletteLUT {
       dst.r[i] = r2;
       dst.g[i] = g2;
       dst.b[i] = b2;
-      dst.a[i] = Math.round((cA * oneMinusD + wA * dQuant) / 255);
+      // 修复:coldStatic.a / warmStatic.a 已是 0-255 范围(Uint8Array,rebuildStatic 用
+      // Math.round(a * 255)),直接插值即可,不要再次 / 255(会让 alpha ≈ 0,字符全透明)
+      dst.a[i] = Math.round(cA * oneMinusD + wA * dQuant);
     }
     this.blendedHash[di] = hash;
     return dst;
