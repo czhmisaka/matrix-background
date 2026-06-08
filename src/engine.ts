@@ -50,6 +50,57 @@ const FLICKER_SPEED_DEFAULT = 1;
 
 const DEFAULT_FLICKER = { high: 0.7, mid: 0.4, low: 0.15, dark: 0.04 };
 
+// ==================== 位图缩放(用于 targetFitMode)====================
+/**
+ * 灰度位图等比缩放(box filter)
+ * - src: 源 Float32Array(长度 srcW*srcH)
+ * - srcW/srcH: 源宽高
+ * - dstW/dstH: 目标宽高
+ * - 返回: 新的 Float32Array(长度 dstW*dstH)
+ * - 降采样时用 box filter(平均),升采样时用 nearest neighbor(快)
+ */
+const resampleBitmap = (
+  src: Float32Array,
+  srcW: number,
+  srcH: number,
+  dstW: number,
+  dstH: number
+): Float32Array => {
+  if (srcW === dstW && srcH === dstH) return new Float32Array(src);  // 1:1 直返
+  const dst = new Float32Array(dstW * dstH);
+  if (dstW >= srcW && dstH >= srcH) {
+    // 升采样:nearest neighbor
+    for (let y = 0; y < dstH; y++) {
+      const sy = Math.min(srcH - 1, Math.floor(y * srcH / dstH));
+      for (let x = 0; x < dstW; x++) {
+        const sx = Math.min(srcW - 1, Math.floor(x * srcW / dstW));
+        dst[y * dstW + x] = src[sy * srcW + sx];
+      }
+    }
+  } else {
+    // 降采样:box filter(对每个 dst 像素,覆盖 src 区域求平均)
+    const xRatio = srcW / dstW;
+    const yRatio = srcH / dstH;
+    for (let y = 0; y < dstH; y++) {
+      const sy0 = Math.floor(y * yRatio);
+      const sy1 = Math.min(srcH, Math.floor((y + 1) * yRatio));
+      for (let x = 0; x < dstW; x++) {
+        const sx0 = Math.floor(x * xRatio);
+        const sx1 = Math.min(srcW, Math.floor((x + 1) * xRatio));
+        let sum = 0, count = 0;
+        for (let sy = sy0; sy < sy1; sy++) {
+          for (let sx = sx0; sx < sx1; sx++) {
+            sum += src[sy * srcW + sx];
+            count++;
+          }
+        }
+        dst[y * dstW + x] = count > 0 ? sum / count : 0;
+      }
+    }
+  }
+  return dst;
+};
+
 // ==================== 事件节流/防抖常量 ====================
 const ONFRAME_THROTTLE_MS = 1000 / 30;  // onFrame 30Hz 节流
 const RESIZE_DEBOUNCE_MS = 200;         // onResize debounce
@@ -433,6 +484,14 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
   let targetHold = options.targetHold ?? Infinity;
   let targetFadeOut = Math.max(0.001, options.targetFadeOut ?? 2.0);
   let targetChaos = Math.max(0, Math.min(1, options.targetChaos ?? 0.5));
+  // ==================== A: 位图缩放策略(targetFitMode)====================
+  // contain (默认):位图 cols/rows 超过 grid 的 95% 时,等比缩放至完整显示
+  // cover:位图 cols/rows 小于 grid 时,等比放大填满(可能裁切)
+  // actual:按位图原始尺寸渲染(可能溢出)
+  // auto:根据内容自动选(长文本→contain,短文本/图→actual)
+  let targetFitMode: 'contain' | 'cover' | 'actual' | 'auto' = options.targetFitMode ?? 'contain';
+  // fitMode 缩放阈值(比例):bitmap dim 超过 grid dim * threshold 时,触发缩放
+  const FIT_THRESHOLD = 0.95;
   // 噪声→收敛模式(targetPhase='noise-converge')专用
   let targetPhase: 'fade' | 'noise-converge' = options.targetPhase ?? 'fade';
   let targetNoiseDuration = Math.max(0, options.targetNoiseDuration ?? 0.5);   // 全屏噪点时长(秒)
@@ -617,6 +676,66 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
   let effectiveCtp: ThemeParams = ctp;
   let effectiveWtp: ThemeParams = wtp;
 
+  // ==================== A: fitMode 缩放(用于 setTargetBitmap / resize)====================
+  // 1) contain:扫描非零 bbox,若 cols/rows > grid × 0.95,等比缩放
+  // 2) cover:  扫描非零 bbox,若 cols/rows < grid,等比放大
+  // 3) actual: 不缩放(旧版默认)
+  // 4) auto:   长文本(> grid cols * 0.4)→ contain,否则 actual
+  const applyTargetFitMode = (overrideMode?: 'contain' | 'cover' | 'actual' | 'auto') => {
+    if (!targetBitmap || targetCols <= 0 || targetRows <= 0) return;
+    if (r <= 0 || i <= 0) return;  // grid 未就绪
+    const mode = overrideMode ?? targetFitMode;
+    if (mode === 'actual') return;
+    // 扫描非零像素 bbox
+    let bbMinX = targetCols, bbMinY = targetRows, bbMaxX = -1, bbMaxY = -1;
+    for (let py = 0; py < targetRows; py++) {
+      for (let px = 0; px < targetCols; px++) {
+        if (targetBitmap[py * targetCols + px] > 0) {
+          if (px < bbMinX) bbMinX = px;
+          if (px > bbMaxX) bbMaxX = px;
+          if (py < bbMinY) bbMinY = py;
+          if (py > bbMaxY) bbMaxY = py;
+        }
+      }
+    }
+    if (bbMaxX < 0) return;  // 整张位图都黑,无内容
+    const bbCols = bbMaxX - bbMinX + 1;
+    const bbRows = bbMaxY - bbMinY + 1;
+    let needScale = false;
+    let scale = 1.0;
+    if (mode === 'contain') {
+      if (bbCols > r * FIT_THRESHOLD || bbRows > i * FIT_THRESHOLD) {
+        needScale = true;
+        scale = Math.min(r * FIT_THRESHOLD / bbCols, i * FIT_THRESHOLD / bbRows);
+      }
+    } else if (mode === 'cover') {
+      if (bbCols < r * FIT_THRESHOLD || bbRows < i * FIT_THRESHOLD) {
+        needScale = true;
+        scale = Math.max(r * FIT_THRESHOLD / bbCols, i * FIT_THRESHOLD / bbRows);
+      }
+    } else if (mode === 'auto') {
+      const isLong = bbCols > r * 0.4;
+      if (isLong && (bbCols > r * FIT_THRESHOLD || bbRows > i * FIT_THRESHOLD)) {
+        needScale = true;
+        scale = Math.min(r * FIT_THRESHOLD / bbCols, i * FIT_THRESHOLD / bbRows);
+      }
+    }
+    if (!needScale || scale <= 0) return;
+    const newCols = Math.max(1, Math.round(bbCols * scale));
+    const newRows = Math.max(1, Math.round(bbRows * scale));
+    // 提取 bbox 子位图
+    const sub = new Float32Array(bbCols * bbRows);
+    for (let py = 0; py < bbRows; py++) {
+      for (let px = 0; px < bbCols; px++) {
+        sub[py * bbCols + px] = targetBitmap[(py + bbMinY) * targetCols + (px + bbMinX)];
+      }
+    }
+    const resampled = resampleBitmap(sub, bbCols, bbRows, newCols, newRows);
+    targetBitmap = resampled;
+    targetCols = newCols;
+    targetRows = newRows;
+  };
+
   const buildGrid = () => {
     n = Math.min(window.devicePixelRatio || 1, cfg.maxDPR);
     // 关键修复:从 canvas 自身的实际展示尺寸读,而不是从 container 读
@@ -657,6 +776,9 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       b.push(row);
     }
     syncFrameCtxSize();
+    // ==================== A: resize 时重新 fitMode 缩放 ====================
+    // 网格大小变了,旧缩放可能不再合适,重新跑一遍
+    applyTargetFitMode();
     // noise-converge 模式:为每个目标区 cell 计算 lockTime + 初始化 locked
     // 放在 buildGrid 末尾,因为网格大小/锚点依赖最新 r/i/bitmap
     recomputeTargetLockTimes();
@@ -1660,6 +1782,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       convergeDuration?: number;
       lockOrder?: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft';
       lockStability?: number;
+      /** 单次覆盖 fitMode(不传则走实例 targetFitMode) */
+      fitMode?: 'contain' | 'cover' | 'actual' | 'auto';
       /** 可选:切换 phase 时,跨阶段过渡时长(秒)。不传则走实例默认 phaseTransitionDuration */
       phaseTransitionDuration?: number;
     }) {
@@ -1717,6 +1841,11 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         // 纯 Float32Array·需要传 cols/rows·这里用默认值(全屏)
         if (targetCols === 0) targetCols = r;
         if (targetRows === 0) targetRows = i;
+      }
+      // ==================== A: fitMode 缩放(防止位图溢出 grid)====================
+      // 单次覆盖 opts.fitMode 优先,否则走实例 targetFitMode
+      if (data && (targetCols > 0) && (targetRows > 0)) {
+        applyTargetFitMode(opts?.fitMode);
       }
       if (opts?.fadeIn !== undefined) targetFadeIn = opts.fadeIn;
       if (opts?.hold !== undefined) targetHold = opts.hold;

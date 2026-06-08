@@ -31,7 +31,7 @@ export { matrixRain as matrixRainInternal } from './engine';
 import { matrixRain } from './engine';
 export { matrixRain };
 export { textToBitmap, imageToBitmap, fileToImage } from './bitmap';
-export type { BitmapSource } from './bitmap';
+export type { BitmapSource, FitMode } from './bitmap';
 
 // ==================== Web Component ====================
 // 用法: import { MatrixRainElement } from '@xietuier/matrix-rain';

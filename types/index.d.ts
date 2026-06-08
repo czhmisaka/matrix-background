@@ -6,6 +6,17 @@
 /** 4 通道颜色:R, G, B, alpha(0-1) */
 export type RGBA = [number, number, number, number];
 
+/**
+ * 目标位图(textToBitmap 输出 / engine 渲染)的缩放策略
+ *
+ * - `contain` (默认):完整显示位图内容,保持宽高比,可能四周留空
+ *   当位图 cols 超过 grid cols 时,自动等比缩小(防止文字溢出可视区)
+ * - `cover`:填满整个 grid,保持宽高比,可能裁切
+ * - `actual`:按位图原始 cols/rows 渲染(旧版默认行为,可能溢出)
+ * - `auto`:根据位图内容自动选择 —— 长文本 / 高度比宽度比大的图 → contain,否则 actual
+ */
+export type FitMode = 'contain' | 'cover' | 'actual' | 'auto';
+
 /** HSL 调色板(方案 B): H/S/L 起点+终点, 公式生成 0-1 连续亮度 */
 export interface HSLPalette {
   /** 0-360 */
@@ -267,6 +278,15 @@ export interface MatrixRainOptions {
   targetCols?: number;
   /** 位图高(行数)· 0 = 默认等于 grid rows */
   targetRows?: number;
+  /**
+   * 位图 → 网格的缩放策略,默认 'contain'
+   * - contain (默认):位图内容超出 grid 时等比缩放以保证 0 溢出
+   * - cover:位图内容缩放填满 grid,可能裁切
+   * - actual:按位图原始尺寸渲染(可能溢出,旧版行为)
+   * - auto:根据位图实际内容 bbox 智能选择 contain/actual
+   * 引擎会扫描非零像素 bbox:若 cols/rows > 0.95 × grid,自动等比缩放
+   */
+  targetFitMode?: FitMode;
   /** 位图锚点· 决定位图在 grid 中的默认位置
    * - 'topLeft' (左上)
    * - 'center' (居中,默认)
@@ -449,6 +469,12 @@ export interface MatrixRainInstance {
     convergeDuration?: number;
     lockOrder?: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft';
     lockStability?: number;
+    /**
+     * 临时覆盖 instance.targetFitMode(单次生效)
+     * - 'contain' / 'cover' / 'actual' / 'auto'
+     * - 不传 → 走实例 targetFitMode(默认 'contain')
+     */
+    fitMode?: 'contain' | 'cover' | 'actual' | 'auto';
     /** 可选:切换 phase 时,跨阶段过渡时长(秒)。不传则走实例默认 phaseTransitionDuration */
     phaseTransitionDuration?: number;
   }): void;
@@ -460,8 +486,10 @@ export interface MatrixRainInstance {
    * - 用于:路由切换/页面离开时优雅淡出;新实例淡入
    * - 不影响性能:在 LUT 输出端乘 alpha,无额外 LUT 重建
    * - alpha=1 时完全等价于未启用
+   * @param alpha 目标透明度 0-1
+   * @param dur 可选 · 渐变时长(秒)。不传 = 立即切换;>0 = 在 dur 秒内线性插值
    */
-  setTransitionAlpha(alpha: number): void;
+  setTransitionAlpha(alpha: number, dur?: number): void;
   /** 读取当前 transition alpha(测试用) */
   getTransitionAlpha?(): number;
 

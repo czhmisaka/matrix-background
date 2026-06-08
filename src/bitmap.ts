@@ -6,6 +6,14 @@
  * 图片: 用 Image + OffscreenCanvas 缩放 → 取亮度
  */
 
+/** 位图 → 网格的缩放策略
+ * - 'contain' (默认):内容完整显示,可能留空
+ * - 'cover':填满网格,可能裁切
+ * - 'actual':按原始尺寸渲染(可能溢出,旧版默认)
+ * - 'auto':根据内容自动选 contain / actual
+ */
+export type FitMode = 'contain' | 'cover' | 'actual' | 'auto';
+
 export interface BitmapSource {
   /** 列数(cols) */
   cols: number;
@@ -21,12 +29,19 @@ export interface BitmapSource {
  * 一位 = 一个 grid cell,字形在画布上画完后直接 getImageData 读
  *
  * cols/rows · bitmap 输出尺寸(= grid 尺寸)
+ *
+ * @param fitMode 缩放策略,默认 'contain'(完整显示,不溢出)
+ *   - contain: 取 min(maxByHeight, maxByWidth) · 短文本按高度定,长文本按宽度压
+ *   - cover:   取 maxByWidth · 尽可能填满 cols
+ *   - actual:  取 maxByHeight · 按高度自然渲染,可能溢出 cols(旧版行为)
+ *   - auto:    短文本(< cols*0.4 chars)用 actual,长文本用 contain
  */
 export const textToBitmap = (
   text: string,
   cols: number,
   rows: number,
-  _gridCharPx?: number
+  _gridCharPx?: number,
+  fitMode: FitMode = 'contain'
 ): BitmapSource => {
   if (!cols || cols <= 0) cols = 80;
   if (!rows || rows <= 0) rows = 30;
@@ -56,7 +71,32 @@ export const textToBitmap = (
   const maxByHeight = Math.floor((rows * 0.85) / lineCount);
   // 按宽度算
   const maxByWidth = Math.floor((cols * 0.95) / (maxLineLen * charW));
-  let fontSize = Math.max(4, Math.min(maxByHeight, maxByWidth));
+
+  // ==================== fitMode 决定 fontSize 起点 ====================
+  let fontSize: number;
+  switch (fitMode) {
+    case 'cover':
+      // 优先按宽度铺满(忽略高度约束,可能纵向超出 rows)
+      fontSize = Math.max(4, maxByWidth);
+      break;
+    case 'actual':
+      // 按高度自然渲染(忽略宽度约束,可能横向超出 cols —— 旧版行为)
+      fontSize = Math.max(4, maxByHeight);
+      break;
+    case 'auto':
+      // 短文本(< cols*0.4 字符)用 actual(给短文本合适高度),长文本用 contain
+      if (maxLineLen <= cols * 0.4) {
+        fontSize = Math.max(4, maxByHeight);
+      } else {
+        fontSize = Math.max(4, Math.min(maxByHeight, maxByWidth));
+      }
+      break;
+    case 'contain':
+    default:
+      // 默认:取 min,保证文字不超出 cols * 0.95
+      fontSize = Math.max(4, Math.min(maxByHeight, maxByWidth));
+      break;
+  }
   ctx.font = `bold ${fontSize}px "JetBrains Mono", "Menlo", monospace`;
 
   // 自动换行(超出宽度则换)
@@ -75,12 +115,15 @@ export const textToBitmap = (
   }
   if (cur) lines.push(cur);
 
-  // 限宽
+  // 限宽(contain/auto 时强制 ensure,cover/actual 时尊重用户选择)
   let maxLineW = 0;
   for (const line of lines) {
     maxLineW = Math.max(maxLineW, ctx.measureText(line).width);
   }
   if (maxLineW > cols * 0.95) {
+    // 文本超出宽度 → 等比缩放(contain/auto/actual 都收敛到不超 cols)
+    // 注意:cover 模式如果用户想"溢出也填满",此处仍然会缩回 —— cover 模式 fontSize
+    // 起点已经按宽度算,正常情况不会到这里
     fontSize = Math.max(4, Math.floor(fontSize * (cols * 0.95) / maxLineW));
     ctx.font = `bold ${fontSize}px "JetBrains Mono", "Menlo", monospace`;
   }
@@ -104,11 +147,19 @@ export const textToBitmap = (
   return { cols, rows, data };
 };
 
-/** HTMLImageElement → 灰度位图 */
+/** HTMLImageElement → 灰度位图
+ *
+ * @param fitMode 缩放策略,默认 'contain'(与旧版行为一致)
+ *   - contain: 等比缩放完整显示,可能留空(旧版默认)
+ *   - cover:   等比缩放填满,可能裁切
+ *   - actual:  按原图尺寸拉伸到 cols×rows(可能变形)
+ *   - auto:    contain(同 contain,本函数无 auto 优化空间)
+ */
 export const imageToBitmap = (
   img: HTMLImageElement,
   cols: number,
-  rows: number
+  rows: number,
+  fitMode: FitMode = 'contain'
 ): BitmapSource => {
   const canvas = document.createElement('canvas');
   canvas.width = cols;
@@ -120,20 +171,42 @@ export const imageToBitmap = (
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, cols, rows);
 
-  // 居中绘制并保持比例(contain)
+  // 按 fitMode 计算目标绘制尺寸
   const ar = img.naturalWidth / img.naturalHeight;
   const tar = cols / rows;
   let w: number, h: number, x: number, y: number;
-  if (ar > tar) {
+  if (fitMode === 'actual') {
+    // 拉伸到 cols×rows(可能变形,旧版之外的选项)
     w = cols;
-    h = cols / ar;
-    x = 0;
-    y = (rows - h) / 2;
-  } else {
     h = rows;
-    w = rows * ar;
-    x = (cols - w) / 2;
+    x = 0;
     y = 0;
+  } else if (fitMode === 'cover') {
+    // 等比缩放填满,可能裁切
+    if (ar > tar) {
+      h = rows;
+      w = rows * ar;
+      x = (cols - w) / 2;
+      y = 0;
+    } else {
+      w = cols;
+      h = cols / ar;
+      x = 0;
+      y = (rows - h) / 2;
+    }
+  } else {
+    // contain / auto · 居中绘制并保持比例(完整显示,可能留空)
+    if (ar > tar) {
+      w = cols;
+      h = cols / ar;
+      x = 0;
+      y = (rows - h) / 2;
+    } else {
+      h = rows;
+      w = rows * ar;
+      x = (cols - w) / 2;
+      y = 0;
+    }
   }
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(img, x, y, w, h);
