@@ -189,7 +189,8 @@ export const applyTargetBitmapPhase = (
   h: number,
   s: number,
   l: number,
-  elapsedOpt?: number
+  elapsedOpt?: number,
+  isSub: boolean = false
 ): { l: number; ch: number; skipCharset: boolean } | null => {
   if (!state.targetBitmap || !state.targetActive || state.targetPhase !== 'noise-converge')
     return null;
@@ -262,10 +263,11 @@ export const applyTargetBitmapPhase = (
     };
   }
 
-  // 锚点快速拒绝
+  // 锚点快速拒绝 · 子格模式按 floor(h/eff) 映射回父格坐标再减锚点
   const { ox, oy } = computeTargetOrigin(state);
-  const bx = h - ox,
-    by = s - oy;
+  const eff = state.renderScaleEffective;
+  const bx = (isSub ? Math.floor(h / eff) : h) - ox,
+    by = (isSub ? Math.floor(s / eff) : s) - oy;
   if (bx < 0 || bx >= state.targetCols || by < 0 || by >= state.targetRows) {
     // 非目标区
     const convergeElapsed = elapsed - noiseStart;
@@ -320,7 +322,9 @@ export const applyTargetBitmapPhase = (
     c.lockedCh = Math.floor(Math.random() * state.charset.length);
   }
   if (c.locked) {
-    if (Math.random() > state.targetLockStability) {
+    // 子格模式:lockedCh 写只在父格层发生 1 次(Step 4 wrapper 在外层做)
+    // 此处只在 isSub=false 时随机化,避免 4 子格各写一次 → 最后赢的 bug
+    if (!isSub && Math.random() > state.targetLockStability) {
       c.lockedCh = Math.floor(Math.random() * state.charset.length);
     }
     return {

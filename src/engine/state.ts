@@ -463,7 +463,8 @@ export interface MatrixRainHooks {
     h: number,
     s: number,
     l: number,
-    elapsedOpt?: number
+    elapsedOpt?: number,
+    isSub?: boolean
   ) => { l: number; ch: number; skipCharset: boolean } | null;
   syncFrameCtxSize: () => void;
   fireOnFrame: () => void;

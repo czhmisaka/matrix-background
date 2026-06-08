@@ -659,7 +659,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     recomputeTargetLockTimes,
     resetAllCellLockState,
     updateTargetBitmapPhaseGlobal: () => updateTargetBitmapPhaseGlobal(state),
-    applyTargetBitmapPhase: (c, h, s, l, e) => applyTargetBitmapPhase(state, c, h, s, l, e),
+    applyTargetBitmapPhase: (c, h, s, l, e, isSub) =>
+      applyTargetBitmapPhase(state, c, h, s, l, e, isSub),
     syncFrameCtxSize,
     fireOnFrame,
     fireOnResize,
