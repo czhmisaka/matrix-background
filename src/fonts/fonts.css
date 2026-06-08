@@ -1,6 +1,20 @@
 /* @xietuier/matrix-rain · 自托管字体(原 Google Fonts · latin subset · variable)
- * 3 个 variable woff2 文件覆盖全部需要的 weight,体积 ~125 KB(原 GFonts 一次性约 270 KB)
- * 详见 docs/ROUTING-AUDIT-2026-06-07.md · 阶段 2 字体本地化
+ * 3 个 variable woff2 文件覆盖全部需要的 weight
+ *
+ * 2026-06-08 perf(fonts): 用 pyftsubset (fontTools 4.46 + brotli) 对字符级再 subset
+ *   - Inter:        48.4 KB → 25.4 KB (-46.3%) · latin + Latin-1 常用符号
+ *   - Fraunces:     45.6 KB → 23.1 KB (-48.2%) · ASCII 字母/数字 + H1 实际 161 CJK
+ *   - JetBrains:    31.3 KB → 23.4 KB (-23.7%) · latin + 符号 (code block 用)
+ *   - 总:           125.4 KB → 71.9 KB (-41.3%, 节省 ~50.6 KB ≥ 50 KB 目标 ✓)
+ *
+ * 设计要点:
+ *   - 原 Inter 字体本就是 latin-only subset,无 CJK glyph,中文走 system fallback
+ *   - Fraunces H1 实际含 161 CJK 已保留,H1 渲染不丢字
+ *   - pyftsubset 关键参数: --no-hinting (减重), --ignore-missing-glyphs (安全)
+ *   - 注意:--desubroutinize 会导致 Fraunces 丢失 B/X/Y/Z/6/8/9,故仅用 --no-hinting
+ *
+ * 历史:见 docs/ROUTING-AUDIT-2026-06-07.md (阶段 2 字体本地化,270 KB → 125 KB)
+ *      + docs/audit-perf-2026-06-08.md §0 P0-4 / §5 P1-5
  */
 
 /* Inter: variable font, 单文件覆盖 weight 400/500/600 */
