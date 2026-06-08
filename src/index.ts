@@ -40,7 +40,32 @@ export type { BitmapSource, FitMode } from './bitmap';
 export { MatrixRainElement } from './matrix-rain-element';
 export { mountFpsOverlay, type FpsOverlayHandle } from './fps-overlay';
 
-import type { MatrixRainInstance } from '../types';
+import type { MatrixRainInstance, EnvironmentInfo, ViewportBucket, BrowserName } from '../types';
+
+/**
+ * 视口宽度分档(<768 / 768-1024 / 1024-1440 / ≥1440)
+ * SSR / window 不可用时默认 'desktop'
+ */
+function pickViewportBucket(width: number): ViewportBucket {
+  if (width < 768) return 'mobile';
+  if (width < 1024) return 'tablet';
+  if (width < 1440) return 'desktop';
+  return 'wide';
+}
+
+/**
+ * UA 正则 → 浏览器型号(粗粒度;首匹配)
+ * 顺序:Edge / Opera / Chrome / Firefox / Safari / IE
+ */
+function detectBrowser(ua: string): BrowserName {
+  if (/Edg\//.test(ua)) return 'Edge';
+  if (/OPR\/|Opera/.test(ua)) return 'Opera';
+  if (/Firefox\//.test(ua)) return 'Firefox';
+  if (/Chrome\//.test(ua)) return 'Chrome';
+  if (/Safari\//.test(ua)) return 'Safari';
+  if (/MSIE|Trident\//.test(ua)) return 'IE';
+  return 'Unknown';
+}
 
 /**
  * 全局命名空间 · 静态工具方法
@@ -60,10 +85,12 @@ export const MatrixRain = {
       ? container.querySelectorAll<HTMLElement>('.matrix-rain-wrapper')
       : document.querySelectorAll<HTMLElement>('.matrix-rain-wrapper');
 
-    wrappers.forEach(w => {
+    wrappers.forEach((w) => {
       const inst = (w as any).__matrixRainInstance as MatrixRainInstance | undefined;
       if (inst) {
-        try { inst.destroy(); } catch (e) {}
+        try {
+          inst.destroy();
+        } catch (e) {}
       } else {
         // 兜底:即使没有实例引用,直接 remove DOM 也能停掉 rAF
         w.remove();
@@ -76,7 +103,66 @@ export const MatrixRain = {
   /** 当前活跃实例数(估算 · 通过数 DOM wrapper) */
   get activeCount(): number {
     return document.querySelectorAll('.matrix-rain-wrapper').length;
-  }
+  },
+
+  /**
+   * 环境检测 · 一次性读取当前运行环境
+   *
+   * 信号源:
+   * - `navigator.userAgent` → 浏览器型号 + 移动端判断
+   * - `window.matchMedia('(prefers-color-scheme: dark)')` → 暗色模式
+   * - `window.innerWidth` → 视口分档(mobile <768 / tablet 768-1024 / desktop 1024-1440 / wide ≥1440)
+   * - `window.devicePixelRatio` → DPR
+   *
+   * SSR 安全:`typeof window === 'undefined'` 时返回 desktop + 亮色 + 'Unknown' + DPR=1 默认值。
+   *
+   * 用法:
+   *   const env = MatrixRain.detect();
+   *   matrixRain({ fontSize: env.recommendedFontSize, targetFPS: env.recommendedTargetFPS, ... });
+   */
+  detect(): EnvironmentInfo {
+    // SSR / Node 环境:返回合理的 desktop 默认
+    if (typeof window === 'undefined') {
+      return {
+        isMobile: false,
+        isDarkMode: false,
+        recommendedFontSize: 14,
+        recommendedTargetFPS: 0,
+        recommendedBrightness: 1.0,
+        browser: 'Unknown',
+        viewport: 'desktop',
+        viewportWidth: 0,
+        devicePixelRatio: 1,
+      };
+    }
+
+    const w = window as any;
+    const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+    const viewportWidth = typeof w.innerWidth === 'number' ? w.innerWidth : 0;
+    const dpr = typeof w.devicePixelRatio === 'number' ? w.devicePixelRatio : 1;
+    const browser = detectBrowser(ua);
+    const viewport = pickViewportBucket(viewportWidth);
+    const isDarkMode =
+      typeof w.matchMedia === 'function'
+        ? w.matchMedia('(prefers-color-scheme: dark)').matches
+        : true;
+    const isMobile =
+      viewport === 'mobile' ||
+      /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) ||
+      (typeof w.matchMedia === 'function' && w.matchMedia('(pointer: coarse)').matches);
+
+    return {
+      isMobile,
+      isDarkMode,
+      recommendedFontSize: isMobile ? 16 : 14,
+      recommendedTargetFPS: isMobile ? 30 : 0,
+      recommendedBrightness: isDarkMode ? 1.1 : 1.0,
+      browser,
+      viewport,
+      viewportWidth,
+      devicePixelRatio: dpr,
+    };
+  },
 };
 
 // ==================== 默认导出 ====================
