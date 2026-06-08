@@ -7,7 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-待开发。下一版可能方向见 [`project_roadmap.md`](./docs/project_roadmap.md)。
+### Added
+
+- **`renderScale?: number | 'auto'`** —— 数字像素背景**动态分辨率**(类似"脏渲染")。启用后,目标位图激活时,**仅位图覆盖区**按倍率画子格(`renderScale=2` → 区内每个父格画 4 个子格 / 像素),位图区外 0 额外开销。文字/图片边缘锐度可肉眼对比提升,雨滴密度不变。
+  - `1` (默认): 行为 100% 等价于无此选项(向后兼容)
+  - `2` / `3` / `4`: 显式倍率,`>= 4` 性能急剧下降(仅适合短时演示)
+  - `'auto'`: 等价于 `2`,位图未激活时回到 `1`
+  - 输入钳位: `NaN` / 负数 / 0 → 1;`Infinity` / 100 → 16(上限)
+  - 配套热更新 `setRenderScale(s: number | 'auto')` + `getRenderScale(): number`,`getOptions().renderScale` 反映用户原值
+  - Web Component: `<matrix-rain render-scale="2">` / `render-scale="auto"`(不重建,同 `font-size` 走 `setDensity` 模式)
+  - ⚠️ **`avalanche` 变体**: 头亮 trail 按行对齐,子格仅在列方向生效(横向更锐,纵向密度不变)
+  - 配套 `test/render-scale.mjs`(11 用例): 1x 字节等价 / 2x 子格 fillText 计数 / 'auto' 解析 / 输入钳位 / 三变体协同 / 锁字符不重复写 bug 验证 / 颜色覆盖协同 / mid-animation 切换 / 主题切换协同。
+
+- **`textToBitmap` 第 6 参 `options: TextToBitmapOptions`** —— 支持任意字体(`font` 任意 CSS font-family,系统字体 / 自托管字体 / Google Fonts / 字符串列表 fallback 全兼容)+ CJK 全角字符宽度识别(`cjkAware` 默认 `true`,自动检测 8 段 CJK Unicode 范围:汉字 / 平假名 / 片假名 / 韩文 / 全角符号等,按 1.0×fontSize 宽计算;Latin 按 0.6×fontSize;混合文本按权重加权)+ `fontWeight` 可调(number 100-900 或 `normal` / `bold` / `lighter` / `bolder`)。**非破坏式扩展** —— 默认参数下行为与旧版一致(纯 Latin 文本)。配套 `test/text-fit.mjs` 新增 6 类用例:纯 CJK 字号小于纯 Latin / 5 类 CJK 字符 Unicode 范围识别 / 9 个 CSS font-family 透传 / 10 个 fontWeight 解析 / `cjkAware: false` 强制走旧行为 / 混合 CJK+Latin 字符按加权 charW 中庸值。
+
+- **`textToBitmap` 第 6 参 `options: TextToBitmapOptions`** —— 支持任意字体(`font` 任意 CSS font-family,系统字体 / 自托管字体 / Google Fonts / 字符串列表 fallback 全兼容)+ CJK 全角字符宽度识别(`cjkAware` 默认 `true`,自动检测 8 段 CJK Unicode 范围:汉字 / 平假名 / 片假名 / 韩文 / 全角符号等,按 1.0×fontSize 宽计算;Latin 按 0.6×fontSize;混合文本按权重加权)+ `fontWeight` 可调(number 100-900 或 `normal` / `bold` / `lighter` / `bolder`)。**非破坏式扩展** —— 默认参数下行为与旧版一致(纯 Latin 文本)。配套 `test/text-fit.mjs` 新增 6 类用例:纯 CJK 字号小于纯 Latin / 5 类 CJK 字符 Unicode 范围识别 / 9 个 CSS font-family 透传 / 10 个 fontWeight 解析 / `cjkAware: false` 强制走旧行为 / 混合 CJK+Latin 字符按加权 charW 中庸值。
+
+### Changed
+
+- `textToBitmap` 内部 charW 估计从硬编码 `0.6` (JetBrains Mono Latin 经验值)改为 **measureText 实测 + CJK 比例加权** 两步走:先用 100px 参考字号测真实宽度(任意字体自动适应),再按 CJK 字符数加权。空文本 fallback 到 `'M'` 测宽,避免除 0。
+- `text.length` 在 maxLineLen 等位置改为 `codePointLength(text)` —— 避免 supplementary plane(emoji / 罕用 CJK Ext B-G)的 surrogate pair 误算。
 
 ---
 

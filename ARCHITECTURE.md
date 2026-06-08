@@ -7,6 +7,7 @@
 > **不覆盖**: site 路由 / Vue 组件 / Playwright 测试 — 见 `site/src/` 与 `docs/A11Y-AUDIT-2026-06-08.md`。
 >
 > **配套文档**:
+>
 > - `README.md` —— 用户面向的 API
 > - `CHANGELOG.md` —— 版本历史
 > - `docs/AUDIT-2026-06-07.md` —— 2026-06-07 深度审计
@@ -45,22 +46,22 @@
 └────────────────────────────────────────────────────────────────┘
 ```
 
-| 层 | 模块 | 文件 | 适合 | 例子 |
-|---|---|---|---|---|
-| **D** 预设 | `PRESETS` | `src/curves/presets.ts` | 一键出效果 | `linear` / `easeIn` / `pulse` / `heartbeat` / `chaos` 共 8 个 |
-| **C** LUT | `buildLUT` | `src/curves/lut.ts` | 设计师手画 | 拖 16 控制点,自动生成线性采样表 |
-| **B** 波形 | `evalWave` / `evalChannels` | `src/curves/waves.ts` | 数据驱动 | `[sin*0.5, square*0.3, noise*0.2]` + `combine: sum` |
-| **A** 沙箱 | `compileUserFunction` | `src/curves/sandbox.ts` | 自由表达 | `ease.outBack(t % 1) * noise(t * 4)` |
+| 层         | 模块                        | 文件                    | 适合       | 例子                                                          |
+| ---------- | --------------------------- | ----------------------- | ---------- | ------------------------------------------------------------- |
+| **D** 预设 | `PRESETS`                   | `src/curves/presets.ts` | 一键出效果 | `linear` / `easeIn` / `pulse` / `heartbeat` / `chaos` 共 8 个 |
+| **C** LUT  | `buildLUT`                  | `src/curves/lut.ts`     | 设计师手画 | 拖 16 控制点,自动生成线性采样表                               |
+| **B** 波形 | `evalWave` / `evalChannels` | `src/curves/waves.ts`   | 数据驱动   | `[sin*0.5, square*0.3, noise*0.2]` + `combine: sum`           |
+| **A** 沙箱 | `compileUserFunction`       | `src/curves/sandbox.ts` | 自由表达   | `ease.outBack(t % 1) * noise(t * 4)`                          |
 
 **5 个动态量共享同一 4 层模型**:
 
-| 动态量 | Option 字段 | 控制什么 |
-|---|---|---|
-| 亮度 | `brightnessCurve` | 头部亮度的时序形状 |
-| 闪烁 | `flickerCurve` | 闪烁概率的时序形状 |
-| 相位 | `phaseFunc` | 每个字符相位推进速度 |
-| 字符 | `charsetFunc` | 当前字符索引 |
-| 颜色 | `colorCurve` | HSL 色相时序偏移 |
+| 动态量 | Option 字段       | 控制什么             |
+| ------ | ----------------- | -------------------- |
+| 亮度   | `brightnessCurve` | 头部亮度的时序形状   |
+| 闪烁   | `flickerCurve`    | 闪烁概率的时序形状   |
+| 相位   | `phaseFunc`       | 每个字符相位推进速度 |
+| 字符   | `charsetFunc`     | 当前字符索引         |
+| 颜色   | `colorCurve`      | HSL 色相时序偏移     |
 
 > **冷暖独立 + 注入点 + 时间旋转** = 颜色这条 4 层模型之外的额外控制(见 `README.md` §"颜色动态控制")。
 
@@ -71,6 +72,7 @@
 ### 2.1 rAF 主循环
 
 引擎入口 `matrixRain(options)`(`src/engine.ts`):
+
 1. 解析 options → 调色板 / ThemeParams / VariantParams / 网格大小
 2. 创建 canvas + 注入 container(`.matrix-rain-wrapper`)
 3. 启动 `requestAnimationFrame(draw)` 主循环
@@ -95,33 +97,83 @@
 
 引擎维护 3 个时间量:
 
-| 变量 | 类型 | 用途 | 误用风险 |
-|---|---|---|---|
-| `f` | 帧号 | 累计帧数,userFunc 取整用 | 跑 24h 累至 1e7+ 量级(浮点误差累积) |
-| `wallTime` | 秒 | `performance.now() / 1000` 派生,dt-based 状态机 | 跨调用累积浮点误差需 `+1e-9` epsilon |
-| `dt` | 秒 | 上一帧到现在秒数,`targetFPS` 节流用 | `setTargetFPS` 时需同步 `lastFrameTime`(防跳帧) |
+| 变量       | 类型 | 用途                                            | 误用风险                                        |
+| ---------- | ---- | ----------------------------------------------- | ----------------------------------------------- |
+| `f`        | 帧号 | 累计帧数,userFunc 取整用                        | 跑 24h 累至 1e7+ 量级(浮点误差累积)             |
+| `wallTime` | 秒   | `performance.now() / 1000` 派生,dt-based 状态机 | 跨调用累积浮点误差需 `+1e-9` epsilon            |
+| `dt`       | 秒   | 上一帧到现在秒数,`targetFPS` 节流用             | `setTargetFPS` 时需同步 `lastFrameTime`(防跳帧) |
 
 ### 2.3 4 种 draw 变体
 
 引擎对 4 种 `variant` 派发到不同 draw 函数(`src/engine.ts:454-598` 等):
 
-| 变体 | 入口函数 | 字符流动方式 | 适用场景 |
-|---|---|---|---|
-| `classic` | `drawClassic` | 字符匀速下落 + 残影拖尾 | 默认 / 黑客帝国 |
-| `ascii` | `drawClassic`(共享) | 同 classic(参数表相同) | 预留 ASCII 字符集(目前与 classic 共用) |
-| `avalanche` | `drawAvalanche` | 头部更亮 + 整列雪崩更新 | 加密牛市 / 高强度 |
-| `ripple` | `drawRipple` | 涟漪式波动 + 字符按 sin 相位 | 水波 / 平静 UI |
+| 变体        | 入口函数            | 字符流动方式                 | 适用场景                               |
+| ----------- | ------------------- | ---------------------------- | -------------------------------------- |
+| `classic`   | `drawClassic`       | 字符匀速下落 + 残影拖尾      | 默认 / 黑客帝国                        |
+| `ascii`     | `drawClassic`(共享) | 同 classic(参数表相同)       | 预留 ASCII 字符集(目前与 classic 共用) |
+| `avalanche` | `drawAvalanche`     | 头部更亮 + 整列雪崩更新      | 加密牛市 / 高强度                      |
+| `ripple`    | `drawRipple`        | 涟漪式波动 + 字符按 sin 相位 | 水波 / 平静 UI                         |
 
 > **⚠️ 注意**:`ascii` 变体在 `src/variant-defaults.ts` 与 `classic` 默认值一字不差,字符集未真正独立(`docs/AUDIT-2026-06-07.md` U-08)。
 
 ### 2.4 Canvas2D 输出顺序
 
 每帧网格 cell 循环,顺序:
+
 1. 计算本 cell 的 HSL 调色板索引(冷 / 暖 / 由 warmth 决定)
 2. 查 PaletteLUT(命中 4 张表之一),得到 `[r, g, b, a]`
 3. `ctx.fillStyle = 'rgba(...)'` 字符串拼接
 4. `ctx.fillText(charset[ch], x, y)`
 5. `trailAlpha` 通过不重设 `fillStyle` 直接画半透明黑色覆盖层模拟残影
+
+### 2.5 局部子格渲染(0.3.0+)· `renderScale`
+
+**触发条件**:
+
+- `state.renderScaleUser` 显式 > 1(数字)或 `'auto'` 且位图激活
+- `state.targetActive && state.targetBitmap !== null`
+- 每帧由 `resolveEffectiveRenderScale(state)` 重算 → 写 `state.renderScaleEffective`
+
+**坐标空间**:
+
+- 基础网格 `state.r × state.i`(由 `cssW / ef` × `cssH / ef` 决定)不变
+- 子格(在位图区内)按 `floor(hh / eff) - ox` 映射回父格 → 位图索引
+- 子格 fillText 字号 `subEf = state.ef / eff`,坐标 `hh * subEf + subEf/2`
+
+**三个变体的 cell 循环结构**(0.3.0+ 重构后):
+
+```ts
+for s in 0..i:
+  for h in 0..r:
+    c = state.b[s][h]
+    if (localBoost && isParentInBitmapRegion(h, s, ox, oy)) {
+      // === 子格路径 ===
+      computeParentCellStateXxx(state, c, h, s)  // 父 c.phase/bright/spark 更新 1 次
+      for ss in 0..eff:
+        for hh in 0..eff:
+          drawSubCellXxx(state, c, h*eff+hh, s*eff+ss, eff, subEf, ...)
+    } else {
+      // === 1x 路径(行为 100% 等价于改前)===
+      drawParentCellXxx(state, c, h, s, y, M, p, totalHue)
+    }
+```
+
+**关键不变量**:
+
+- 子格不写 `c.phase / c.bright / c.ch / c.warmth / c.locked / c.lockedCh` / `*Ease*` 任何字段
+- `c.lockedCh` 随机化每父 1 次/帧(`applyTargetBitmapPhase` 在子格层 `isSub=true` 跳过写)
+- `userFuncs`(`phaseFunc / brightnessCurve / charsetFunc`)每父调 1 次,子格继承
+- 基础网格 r/i 不变 → 不触发 `buildGrid`
+
+**性能边界**(以 1920×1080 视口 + 60×40 位图 + classic 变体为基准):
+| renderScale | 区内 fillText/帧 | 区外 | 总 | 60fps 可行? |
+|---:|---:|---:|---:|---|
+| 1 | 0(无) | 10.5K | 10.5K | ✅ |
+| 2 | 9.6K | 10.5K | 20.1K | ✅ |
+| 4 | 38.4K | 10.5K | 48.9K | ⚠️ 边缘 |
+| 8 | 153K | 10.5K | 163K | ❌ <30fps |
+
+详见 [README §动态分辨率 / 局部子格](README.md#动态分辨率--局部子格)。
 
 ---
 
@@ -131,16 +183,16 @@
 
 ```ts
 matrixRain({
-  targetBitmap: textToBitmap('HELLO'),    // Float32Array
-  targetPhase: 'noise-converge',           // 关键
-  targetNoiseDuration: 0.8,                 // 阶段 1
-  targetConvergeDuration: 0.6,             // 阶段 2
-  targetLockOrder: 'l2r',                   // 阶段 2 内锁定顺序
-  targetLockStability: 0.5,                 // 阶段 3 内字符稳定度
-  targetHold: 2.0,                          // 阶段 3
-  targetFadeOut: 0.5,                       // 阶段 4
-  targetAnchor: 'center',                   // 锚点
-  targetFitMode: 'contain'                  // 位图适配
+  targetBitmap: textToBitmap('HELLO'), // Float32Array
+  targetPhase: 'noise-converge', // 关键
+  targetNoiseDuration: 0.8, // 阶段 1
+  targetConvergeDuration: 0.6, // 阶段 2
+  targetLockOrder: 'l2r', // 阶段 2 内锁定顺序
+  targetLockStability: 0.5, // 阶段 3 内字符稳定度
+  targetHold: 2.0, // 阶段 3
+  targetFadeOut: 0.5, // 阶段 4
+  targetAnchor: 'center', // 锚点
+  targetFitMode: 'contain', // 位图适配
 });
 ```
 
@@ -161,22 +213,22 @@ noise     converge       hold         dissolve    idle
                        (继续 hold)    N+C+H+FOut 秒 → 触发 onTargetFinish
 ```
 
-| 阶段 | 时长字段 | 行为 | 关键函数 |
-|---|---|---|---|
-| **1 noise** | `targetNoiseDuration` | 全屏 `Math.random()` chaos 字符(每个 cell 独立随机亮度 + 字符) | `applyTargetBitmapPhase` Phase 1 |
-| **2 converge** | `targetConvergeDuration` | 目标区从 noise 渐变到锁定形态;非目标区从 noise 渐变回 rain;目标区 cell 按 `targetLockOrder` 顺序锁定 | `applyTargetBitmapPhase` Phase 2 |
-| **3 hold** | `targetHold`(默认 `Infinity` 永久) | 目标区 cell 锁定为位图灰度值,字符按 `targetLockStability` 概率更新 | `applyTargetBitmapPhase` Phase 3 |
-| **4 dissolve** | `targetFadeOut` | 按锁定时 `lockTime` 倒序解锁,每个 cell 单独 ease 回 chaos | `applyTargetBitmapPhase` Phase 4 |
-| **5 idle** | — | 还原到普通 rain,触发 `onTargetFinish` 回调,清理 `targetBitmap` | `updateTargetBitmapPhaseGlobal` |
+| 阶段           | 时长字段                           | 行为                                                                                                 | 关键函数                         |
+| -------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------- |
+| **1 noise**    | `targetNoiseDuration`              | 全屏 `Math.random()` chaos 字符(每个 cell 独立随机亮度 + 字符)                                       | `applyTargetBitmapPhase` Phase 1 |
+| **2 converge** | `targetConvergeDuration`           | 目标区从 noise 渐变到锁定形态;非目标区从 noise 渐变回 rain;目标区 cell 按 `targetLockOrder` 顺序锁定 | `applyTargetBitmapPhase` Phase 2 |
+| **3 hold**     | `targetHold`(默认 `Infinity` 永久) | 目标区 cell 锁定为位图灰度值,字符按 `targetLockStability` 概率更新                                   | `applyTargetBitmapPhase` Phase 3 |
+| **4 dissolve** | `targetFadeOut`                    | 按锁定时 `lockTime` 倒序解锁,每个 cell 单独 ease 回 chaos                                            | `applyTargetBitmapPhase` Phase 4 |
+| **5 idle**     | —                                  | 还原到普通 rain,触发 `onTargetFinish` 回调,清理 `targetBitmap`                                       | `updateTargetBitmapPhaseGlobal`  |
 
 ### 3.3 状态机共享函数
 
-| 函数 | 位置 | 作用 |
-|---|---|---|
-| `updateTargetBitmapPhaseGlobal()` | `src/engine.ts:981-1009` | 每帧 1 次,处理 dissolve 阶段进入 / 退出判定 |
+| 函数                                           | 位置                      | 作用                                            |
+| ---------------------------------------------- | ------------------------- | ----------------------------------------------- |
+| `updateTargetBitmapPhaseGlobal()`              | `src/engine.ts:981-1009`  | 每帧 1 次,处理 dissolve 阶段进入 / 退出判定     |
 | `applyTargetBitmapPhase(c, h, s, l, elapsed?)` | `src/engine.ts:1023-1149` | 每 cell 每帧 1 次,返回 `{ l, ch, skipCharset }` |
-| `computeTargetOrigin()` | `src/engine.ts:964-973` | 每帧 1 次,推导锚点偏移,缓存避免 per-cell 重算 |
-| `invalidateTargetAnchor()` | `src/engine.ts:974` | `setTargetBitmap` 时清缓存 |
+| `computeTargetOrigin()`                        | `src/engine.ts:964-973`   | 每帧 1 次,推导锚点偏移,缓存避免 per-cell 重算   |
+| `invalidateTargetAnchor()`                     | `src/engine.ts:974`       | `setTargetBitmap` 时清缓存                      |
 
 ### 3.4 状态机集成到 3 个 draw 变体
 
@@ -197,21 +249,21 @@ drawClassic / drawAvalanche / drawRipple
 
 `setTargetBitmap(bmp, opts)` 14 字段按类别分组:
 
-| 类别 | 字段 | 默认 |
-|---|---|---|
-| **阶段 1** | `noiseDuration` | 0.8 |
-| **阶段 2** | `convergeDuration` | 0.6 |
-| **阶段 3** | `lockOrder` (7 种) / `lockStability` | `'l2r'` / 0.5 |
-| **阶段 3+** | `hold` | `Infinity` |
-| **阶段 4** | `fadeOut` | 0.5 |
-| **阶段 1+** | `fadeIn` | 0.2 |
-| **阶段切换** | `phaseTransitionDuration` | 0.15 |
-| **锚点** | `anchor` (`center` / `topRight` / `bottomLeft` / `bottomRight` / `topLeft`) | `topLeft` |
-| **适配** | `fitMode` (5 种) | `contain` |
-| **动画** | `motion` (`none` / `drift` / `wave` / `pulse`) | `none` |
-| **动速** | `motionSpeed` | 1 |
-| **强度** | `chaos` | 1.0 |
-| **基础** | `phase` (`fade` / `noise-converge`) | `fade` |
+| 类别         | 字段                                                                        | 默认          |
+| ------------ | --------------------------------------------------------------------------- | ------------- |
+| **阶段 1**   | `noiseDuration`                                                             | 0.8           |
+| **阶段 2**   | `convergeDuration`                                                          | 0.6           |
+| **阶段 3**   | `lockOrder` (7 种) / `lockStability`                                        | `'l2r'` / 0.5 |
+| **阶段 3+**  | `hold`                                                                      | `Infinity`    |
+| **阶段 4**   | `fadeOut`                                                                   | 0.5           |
+| **阶段 1+**  | `fadeIn`                                                                    | 0.2           |
+| **阶段切换** | `phaseTransitionDuration`                                                   | 0.15          |
+| **锚点**     | `anchor` (`center` / `topRight` / `bottomLeft` / `bottomRight` / `topLeft`) | `topLeft`     |
+| **适配**     | `fitMode` (5 种)                                                            | `contain`     |
+| **动画**     | `motion` (`none` / `drift` / `wave` / `pulse`)                              | `none`        |
+| **动速**     | `motionSpeed`                                                               | 1             |
+| **强度**     | `chaos`                                                                     | 1.0           |
+| **基础**     | `phase` (`fade` / `noise-converge`)                                         | `fade`        |
 
 ---
 
@@ -227,24 +279,24 @@ drawClassic / drawAvalanche / drawRipple
 
 `src/palette-lut.ts` 维护 4 张 256 阶 RGBA 查找表(每张 1KB):
 
-| LUT | 失效时机 | 何时重建 |
-|---|---|---|
-| `coldStatic` | palette 变化 | `setPalettes` / `setTheme` / 主题切换 |
-| `warmStatic` | 同上 | 同上 |
-| `coldFinal` | TP 或 hue 旋转 | `setThemeParams` / `setHueRotate` / `setColorCurve` |
-| `warmFinal` | 同上 | 同上 |
+| LUT          | 失效时机       | 何时重建                                            |
+| ------------ | -------------- | --------------------------------------------------- |
+| `coldStatic` | palette 变化   | `setPalettes` / `setTheme` / 主题切换               |
+| `warmStatic` | 同上           | 同上                                                |
+| `coldFinal`  | TP 或 hue 旋转 | `setThemeParams` / `setHueRotate` / `setColorCurve` |
+| `warmFinal`  | 同上           | 同上                                                |
 
 > 整张表 < 8KB(2 静态 + 2 终态,各 256 阶 × 4 字节),相比 1-2MB 的全图缓存可忽略。
 
 ### 4.3 失效规则
 
-| 触发 | coldStatic | warmStatic | coldFinal | warmFinal |
-|---|:-:|:-:|:-:|:-:|
-| `setPalettes` | 🔄 | 🔄 | dirty | dirty |
-| `setTheme` | 🔄 | 🔄 | dirty | dirty |
-| `setThemeParams` / `setColdThemeParams` / `setWarmThemeParams` | — | — | 🔄 | 🔄 |
-| `setHueRotate` / `setColorCurve` | — | — | 🔄 | 🔄 |
-| `setColorOverrides(fn)` | — | — | skip | skip |
+| 触发                                                           | coldStatic | warmStatic | coldFinal | warmFinal |
+| -------------------------------------------------------------- | :--------: | :--------: | :-------: | :-------: |
+| `setPalettes`                                                  |     🔄     |     🔄     |   dirty   |   dirty   |
+| `setTheme`                                                     |     🔄     |     🔄     |   dirty   |   dirty   |
+| `setThemeParams` / `setColdThemeParams` / `setWarmThemeParams` |     —      |     —      |    🔄     |    🔄     |
+| `setHueRotate` / `setColorCurve`                               |     —      |     —      |    🔄     |    🔄     |
+| `setColorOverrides(fn)`                                        |     —      |     —      |   skip    |   skip    |
 
 🔄 = 立即重建(per-frame 不重算)· `dirty` = 下一帧 lazy 重建 · `skip` = 完全走 `colorOverride` 路径,不查 LUT
 
@@ -258,38 +310,38 @@ drawClassic / drawAvalanche / drawRipple
 
 引擎内部把所有过渡效果统一编号为 10 个类别,每个有独立 duration option:
 
-| ID | 类别 | duration option | 默认 | 作用 |
-|---|---|---|---|---|
-| **A1** | noise 阶段开头渐入 | `noiseFadeInDuration` | 0.2s | 从 rain 渐变到 chaos 字符 |
-| **A2** | 阶段间 crossfade | `phaseTransitionDuration` | 0.15s | `fade` ↔ `noise-converge` 切换 |
-| **A3** | per-cell 锁定 ease | `cellLockEaseDuration` | 0.12s | 单 cell 从 noise 锁定到目标灰度(`easeOut`) |
-| **A4** | per-cell 解锁 ease | `cellLockEaseDuration` | 0.12s | 单 cell 从目标灰度解锁回 noise(`easeIn`) |
-| **B1** | fade → noise-converge | `phaseTransitionDuration` | 0.15s | 跨阶段切换时旧状态快照 |
-| **B2** | noise-converge → fade | `phaseTransitionDuration` | 0.15s | 同 B1 镜像 |
-| **C1** | 主题切换 HSL 插值 | `themeTransitionDuration` | 0.4s | cold + warm palette 逐字段 lerp |
-| **C2** | 主题参数切换 | `themeTransitionDuration` | 0.4s | brightness / contrast 等 7 字段 |
-| **D1** | variant 切换 | `variantTransitionDuration` | 0.3s | variantParams 11 字段 lerp |
-| **E1** | 整体过渡系统 | (包裹 A1–D1) | — | A1–D1 的统一包裹层 |
+| ID     | 类别                  | duration option             | 默认  | 作用                                       |
+| ------ | --------------------- | --------------------------- | ----- | ------------------------------------------ |
+| **A1** | noise 阶段开头渐入    | `noiseFadeInDuration`       | 0.2s  | 从 rain 渐变到 chaos 字符                  |
+| **A2** | 阶段间 crossfade      | `phaseTransitionDuration`   | 0.15s | `fade` ↔ `noise-converge` 切换             |
+| **A3** | per-cell 锁定 ease    | `cellLockEaseDuration`      | 0.12s | 单 cell 从 noise 锁定到目标灰度(`easeOut`) |
+| **A4** | per-cell 解锁 ease    | `cellLockEaseDuration`      | 0.12s | 单 cell 从目标灰度解锁回 noise(`easeIn`)   |
+| **B1** | fade → noise-converge | `phaseTransitionDuration`   | 0.15s | 跨阶段切换时旧状态快照                     |
+| **B2** | noise-converge → fade | `phaseTransitionDuration`   | 0.15s | 同 B1 镜像                                 |
+| **C1** | 主题切换 HSL 插值     | `themeTransitionDuration`   | 0.4s  | cold + warm palette 逐字段 lerp            |
+| **C2** | 主题参数切换          | `themeTransitionDuration`   | 0.4s  | brightness / contrast 等 7 字段            |
+| **D1** | variant 切换          | `variantTransitionDuration` | 0.3s  | variantParams 11 字段 lerp                 |
+| **E1** | 整体过渡系统          | (包裹 A1–D1)                | —     | A1–D1 的统一包裹层                         |
 
 ### 5.1 lerp 助手
 
 `src/engine.ts:114-145` 提供 3 个 lerp:
 
-| 函数 | 字段数 | 用途 |
-|---|---|---|
-| `lerpHSLPalette(a, b, t)` | 5 | HSL 调色板冷 / 暖色 |
-| `lerpThemeParams(a, b, t)` | 7 | ThemeParams |
-| `lerpVariantParams(a, b, t)` | 11 | VariantParams |
+| 函数                         | 字段数 | 用途                |
+| ---------------------------- | ------ | ------------------- |
+| `lerpHSLPalette(a, b, t)`    | 5      | HSL 调色板冷 / 暖色 |
+| `lerpThemeParams(a, b, t)`   | 7      | ThemeParams         |
+| `lerpVariantParams(a, b, t)` | 11     | VariantParams       |
 
 ### 5.2 ease 函数
 
 `src/engine.ts:148-153` + `src/curves/sandbox.ts`:
 
-| 函数 | 曲线 | 用在 |
-|---|---|---|
-| `easeOut(t)` | `1 - (1-t)³` | A3 锁定 ease |
-| `easeIn(t)` | `t³` | A4 解锁 ease |
-| `easeInOut(t)` | cubic | 通用 |
+| 函数                     | 曲线                                                            | 用在                   |
+| ------------------------ | --------------------------------------------------------------- | ---------------------- |
+| `easeOut(t)`             | `1 - (1-t)³`                                                    | A3 锁定 ease           |
+| `easeIn(t)`              | `t³`                                                            | A4 解锁 ease           |
+| `easeInOut(t)`           | cubic                                                           | 通用                   |
 | `ease.*` (sandbox 13 种) | inQuad / outCubic / inOutSine / outBack / inOutExpo / outCirc … | A 层 userFunc 自由组合 |
 
 ---
@@ -312,22 +364,22 @@ drawClassic / drawAvalanche / drawRipple
 
 `src/matrix-rain-element.ts:26-27`:
 
-| 属性 | 类型 | 触发 |
-|---|---|---|
-| `theme` | ThemeName | `setTheme` 热更 |
-| `variant` | VariantName | destroy + init(`_reload`) |
-| `font-size` | number | `setDensity` 热更 |
-| `charset` | string | destroy + init(`_reload`) |
+| 属性        | 类型        | 触发                      |
+| ----------- | ----------- | ------------------------- |
+| `theme`     | ThemeName   | `setTheme` 热更           |
+| `variant`   | VariantName | destroy + init(`_reload`) |
+| `font-size` | number      | `setDensity` 热更         |
+| `charset`   | string      | destroy + init(`_reload`) |
 
 ### 6.3 编程 API
 
 ```ts
 const el = document.querySelector('matrix-rain');
-el.theme = 'lava-red';        // 等同 setAttribute('theme', 'lava-red')
-el.setVariant('ripple');      // 触发 _reload
-el.fps;                       // 只读,转发 __instance.getFPS()
-el.instance;                  // 拿到原生 MatrixRainInstance
-el.destroy();                 // 销毁 + 置 null
+el.theme = 'lava-red'; // 等同 setAttribute('theme', 'lava-red')
+el.setVariant('ripple'); // 触发 _reload
+el.fps; // 只读,转发 __instance.getFPS()
+el.instance; // 拿到原生 MatrixRainInstance
+el.destroy(); // 销毁 + 置 null
 ```
 
 ### 6.4 SSR / Node 兜底
@@ -366,23 +418,23 @@ graph TD
 
 ### 7.2 物理文件
 
-| 文件 | 行数 | 角色 |
-|---|---:|---|
-| `src/index.ts` | 83 | 主入口,转出 engine + bitmap + Web Component + 静态 `MatrixRain` 命名空间 |
-| `src/core.ts` | 48 | SSR 友好的非 DOM 集合,转出 themes / VARIANT_DEFAULTS / palette-lut / curves / sandbox / types |
-| `src/engine.ts` | 2199 | 巨型核心,`matrixRain()` + 主循环 + 状态机 + 4 个 draw 变体 + 25+ 个 method |
-| `src/matrix-rain-element.ts` | 176 | `<matrix-rain>` 自定义元素,观察属性 + 热更 |
-| `src/bitmap.ts` | 243 | `textToBitmap` / `imageToBitmap` / `fileToImage`(含 `FitMode` 缩放) |
-| `src/themes.ts` | 79 | 5 套 HSL 调色板工厂 |
-| `src/variant-defaults.ts` | 13 | 4 种 variant 的 11 字段默认参数 |
-| `src/palette-lut.ts` | 248 | 4 张 256 阶 RGBA LUT + `hslToRGBA` + `applyTP` |
-| `src/fps-overlay.ts` | 103 | 实时 FPS 角标 |
-| `src/curves/waves.ts` | 101 | B 层 3 channel × 6 基波 × 4 算符 |
-| `src/curves/lut.ts` | 50 | C 层控制点 → JS 代码生成 |
-| `src/curves/presets.ts` | 76 | D 层 8 个 preset + 类型导出 |
-| `src/curves/sandbox.ts` | 311 | A 层沙箱安全模型(50+ 关键词黑名单 + 步数上限) |
-| `src/matrix-rain.css` | — | canvas 容器 absolute 定位 + woff2 字体 |
-| `types/index.d.ts` | 579 | 27 个导出(21 type + 3 const + 1 fn + 1 namespace) |
+| 文件                         | 行数 | 角色                                                                                          |
+| ---------------------------- | ---: | --------------------------------------------------------------------------------------------- |
+| `src/index.ts`               |   83 | 主入口,转出 engine + bitmap + Web Component + 静态 `MatrixRain` 命名空间                      |
+| `src/core.ts`                |   48 | SSR 友好的非 DOM 集合,转出 themes / VARIANT_DEFAULTS / palette-lut / curves / sandbox / types |
+| `src/engine.ts`              | 2199 | 巨型核心,`matrixRain()` + 主循环 + 状态机 + 4 个 draw 变体 + 25+ 个 method                    |
+| `src/matrix-rain-element.ts` |  176 | `<matrix-rain>` 自定义元素,观察属性 + 热更                                                    |
+| `src/bitmap.ts`              |  243 | `textToBitmap` / `imageToBitmap` / `fileToImage`(含 `FitMode` 缩放)                           |
+| `src/themes.ts`              |   79 | 5 套 HSL 调色板工厂                                                                           |
+| `src/variant-defaults.ts`    |   13 | 4 种 variant 的 11 字段默认参数                                                               |
+| `src/palette-lut.ts`         |  248 | 4 张 256 阶 RGBA LUT + `hslToRGBA` + `applyTP`                                                |
+| `src/fps-overlay.ts`         |  103 | 实时 FPS 角标                                                                                 |
+| `src/curves/waves.ts`        |  101 | B 层 3 channel × 6 基波 × 4 算符                                                              |
+| `src/curves/lut.ts`          |   50 | C 层控制点 → JS 代码生成                                                                      |
+| `src/curves/presets.ts`      |   76 | D 层 8 个 preset + 类型导出                                                                   |
+| `src/curves/sandbox.ts`      |  311 | A 层沙箱安全模型(50+ 关键词黑名单 + 步数上限)                                                 |
+| `src/matrix-rain.css`        |    — | canvas 容器 absolute 定位 + woff2 字体                                                        |
+| `types/index.d.ts`           |  579 | 27 个导出(21 type + 3 const + 1 fn + 1 namespace)                                             |
 
 ---
 
@@ -390,33 +442,33 @@ graph TD
 
 ### 8.1 关键指标
 
-| 指标 | 预算 | 实测(2026-06-08 基线) | 评级 |
-|---|---:|---:|---|
-| **FCP** | < 100ms | 56ms(中位) | 🟢 极好 |
-| **LCP** | < 200ms | 86ms(中位) | 🟢 极好 |
-| **TTI**(估算) | < 100ms | 56ms(中位) | 🟢 极好 |
-| **FPS**(桌面) | 60fps | 120fps(v-sync cap) | 🟢 优秀 |
-| **FPS**(移动端) | ≥ 30fps | (未测) | — |
-| **longtask > 50ms** | ≤ 1/路由 | 0–1/路由 | 🟢 优秀 |
-| **CLS** | < 0.1 | 0.20(最差 `/`)| 🟠 6/12 路由超标 |
-| **总资源** | < 300KB/路由 | 283KB(中位) | 🟡 字体占 43% |
-| **JS** | < 50KB | 41KB(未 minify) | 🟢 预算内 |
-| **gzip JS** | < 20KB | ~12-15KB(预计) | 🟢 |
-| **内存** | < 30MB | 估算 8-15MB | 🟢 |
+| 指标                |         预算 | 实测(2026-06-08 基线) | 评级             |
+| ------------------- | -----------: | --------------------: | ---------------- |
+| **FCP**             |      < 100ms |            56ms(中位) | 🟢 极好          |
+| **LCP**             |      < 200ms |            86ms(中位) | 🟢 极好          |
+| **TTI**(估算)       |      < 100ms |            56ms(中位) | 🟢 极好          |
+| **FPS**(桌面)       |        60fps |    120fps(v-sync cap) | 🟢 优秀          |
+| **FPS**(移动端)     |      ≥ 30fps |                (未测) | —                |
+| **longtask > 50ms** |     ≤ 1/路由 |              0–1/路由 | 🟢 优秀          |
+| **CLS**             |        < 0.1 |        0.20(最差 `/`) | 🟠 6/12 路由超标 |
+| **总资源**          | < 300KB/路由 |           283KB(中位) | 🟡 字体占 43%    |
+| **JS**              |       < 50KB |       41KB(未 minify) | 🟢 预算内        |
+| **gzip JS**         |       < 20KB |        ~12-15KB(预计) | 🟢               |
+| **内存**            |       < 30MB |           估算 8-15MB | 🟢               |
 
 > 详细数字见 `docs/PERF-BASELINE-2026-06-08.md`。
 
 ### 8.2 热路径优化清单
 
-| 优化点 | 文件:行 | 效果 |
-|---|---|---|
-| `PaletteLUT` 4 张表 | `src/palette-lut.ts` | HSL→RGBA + applyTP 从 per-cell 降到 per-frame |
-| `onFrame` 30Hz 节流 | `src/engine.ts:105` | 避免回调阻塞主循环 |
-| `onResize` 200ms debounce | `src/engine.ts:106` | 避免 resize 风暴 |
-| `computeTargetOrigin` 缓存 | `src/engine.ts:962-974` | 5 锚点 if 链从 per-cell 降到 per-frame |
-| `l < 0.02` 早 continue | `src/engine.ts` drawClassic | 不可见 cell 跳过 fillStyle + fillText |
-| `lastCtx` 缓存 | (待办 QW-P1) | userFunc 调用前判 (h,s,c,l) 是否变化,跳过 buildCtx |
-| 静态 `clamp` / `lerp` / `noise` 提升 | (待办 QW-P1) | 闭包外提,避免每帧 5000 次箭头函数分配 |
+| 优化点                               | 文件:行                     | 效果                                               |
+| ------------------------------------ | --------------------------- | -------------------------------------------------- |
+| `PaletteLUT` 4 张表                  | `src/palette-lut.ts`        | HSL→RGBA + applyTP 从 per-cell 降到 per-frame      |
+| `onFrame` 30Hz 节流                  | `src/engine.ts:105`         | 避免回调阻塞主循环                                 |
+| `onResize` 200ms debounce            | `src/engine.ts:106`         | 避免 resize 风暴                                   |
+| `computeTargetOrigin` 缓存           | `src/engine.ts:962-974`     | 5 锚点 if 链从 per-cell 降到 per-frame             |
+| `l < 0.02` 早 continue               | `src/engine.ts` drawClassic | 不可见 cell 跳过 fillStyle + fillText              |
+| `lastCtx` 缓存                       | (待办 QW-P1)                | userFunc 调用前判 (h,s,c,l) 是否变化,跳过 buildCtx |
+| 静态 `clamp` / `lerp` / `noise` 提升 | (待办 QW-P1)                | 闭包外提,避免每帧 5000 次箭头函数分配              |
 
 ### 8.3 3 个 P0 优化点(从 PERF-BASELINE)
 
@@ -469,14 +521,14 @@ graph TD
 
 详见 `docs/audit-security-2026-06-08.md` 和 `src/curves/sandbox.ts`:
 
-| 防线 | 机制 |
-|---|---|
-| 词级黑名单 | 50+ 关键词(`window` / `document` / `eval` / `fetch` / `setTimeout` / `Proxy` / `import` …) |
-| 白名单全局 | `Math` / `Number` / `String` / `Boolean` / `Array` 冻结对象,只暴露安全方法 |
-| 步数上限 | `__check()` 10000 步,超限抛错 |
-| 字符串上限 | `code.length > 5KB` 拒绝编译 |
-| 返回值校验 | 必须 `string \| number`,否则当 0 |
-| 编译失败 fallback | 静默回 0,`getDiagnostics()` 查询 |
+| 防线              | 机制                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------ |
+| 词级黑名单        | 50+ 关键词(`window` / `document` / `eval` / `fetch` / `setTimeout` / `Proxy` / `import` …) |
+| 白名单全局        | `Math` / `Number` / `String` / `Boolean` / `Array` 冻结对象,只暴露安全方法                 |
+| 步数上限          | `__check()` 10000 步,超限抛错                                                              |
+| 字符串上限        | `code.length > 5KB` 拒绝编译                                                               |
+| 返回值校验        | 必须 `string \| number`,否则当 0                                                           |
+| 编译失败 fallback | 静默回 0,`getDiagnostics()` 查询                                                           |
 
 ### 10.2 SSR 边界
 
@@ -486,10 +538,10 @@ graph TD
 
 ## 11 · 版本与变更追踪
 
-| 版本 | 日期 | 关键变更 |
-|---|---|---|
-| 0.1.0 | 2026-06-08 | 首发(详见 `CHANGELOG.md`) |
-| 0.2.0 | 待定 | FitMode 默认 `contain`(BREAKING)+ 文档补全 + `MatrixRain.detect()` 补全 |
+| 版本  | 日期       | 关键变更                                                                |
+| ----- | ---------- | ----------------------------------------------------------------------- |
+| 0.1.0 | 2026-06-08 | 首发(详见 `CHANGELOG.md`)                                               |
+| 0.2.0 | 待定       | FitMode 默认 `contain`(BREAKING)+ 文档补全 + `MatrixRain.detect()` 补全 |
 
 ---
 

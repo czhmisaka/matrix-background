@@ -373,15 +373,16 @@ export default function MatrixBg() {
 
 **基础**
 
-| 字段           | 类型          | 默认               | 说明                                                                                   |
-| -------------- | ------------- | ------------------ | -------------------------------------------------------------------------------------- |
-| `theme`        | `ThemeName`   | `'silicon-valley'` | 主题预设 · `silicon-valley` / `matrix-green` / `lava-red` / `cyber-blue` / `pure-mono` |
-| `variant`      | `VariantName` | `'classic'`        | 变体 · `classic` / `avalanche` / `ripple` / `ascii`                                    |
-| `fontSize`     | `number`      | `14`               | 字符宽(px)                                                                             |
-| `charset`      | `string`      | `'0123456789'`     | 字符集                                                                                 |
-| `trailAlpha`   | `number`      | `0.18`             | 残影 alpha,0.05=长拖尾 / 0.5=无拖尾                                                    |
-| `maxDPR`       | `number`      | `2`                | DPR 上限,性能优先设 1                                                                  |
-| `flickerSpeed` | `number`      | `1`                | 闪烁速度倍率 · 0=冻结 1=默认 3=狂暴                                                    |
+| 字段           | 类型               | 默认               | 说明                                                                                   |
+| -------------- | ------------------ | ------------------ | -------------------------------------------------------------------------------------- |
+| `theme`        | `ThemeName`        | `'silicon-valley'` | 主题预设 · `silicon-valley` / `matrix-green` / `lava-red` / `cyber-blue` / `pure-mono` |
+| `variant`      | `VariantName`      | `'classic'`        | 变体 · `classic` / `avalanche` / `ripple` / `ascii`                                    |
+| `fontSize`     | `number`           | `14`               | 字符宽(px)                                                                             |
+| `charset`      | `string`           | `'0123456789'`     | 字符集                                                                                 |
+| `trailAlpha`   | `number`           | `0.18`             | 残影 alpha,0.05=长拖尾 / 0.5=无拖尾                                                    |
+| `maxDPR`       | `number`           | `2`                | DPR 上限,性能优先设 1                                                                  |
+| `renderScale`  | `number \| 'auto'` | `1`                | 局部子格渲染倍率(0.3.0+)· 详见[§动态分辨率 / 局部子格](#动态分辨率--局部子格)          |
+| `flickerSpeed` | `number`           | `1`                | 闪烁速度倍率 · 0=冻结 1=默认 3=狂暴                                                    |
 
 **颜色 / 调色板**
 
@@ -515,6 +516,69 @@ rain.setTargetBitmap(imageToBitmap(img, 50, 30).data);
 rain.clearTargetBitmap();
 ```
 
+### 🈶 `textToBitmap` 文字渲染:任意字体 + CJK 全角识别
+
+`textToBitmap` 第 6 个参数 `options` 支持自定义字体和 CJK 字符宽度识别:
+
+```ts
+textToBitmap(
+  text: string,
+  cols: number,
+  rows: number,
+  _gridCharPx?: number,
+  fitMode?: 'contain' | 'cover' | 'actual' | 'auto',  // 默认 'contain'
+  options?: {
+    font?: string;                                    // CSS font-family
+    fontWeight?: number | 'normal' | 'bold' | ...;    // CSS font-weight
+    cjkAware?: boolean;                               // 是否启用 CJK 全角识别
+  }
+): { cols, rows, data: Float32Array };
+```
+
+| 选项                 | 默认值                                      | 说明                                                                                                                                                                                                                |
+| -------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `options.font`       | `'JetBrains Mono, ui-monospace, monospace'` | 任意 CSS font-family。系统字体(serif / sans-serif / monospace)、自托管字体(Inter / Fraunces)、Google Fonts 全部支持。字符串列表自动 fallback:`'"Source Han Sans CN", "PingFang SC", "Microsoft YaHei", sans-serif'` |
+| `options.fontWeight` | `'bold'` (700)                              | 接受 100-900 数字或 `'normal'` / `'bold'` / `'lighter'` / `'bolder'`                                                                                                                                                |
+| `options.cjkAware`   | `true`                                      | 启用后自动检测 CJK 字符(汉字 / 平假名 / 片假名 / 韩文 / 全角符号),按 1.0×fontSize 宽计算;Latin 按 0.6×fontSize;混合文本按权重加权。`false` 时全部按 0.6×fontSize(旧版行为)                                          |
+
+**典型场景**:
+
+```ts
+// 1. 中英文混合标题 · 系统 CJK 字体
+const bm = textToBitmap('Hello · 你好世界', 60, 20, undefined, 'contain', {
+  font: '"PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif',
+  fontWeight: 600,
+});
+rain.setTargetBitmap(bm, { phase: 'noise-converge' });
+
+// 2. 衬线大标题 · Fraunces italic
+const bm2 = textToBitmap('MATRIX', 80, 30, undefined, 'cover', {
+  font: 'Fraunces, Georgia, serif',
+  fontWeight: 700,
+});
+
+// 3. 纯数字 ASCII · 关闭 CJK 识别提速(避免 measureText 走 CJK regex 分支)
+const bm3 = textToBitmap('0123456789', 100, 20, undefined, 'contain', {
+  font: '"JetBrains Mono", monospace',
+  cjkAware: false,
+});
+```
+
+**CJK 字符识别范围**(共 8 个 Unicode 区段,覆盖全部常用 CJK + 韩文 + 日文假名 + 全角符号):
+
+| 范围        | 名称                             |
+| ----------- | -------------------------------- |
+| U+3000-303F | CJK Symbols and Punctuation      |
+| U+3040-309F | Hiragana(平假名)                 |
+| U+30A0-30FF | Katakana(片假名)                 |
+| U+3400-4DBF | CJK Extension A                  |
+| U+4E00-9FFF | CJK Unified Ideographs(基本汉字) |
+| U+AC00-D7AF | Hangul Syllables(韩文)           |
+| U+F900-FAFF | CJK Compatibility Ideographs     |
+| U+FF00-FFEF | Halfwidth and Fullwidth Forms    |
+
+不含 emoji(避免误判装饰 emoji);不含 SMP 扩展(罕用 CJK Ext B-G,需要时手动传 `cjkAware: false`)。
+
 ### 🌌 图像"噪声 → 收敛"涌现动画
 
 把图片上传/拖入,引擎先用全屏噪点覆盖网格,然后逐 cell 锁定为图片轮廓,5 段状态机跑完整段:
@@ -552,6 +616,97 @@ rain.setTargetBitmap(bitmap, {
 ```
 
 完整 Demo 见 [`/demos/image-converge`](https://matrix-rain.xietuier.ai/demos/image-converge) — 拖入图片、4 个内置预设、3 个滑块调参。
+
+---
+
+## 🔍 动态分辨率 / 局部子格(0.3.0+)
+
+**问题**: 文字/图片位图(`textToBitmap` / `imageToBitmap`)的精度被网格密度锁死,想"字形更锐"只能调小 `fontSize` —— 但这同时缩小显示尺寸、改变雨滴密度,副作用大。
+
+**方案**: 类似"脏渲染" —— 启用 `renderScale` 后,**仅位图覆盖区**按倍率画子格(父格被拆成 `renderScale²` 个子格),位图区外 0 额外开销。雨滴密度不变,文字/图片边缘锐度肉眼可辨地提升。
+
+### 用法
+
+```ts
+import { matrixRain } from '@xietuier/matrix-rain';
+
+// 1) 显式倍率 2x(位图激活时,区内每个父格画 4 个子格)
+const rain = matrixRain({ renderScale: 2 });
+rain.setTargetBitmap(myBitmap, { phase: 'noise-converge', hold: Infinity });
+
+// 2) 自动模式(等价于 2,位图未激活时回到 1)
+const rain2 = matrixRain({ renderScale: 'auto' });
+// 位图未激活时:rain2.getRenderScale() === 1
+// 位图激活时:rain2.getRenderScale() === 2
+
+// 3) 热更新
+rain.setRenderScale(3); // 立即生效,不重建
+rain.setRenderScale('auto');
+rain.getRenderScale(); // 读取 effective 数值
+```
+
+### 关键特性
+
+| 取值       | 行为                            | 性能                 |
+| ---------- | ------------------------------- | -------------------- |
+| `1` (默认) | 100% 等价于无此选项             | 0 额外开销           |
+| `2`        | 位图区每父格画 4 个子格         | ~1.7x fillText/帧    |
+| `3`        | 9 个子格/父格                   | ~2.5x                |
+| `4`        | 16 个子格/父格                  | ~4.5x,建议短时演示   |
+| `8`+       | 几何极限                        | 性能急剧下降         |
+| `'auto'`   | 等价于 `2`,位图未激活时回到 `1` | 同 `2`(但仅在激活时) |
+
+**热更新**:`setRenderScale(s)` 不触发 `buildGrid`(基础网格 r/i 不变),只影响后续帧的子格路径。`getRenderScale()` 立即反映新值。
+
+**Web Component**: `<matrix-rain render-scale="2">` / `render-scale="auto"`(不重建,同 `font-size` 走 `setDensity` 模式)。
+
+### 输入钳位
+
+| 输入                       | 钳位后         |
+| -------------------------- | -------------- |
+| `setRenderScale(0.5)`      | `1`            |
+| `setRenderScale(-2)`       | `1`            |
+| `setRenderScale(NaN)`      | `1`            |
+| `setRenderScale(2.7)`      | `2`(向下取整)  |
+| `setRenderScale(Infinity)` | `16`(上限)     |
+| `setRenderScale(100)`      | `16`           |
+| `setRenderScale('auto')`   | `'auto'`(透传) |
+
+### 变体差异
+
+| 变体        | 子格支持              | 说明                                                |
+| ----------- | --------------------- | --------------------------------------------------- |
+| `classic`   | ✅ 完整               | 横向 + 纵向都锐化                                   |
+| `ascii`     | ✅ 完整(同 `classic`) | 同上                                                |
+| `avalanche` | ⚠️ 仅横向             | 头亮 trail 按行对齐,子格只在列方向生效;纵向密度不变 |
+| `ripple`    | ✅ 完整               | 横向 + 纵向都锐化                                   |
+
+### 与 `textToBitmap` / `imageToBitmap` 协同
+
+要获得最佳效果,生成位图时按**当前网格大小**调 `cols` / `rows`:
+
+```ts
+// 方案 1:用 state.r / state.i(实例启动后)
+const cols = rain.getOptions().maxDPR ? Math.floor(800 / rain.getOptions().fontSize) : 80;
+const bm = textToBitmap('HELLO', cols, rows);
+
+// 方案 2:用固定值(简化)
+const bm = textToBitmap('HELLO', 80, 30); // 1x 网格大小
+rain.setTargetBitmap(bm, { ... }); // 引擎自动映射,2x 时 1px → 4 sub-cells
+```
+
+> 即使 `bm` 的 `cols`/`rows` 与网格 `state.r`/`state.i` 不匹配,引擎也会按位图→网格 1:1 映射(`applyTargetBitmapPhase` 内 `bx = (isSub ? floor(h/eff) : h) - ox`)。
+
+### 为什么不直接用更小的 `fontSize`?
+
+| 维度     | `fontSize=14` + `renderScale=1` | `fontSize=7` + `renderScale=1` | `fontSize=14` + `renderScale=2`(位图区) |
+| -------- | ------------------------------- | ------------------------------ | --------------------------------------- |
+| 雨滴密度 | 1x                              | 2x(更密)                       | 1x(不变)                                |
+| 位图锐度 | 1x                              | 2x                             | 2x(等价)                                |
+| 区外开销 | 1x                              | 4x                             | 1x                                      |
+| 区外锐度 | 1x                              | 2x                             | 1x                                      |
+
+`renderScale` 是**局部的**:只在位图区升档,不影响区外。
 
 ---
 
