@@ -96,17 +96,21 @@ export const createSetters = (
     if (state.ro) state.ro.disconnect();
     state.canvas.removeEventListener('click', hooks.onCanvasClick);
     if (state.wrapper) state.wrapper.remove();
+    // 0.4.0+ 销毁 renderer(幂等)
+    state.renderer.destroy();
     // 用户传入的 canvas 不删 —— 只解除事件监听(已经做了)
     // 误删会导致消费者(Vue/React 等)重建实例时丢失原 canvas 节点
   };
 
   const pause = (): void => {
     state.isPaused = true;
+    state.renderer.pause();
   };
 
   const resume = (): void => {
     if (state.isPaused && !state.isDestroyed) {
       state.isPaused = false;
+      state.renderer.resume();
       // 防止 pause 期间累积的 dt 引发 phase 跳跃
       state.lastFrameTime = typeof performance !== 'undefined' ? performance.now() : 0;
       state.rafId = requestAnimationFrame((ts) => hooks.draw(ts));
@@ -774,6 +778,8 @@ export const createSetters = (
     easing: state.cfg.easing,
     clickBurst: state.clickBurstCfg.radius > 0 ? { ...state.clickBurstCfg } : false,
     cursor: (state.canvas.style.cursor || undefined) as CursorOption,
+    // 0.4.0+ 新增 · 用户传入的 renderer 选择(从 state.options 原始引用读)
+    renderer: state.options.renderer,
   });
 
   const serialize = (): string => {

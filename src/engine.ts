@@ -42,6 +42,9 @@ import {
   updateTargetBitmapPhaseGlobal,
 } from './engine/draw-helpers';
 import { createSetters } from './engine/setters';
+import { Canvas2DRenderer } from './renderer/canvas2d-renderer';
+import { autoPickRenderer } from './renderer/index';
+import type { MatrixRainRenderer, RendererImpl } from './renderer/types';
 
 // ==================== DevTools 调试钩 ====================
 // window.__matrixRainDebug 暴露活跃实例、聚合 FPS、当前主题
@@ -152,8 +155,25 @@ const resampleBitmap = (
  * rain.destroy();
  */
 export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance {
-  // ============ 1. 创建 state ============
-  const state = createMatrixRainState(options);
+  // ============ 0. 0.4.0+ 选择 renderer ============
+  // Phase 1 只支持 canvas2d; 'webgl' / 'webgpu' / 某些 'auto' 暂 throw
+  const impl: RendererImpl = autoPickRenderer({ renderer: options.renderer });
+  const renderer: MatrixRainRenderer = (() => {
+    switch (impl) {
+      case 'canvas2d':
+        return new Canvas2DRenderer();
+      case 'webgl':
+        throw new Error('[matrix-rain] WebGL renderer not yet implemented (Phase 2B)');
+      case 'webgpu':
+        throw new Error('[matrix-rain] WebGPU renderer not yet implemented (Phase 4)');
+    }
+  })();
+
+  // ============ 1. 创建 state(传入 renderer)============
+  const state = createMatrixRainState(options, renderer);
+  // 同步触发 init(对 canvas2d 是 sync, 内部 body 立即执行, this._ctx 已 set)
+  void renderer.init(state.canvas, state);
+  renderer.setCharset(state.charset);
 
   // ============ 2. 定义内部 helpers(本 closure 内,作为 hooks 注入)============
   const buildGrid = (): void => {
@@ -166,7 +186,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     state.o = rect.height || (typeof window !== 'undefined' ? window.innerHeight : 1);
     state.canvas.width = Math.max(1, Math.round(state.a * state.n));
     state.canvas.height = Math.max(1, Math.round(state.o * state.n));
-    state.ctx.setTransform(state.n, 0, 0, state.n, 0, 0);
+    // 0.4.0+ DPR 缩放由 renderer.resize 处理(走 renderer API 而不是直接 ctx.setTransform)
+    state.renderer.resize(state.a, state.o, state.n);
     // 默认 fontSize 按 canvas 宽度连续映射:720p(1280)→6,4K(3840)→16,中间线性
     // < 720p 落到硬下限 4(产品决策,见 memory/feedback_min_font_size.md)
     // > 4K 固定 16,不再放大
@@ -639,12 +660,11 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       // 为避免引入未用变量,这里不取 coldFinal/warmFinal · 0 op 节省
       void totalHue; // 保留(若以后需要)
 
-      // 残影拖尾
-      state.ctx.fillStyle = `rgba(8, 8, 18, ${state.cfg.trailAlpha})`;
-      state.ctx.fillRect(0, 0, state.a, state.o);
-      state.ctx.font = `${state.ef}px "JetBrains Mono", ui-monospace, monospace`;
-      state.ctx.textBaseline = 'middle';
-      state.ctx.textAlign = 'center';
+      // 残影拖尾(0.4.0+ 走 renderer)
+      state.renderer.drawTrail(8, 8, 18, state.cfg.trailAlpha, state.a, state.o);
+      // 设置 font size(renderer 内部 cache,只 size 变化时真设 ctx.font)
+      state.renderer.setFontSize(state.ef);
+      // 注: textBaseline/textAlign 在 renderer.init() 内 set 一次,rAF 循环不再设
 
       // 绘制
       if (state.variant === 'classic' || state.variant === 'ascii') {

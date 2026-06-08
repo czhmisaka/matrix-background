@@ -194,6 +194,22 @@ export interface MatrixRainOptions {
    */
   renderScale?: number | 'auto';
 
+  /**
+   * 渲染器类型(0.4.0+ · 多渲染器可插拔)
+   * - `'canvas2d'` (默认 / 0 体积): 软件 fillText, 适合 1080p+fontSize ≥ 8
+   * - `'webgl'`:   WebGL2 instanced rendering, 适合 4K+fontSize 4-6 (Phase 2B)
+   * - `'webgpu'`:  WebGPU compute + render, 适合 8K+fontSize 2 (Phase 4)
+   * - `'auto'`:    Phase 3 之后,按 viewport × cell density 估算自动选
+   *
+   * 切换 renderer 需要硬重建(因为 canvas 只能绑一个 context 类型)
+   * - WebGL/WebGPU 路径走 dynamic import,不增加 canvas2d 默认路径体积
+   * - 当前 Phase 1 只支持 `'canvas2d'`; 传 webgl/webgpu 会 throw Error
+   *
+   * @since 0.4.0
+   * @see setRenderer (Phase 3)
+   */
+  renderer?: 'canvas2d' | 'webgl' | 'webgpu' | 'auto';
+
   /** 字符集,默认 '0123456789' */
   charset?: string;
 

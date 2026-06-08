@@ -46,8 +46,8 @@ const drawFillBlended = (
   const B2 = blendedLUT.b[lIdx];
   const k = blendedLUT.a[lIdx] / 255;
   const finalA = k * state.transitionAlpha;
-  state.ctx.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${finalA})`;
-  state.ctx.fillText(state.charset[c.ch], h * state.ef + state.ef / 2, y);
+  // 0.4.0+ 走 renderer(由 renderer 内部 cache fillStyle + 调 fillText)
+  state.renderer.drawChar(c.ch, h * state.ef + state.ef / 2, y, R2, G2, B2, finalA);
 };
 
 // ==================== drawInner · canonical cell 绘制 ====================
@@ -90,15 +90,15 @@ export const drawInner = (
       phase: c.phase,
     });
     if (out) {
-      state.ctx.fillStyle = `rgba(${out[0]}, ${out[1]}, ${out[2]}, 0.9)`;
-      state.ctx.fillText(state.charset[c.ch], h * state.ef + state.ef / 2, y);
+      // 0.4.0+ 走 renderer
+      state.renderer.drawChar(c.ch, h * state.ef + state.ef / 2, y, out[0], out[1], out[2], 0.9);
       return;
     }
   } else if (state.colorOverrides && typeof state.colorOverrides === 'object') {
     const ov = (state.colorOverrides as Record<number, [number, number, number]>)[__lIdx];
     if (ov) {
-      state.ctx.fillStyle = `rgba(${ov[0]}, ${ov[1]}, ${ov[2]}, 0.9)`;
-      state.ctx.fillText(state.charset[c.ch], h * state.ef + state.ef / 2, y);
+      // 0.4.0+ 走 renderer
+      state.renderer.drawChar(c.ch, h * state.ef + state.ef / 2, y, ov[0], ov[1], ov[2], 0.9);
       return;
     }
   }
@@ -439,7 +439,8 @@ export const drawClassic = (state: MatrixRainState): void => {
   const subEf = localBoost ? state.ef / eff : state.ef;
   // 子格模式 set font 一次(覆盖 rAF 入口的 state.ef 设置)
   if (localBoost) {
-    state.ctx.font = `${subEf}px "JetBrains Mono", ui-monospace, monospace`;
+    // 0.4.0+ 走 renderer(内部 cache,只 size 变化时真设 ctx.font)
+    state.renderer.setFontSize(subEf);
   }
   // 取光心(per-frame 不变,各 cell 共享)
   const M =
@@ -757,15 +758,15 @@ const drawInnerSub = (
       phase: c.phase,
     });
     if (out) {
-      state.ctx.fillStyle = `rgba(${out[0]}, ${out[1]}, ${out[2]}, 0.9)`;
-      state.ctx.fillText(state.charset[ch], hh * subEf + subEf / 2, y);
+      // 0.4.0+ 走 renderer
+      state.renderer.drawChar(ch, hh * subEf + subEf / 2, y, out[0], out[1], out[2], 0.9);
       return;
     }
   } else if (state.colorOverrides && typeof state.colorOverrides === 'object') {
     const ov = (state.colorOverrides as Record<number, [number, number, number]>)[__lIdx];
     if (ov) {
-      state.ctx.fillStyle = `rgba(${ov[0]}, ${ov[1]}, ${ov[2]}, 0.9)`;
-      state.ctx.fillText(state.charset[ch], hh * subEf + subEf / 2, y);
+      // 0.4.0+ 走 renderer
+      state.renderer.drawChar(ch, hh * subEf + subEf / 2, y, ov[0], ov[1], ov[2], 0.9);
       return;
     }
   }
@@ -778,8 +779,8 @@ const drawInnerSub = (
   const B2 = blendedLUT.b[lIdx];
   const k = blendedLUT.a[lIdx] / 255;
   const finalA = k * state.transitionAlpha;
-  state.ctx.fillStyle = `rgba(${R2}, ${G2}, ${B2}, ${finalA})`;
-  state.ctx.fillText(state.charset[ch], hh * subEf + subEf / 2, y);
+  // 0.4.0+ 走 renderer
+  state.renderer.drawChar(ch, hh * subEf + subEf / 2, y, R2, G2, B2, finalA);
 };
 
 /**
@@ -801,7 +802,8 @@ export const drawAvalanche = (state: MatrixRainState): void => {
   const eff = subCellCount(state);
   const subEf = localBoost ? state.ef / eff : state.ef;
   if (localBoost) {
-    state.ctx.font = `${subEf}px "JetBrains Mono", ui-monospace, monospace`;
+    // 0.4.0+ 走 renderer(内部 cache,只 size 变化时真设 ctx.font)
+    state.renderer.setFontSize(subEf);
   }
   const M =
     state.r * state.lightCenter.x +
@@ -931,7 +933,8 @@ export const drawRipple = (state: MatrixRainState): void => {
   const eff = subCellCount(state);
   const subEf = localBoost ? state.ef / eff : state.ef;
   if (localBoost) {
-    state.ctx.font = `${subEf}px "JetBrains Mono", ui-monospace, monospace`;
+    // 0.4.0+ 走 renderer(内部 cache,只 size 变化时真设 ctx.font)
+    state.renderer.setFontSize(subEf);
   }
   const M =
     state.r * state.lightCenter.x +

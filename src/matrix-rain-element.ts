@@ -23,7 +23,14 @@
 import { matrixRain } from './engine';
 import type { MatrixRainInstance, MatrixRainOptions, ThemeName, VariantName } from '../types';
 
-const OBSERVED_ATTRS = ['theme', 'variant', 'font-size', 'charset', 'render-scale'] as const;
+const OBSERVED_ATTRS = [
+  'theme',
+  'variant',
+  'font-size',
+  'charset',
+  'render-scale',
+  'renderer',
+] as const;
 type ObservedAttr = (typeof OBSERVED_ATTRS)[number];
 
 /**
@@ -37,6 +44,17 @@ const parseRenderScaleAttr = (v: string | null): number | 'auto' => {
   if (v === 'auto') return 'auto';
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : 1;
+};
+
+/**
+ * 解析 renderer attribute 值
+ * - 'canvas2d' | 'webgl' | 'webgpu' | 'auto' → 透传
+ * - 其它值(空 / null / 非法) → 'auto'(默认)
+ */
+const parseRendererAttr = (v: string | null): 'canvas2d' | 'webgl' | 'webgpu' | 'auto' => {
+  if (v === null || v === undefined || v === '') return 'auto';
+  if (v === 'canvas2d' || v === 'webgl' || v === 'webgpu' || v === 'auto') return v;
+  return 'auto';
 };
 
 /**
@@ -66,6 +84,7 @@ export class MatrixRainElement extends _BaseElement {
   private _currentFontSize = 14;
   private _currentCharset = '0123456789';
   private _currentRenderScale: number | 'auto' = 1;
+  private _currentRenderer: 'canvas2d' | 'webgl' | 'webgpu' | 'auto' = 'auto';
 
   static get observedAttributes(): readonly string[] {
     return OBSERVED_ATTRS;
@@ -86,6 +105,8 @@ export class MatrixRainElement extends _BaseElement {
     if (cs !== null) this._currentCharset = cs;
     const rs = this.getAttribute('render-scale');
     if (rs !== null) this._currentRenderScale = parseRenderScaleAttr(rs);
+    const rndr = this.getAttribute('renderer');
+    if (rndr !== null) this._currentRenderer = parseRendererAttr(rndr);
 
     this._options = {
       theme: this._currentTheme,
@@ -93,6 +114,7 @@ export class MatrixRainElement extends _BaseElement {
       fontSize: this._currentFontSize,
       charset: this._currentCharset,
       renderScale: this._currentRenderScale,
+      renderer: this._currentRenderer,
       container: this,
     };
 
@@ -141,10 +163,19 @@ export class MatrixRainElement extends _BaseElement {
         this.__instance.setRenderScale(this._currentRenderScale);
         break;
       }
+      case 'renderer': {
+        const newRenderer = parseRendererAttr(newVal);
+        if (newRenderer !== this._currentRenderer) {
+          this._currentRenderer = newRenderer;
+          // renderer 切换必须硬重建(canvas 只能绑一个 context 类型)
+          this._reload();
+        }
+        break;
+      }
     }
   }
 
-  /** 重新启动实例(用于 variant / charset 变化) */
+  /** 重新启动实例(用于 variant / charset / renderer 变化) */
   private _reload(): void {
     if (this.__instance) {
       try {
@@ -158,6 +189,7 @@ export class MatrixRainElement extends _BaseElement {
       fontSize: this._currentFontSize,
       charset: this._currentCharset,
       renderScale: this._currentRenderScale,
+      renderer: this._currentRenderer,
       container: this,
     };
     try {
@@ -211,6 +243,13 @@ export class MatrixRainElement extends _BaseElement {
   }
   get renderScale(): number | 'auto' {
     return this._currentRenderScale;
+  }
+
+  set renderer(s: 'canvas2d' | 'webgl' | 'webgpu' | 'auto') {
+    this.setAttribute('renderer', s);
+  }
+  get renderer(): 'canvas2d' | 'webgl' | 'webgpu' | 'auto' {
+    return this._currentRenderer;
   }
 
   /** 拿到原生实例句柄 */

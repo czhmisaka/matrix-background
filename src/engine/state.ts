@@ -444,7 +444,13 @@ export interface MatrixRainState {
   // ============ DOM ============
   container: HTMLElement;
   canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
+  /** 渲染器(0.4.0+ · 替代原 state.ctx)
+   *  - canvas2d 模式: Canvas2DRenderer 实例,内部持 ctx2d
+   *  - webgl 模式:   WebGLRenderer 实例(Phase 2B)
+   *  - webgpu 模式:  WebGPURenderer 实例(Phase 4)
+   * 边界规则: renderer 只读 state, 不写 state
+   */
+  renderer: import('../renderer/types').MatrixRainRenderer;
   wrapper: HTMLDivElement | null;
 
   // ============ Palette LUT(性能优化)============
@@ -503,7 +509,10 @@ export interface MatrixRainHooks {
  * - target_/transition 状态全部置零/默认
  * - 沙箱 __frameCtx 字段填好(Math/Number/String/Boolean/Array 全是 SAFE_GLOBALS)
  */
-export const createMatrixRainState = (options: MatrixRainOptions): MatrixRainState => {
+export const createMatrixRainState = (
+  options: MatrixRainOptions,
+  renderer: import('../renderer/types').MatrixRainRenderer
+): MatrixRainState => {
   // ============ cfg 合并 ============
   const cfg = {
     fontSize: options.fontSize ?? DEFAULTS.fontSize,
@@ -627,8 +636,11 @@ export const createMatrixRainState = (options: MatrixRainOptions): MatrixRainSta
       container.appendChild(c);
       return c;
     })();
-  const ctx = canvas.getContext('2d', { alpha: true });
-  if (!ctx) throw new Error('[matrix-rain] Failed to get 2D context');
+  // 注: 0.4.0+ 不在此处 `canvas.getContext('2d')`
+  // - canvas2d 模式: Canvas2DRenderer.init() 内部 getContext('2d')
+  // - webgl 模式:   WebGLRenderer.init() 内部 getContext('webgl2')
+  // 此处先不绑死 context 类型, renderer init 时再决定
+  // 注: 'auto' 模式下 engine.ts 在 init 之前解析 type, 然后创建对应 renderer
 
   let wrapper: HTMLDivElement | null = null;
   if (!options.canvas) {
@@ -840,7 +852,7 @@ export const createMatrixRainState = (options: MatrixRainOptions): MatrixRainSta
     // DOM
     container,
     canvas,
-    ctx,
+    renderer, // 0.4.0+ 替代 ctx
     wrapper,
 
     // palette LUT
