@@ -42,7 +42,7 @@ const parseRenderScaleAttr = (v: string | null): number | 'auto' => {
 /**
  * 数字雨 Web Component
  * - 自定义元素名:`<matrix-rain>`
- * - 观察属性:theme / variant / font-size / charset
+ * - 观察属性:theme / variant / font-size / charset / render-scale
  * - 子节点内容会被设置为容器(用 light DOM 渲染,便于 CSS 覆盖)
  * - 实例句柄通过 `.__instance` 暴露
  *
@@ -157,6 +157,7 @@ export class MatrixRainElement extends _BaseElement {
       variant: this._currentVariant,
       fontSize: this._currentFontSize,
       charset: this._currentCharset,
+      renderScale: this._currentRenderScale,
       container: this,
     };
     try {
