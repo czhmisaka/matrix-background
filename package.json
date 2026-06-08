@@ -1,6 +1,6 @@
 {
   "name": "@xietuier/matrix-rain",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "czhmisaka 出品 · 数字矩阵背景 · 终端感 + 温度感 · 5 主题 4 变体 · 全参数可调",
   "keywords": [
     "matrix-rain",
@@ -74,7 +74,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json,md}\" \"site/src/**/*.{ts,tsx,vue,css,json,md}\" \"*.{json,md,cjs,js}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json,md}\" \"site/src/**/*.{ts,tsx,vue,css,json,md}\" \"*.{json,md,cjs,js}\"",
     "prepare": "husky",
-    "test": "node test/smoke.mjs && node test/leak.mjs && node test/frame-rate.mjs && node test/events.mjs && node test/sandbox.mjs && node test/noise-converge.mjs && node test/canvas-remove.mjs && node test/transitions.mjs && node test/text-fit.mjs && node test/set-target-bitmap-validation.mjs && node test/detect.mjs && node test/themes.mjs && node test/edge-cases.mjs",
+    "test": "node test/smoke.mjs && node test/leak.mjs && node test/frame-rate.mjs && node test/events.mjs && node test/sandbox.mjs && node test/noise-converge.mjs && node test/canvas-remove.mjs && node test/transitions.mjs && node test/text-fit.mjs && node test/set-target-bitmap-validation.mjs && node test/detect.mjs && node test/themes.mjs && node test/edge-cases.mjs && node test/image-converge.mjs",
     "test:smoke": "node test/smoke.mjs",
     "test:leak": "node test/leak.mjs",
     "test:frame-rate": "node test/frame-rate.mjs",
@@ -88,6 +88,7 @@
     "test:validation": "node test/set-target-bitmap-validation.mjs",
     "test:themes": "node test/themes.mjs",
     "test:edge-cases": "node test/edge-cases.mjs",
+    "test:image-converge": "node test/image-converge.mjs",
     "test:esm": "node test/esm-load.mjs",
     "test:usability": "node test/usability.mjs",
     "test:e2e:demos": "/Users/chenzhihan/anaconda3/bin/python3 scripts/e2e-demos.py",
@@ -104,6 +105,7 @@
     "globals": "^15.0.0",
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0",
+    "playwright": "^1.60.0",
     "prettier": "^3.0.0",
     "tsup": "^8.5.1",
     "typescript": "^5.4.0",
