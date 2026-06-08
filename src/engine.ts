@@ -19,7 +19,6 @@ import type {
   ClickBurstOptions,
   CursorOption,
   MatrixRainSnapshot,
-  EnvironmentInfo,
   HSLPalette,
 } from '../types';
 import {
@@ -2530,28 +2529,5 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
   return matrixRain(opts);
 };
 
-/**
- * 环境检测(浏览器):移动端 / 暗色模式 → 推荐默认值
- * 用户可手动覆盖:
- *   const env = matrixRain.detect();
- *   matrixRain({ fontSize: env.recommendedFontSize, targetFPS: env.recommendedTargetFPS, ... })
- */
-(matrixRain as any).detect = (): EnvironmentInfo => {
-  const isMobile =
-    typeof window !== 'undefined' &&
-    (/Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator?.userAgent || ''
-    ) ||
-      (window.matchMedia && window.matchMedia('(pointer: coarse)').matches));
-  const isDarkMode =
-    typeof window !== 'undefined' && window.matchMedia
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches
-      : true;
-  return {
-    isMobile,
-    isDarkMode,
-    recommendedFontSize: isMobile ? 16 : 14,
-    recommendedTargetFPS: isMobile ? 30 : 0,
-    recommendedBrightness: isDarkMode ? 1.1 : 1.0,
-  };
-};
+// 注:`detect()` 已迁移到 src/index.ts 的 MatrixRain 命名空间(`MatrixRain.detect()`),
+// 涵盖更完整的 9 字段(UA 浏览器型号 / 视口 4 档 / DPR),此处不再重复导出。
