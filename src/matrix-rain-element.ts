@@ -23,8 +23,21 @@
 import { matrixRain } from './engine';
 import type { MatrixRainInstance, MatrixRainOptions, ThemeName, VariantName } from '../types';
 
-const OBSERVED_ATTRS = ['theme', 'variant', 'font-size', 'charset'] as const;
-type ObservedAttr = typeof OBSERVED_ATTRS[number];
+const OBSERVED_ATTRS = ['theme', 'variant', 'font-size', 'charset', 'render-scale'] as const;
+type ObservedAttr = (typeof OBSERVED_ATTRS)[number];
+
+/**
+ * 解析 render-scale attribute 值
+ * - 'auto' → 透传
+ * - 数字字符串 → parseFloat(NaN 退到 1)
+ * - null / undefined / 空字符串 → 1(默认)
+ */
+const parseRenderScaleAttr = (v: string | null): number | 'auto' => {
+  if (v === null || v === undefined || v === '') return 1;
+  if (v === 'auto') return 'auto';
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 1;
+};
 
 /**
  * 数字雨 Web Component
@@ -36,21 +49,23 @@ type ObservedAttr = typeof OBSERVED_ATTRS[number];
  * SSR/Node 兜底:HTMLElement 不存在时 extends 一个空类,class 定义不崩;
  * Web Component 行为只在浏览器生效(Node 端 import 类不会做副作用)。
  */
-const _BaseElement: typeof HTMLElement = typeof HTMLElement !== 'undefined'
-  ? HTMLElement
-  : (class {} as any);
+const _BaseElement: typeof HTMLElement =
+  typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any);
 
 export class MatrixRainElement extends _BaseElement {
   /** 内部实例句柄 */
   __instance: MatrixRainInstance | null = null;
   /** 当前 FPS(只读) */
-  get fps(): number { return this.__instance?.getFPS() ?? 0; }
+  get fps(): number {
+    return this.__instance?.getFPS() ?? 0;
+  }
 
   private _options: MatrixRainOptions = {};
   private _currentTheme: ThemeName = 'silicon-valley';
   private _currentVariant: VariantName = 'classic';
   private _currentFontSize = 14;
   private _currentCharset = '0123456789';
+  private _currentRenderScale: number | 'auto' = 1;
 
   static get observedAttributes(): readonly string[] {
     return OBSERVED_ATTRS;
@@ -69,13 +84,16 @@ export class MatrixRainElement extends _BaseElement {
     if (fs !== null) this._currentFontSize = parseInt(fs, 10) || 14;
     const cs = this.getAttribute('charset');
     if (cs !== null) this._currentCharset = cs;
+    const rs = this.getAttribute('render-scale');
+    if (rs !== null) this._currentRenderScale = parseRenderScaleAttr(rs);
 
     this._options = {
       theme: this._currentTheme,
       variant: this._currentVariant,
       fontSize: this._currentFontSize,
       charset: this._currentCharset,
-      container: this
+      renderScale: this._currentRenderScale,
+      container: this,
     };
 
     try {
@@ -117,13 +135,21 @@ export class MatrixRainElement extends _BaseElement {
         this._currentCharset = newVal || '0123456789';
         this._reload();
         break;
+      case 'render-scale': {
+        this._currentRenderScale = parseRenderScaleAttr(newVal);
+        // 热更新:不重建(同 font-size 走 setDensity 模式)
+        this.__instance.setRenderScale(this._currentRenderScale);
+        break;
+      }
     }
   }
 
   /** 重新启动实例(用于 variant / charset 变化) */
   private _reload(): void {
     if (this.__instance) {
-      try { this.__instance.destroy(); } catch {}
+      try {
+        this.__instance.destroy();
+      } catch {}
       this.__instance = null;
     }
     this._options = {
@@ -131,7 +157,7 @@ export class MatrixRainElement extends _BaseElement {
       variant: this._currentVariant,
       fontSize: this._currentFontSize,
       charset: this._currentCharset,
-      container: this
+      container: this,
     };
     try {
       this.__instance = matrixRain(this._options);
@@ -143,26 +169,53 @@ export class MatrixRainElement extends _BaseElement {
   /** 销毁实例 */
   destroy(): void {
     if (this.__instance) {
-      try { this.__instance.destroy(); } catch {}
+      try {
+        this.__instance.destroy();
+      } catch {}
       this.__instance = null;
     }
   }
 
   /** 切换主题(等同 setAttribute('theme', name)) */
-  set theme(name: ThemeName) { this.setAttribute('theme', name); }
-  get theme(): ThemeName { return this._currentTheme; }
+  set theme(name: ThemeName) {
+    this.setAttribute('theme', name);
+  }
+  get theme(): ThemeName {
+    return this._currentTheme;
+  }
 
-  set variant(name: VariantName) { this.setAttribute('variant', name); }
-  get variant(): VariantName { return this._currentVariant; }
+  set variant(name: VariantName) {
+    this.setAttribute('variant', name);
+  }
+  get variant(): VariantName {
+    return this._currentVariant;
+  }
 
-  set fontSize(n: number) { this.setAttribute('font-size', String(n)); }
-  get fontSize(): number { return this._currentFontSize; }
+  set fontSize(n: number) {
+    this.setAttribute('font-size', String(n));
+  }
+  get fontSize(): number {
+    return this._currentFontSize;
+  }
 
-  set charset(s: string) { this.setAttribute('charset', s); }
-  get charset(): string { return this._currentCharset; }
+  set charset(s: string) {
+    this.setAttribute('charset', s);
+  }
+  get charset(): string {
+    return this._currentCharset;
+  }
+
+  set renderScale(s: number | 'auto') {
+    this.setAttribute('render-scale', String(s));
+  }
+  get renderScale(): number | 'auto' {
+    return this._currentRenderScale;
+  }
 
   /** 拿到原生实例句柄 */
-  get instance(): MatrixRainInstance | null { return this.__instance; }
+  get instance(): MatrixRainInstance | null {
+    return this.__instance;
+  }
 }
 
 /**
