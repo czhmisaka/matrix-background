@@ -241,7 +241,7 @@ console.log('\n[7] 移动端判断(viewport=mobile + 移动 UA)');
   const env = MatrixRain.detect();
   check(env.isMobile === true, 'iPhone UA + 375px → isMobile=true');
   check(env.viewport === 'mobile', 'viewport=mobile');
-  check(env.recommendedFontSize === 16, 'recommendedFontSize=16');
+  check(env.recommendedFontSize === 4, '375px 移动端 recommendedFontSize=4(< 720p 落到硬下限)');
   check(env.recommendedTargetFPS === 30, 'recommendedTargetFPS=30');
 
   globalThis.window.innerWidth = origW;
@@ -262,7 +262,7 @@ console.log('\n[8] SSR-safe:typeof window === "undefined" 返回合理 default')
   check(env.viewportWidth === 0, 'SSR → viewportWidth=0');
   check(env.devicePixelRatio === 1, 'SSR → devicePixelRatio=1');
   check(env.browser === 'Unknown', 'SSR → browser=Unknown');
-  check(env.recommendedFontSize === 14, 'SSR → recommendedFontSize=14');
+  check(env.recommendedFontSize === 6, 'SSR → recommendedFontSize=6(与 DEFAULTS 兜底一致)');
   check(env.recommendedTargetFPS === 0, 'SSR → recommendedTargetFPS=0(不限)');
   check(Math.abs(env.recommendedBrightness - 1.0) < 1e-6, 'SSR → recommendedBrightness=1.0');
   globalThis.window = savedWindow;

@@ -43,3 +43,34 @@
   font-display: swap;
   src: url('./jetbrains-mono.woff2') format('woff2');
 }
+
+/* Space Grotesk: 4 个 weight (latin subset, pyftsubset --no-hinting, ~6 KB each)
+   用于 site H1/H2/H3 (替代 Fraunces serif) · 科技感几何无衬线 */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./space-grotesk-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./space-grotesk-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./space-grotesk-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./space-grotesk-700.woff2') format('woff2');
+}

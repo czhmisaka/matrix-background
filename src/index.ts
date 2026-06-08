@@ -31,7 +31,7 @@ export { matrixRain as matrixRainInternal } from './engine';
 import { matrixRain } from './engine';
 export { matrixRain };
 export { textToBitmap, imageToBitmap, fileToImage } from './bitmap';
-export type { BitmapSource, FitMode } from './bitmap';
+export type { BitmapSource, FitMode, TextToBitmapOptions } from './bitmap';
 
 // ==================== Web Component ====================
 // 用法: import { MatrixRainElement } from '@xietuier/matrix-rain';
@@ -126,7 +126,7 @@ export const MatrixRain = {
       return {
         isMobile: false,
         isDarkMode: false,
-        recommendedFontSize: 14,
+        recommendedFontSize: 6,
         recommendedTargetFPS: 0,
         recommendedBrightness: 1.0,
         browser: 'Unknown',
@@ -154,7 +154,13 @@ export const MatrixRain = {
     return {
       isMobile,
       isDarkMode,
-      recommendedFontSize: isMobile ? 16 : 14,
+      // 推荐 fontSize:与 engine buildGrid 同公式(720p→6,4K→16 线性)
+      recommendedFontSize:
+        viewportWidth < 1280
+          ? 4
+          : viewportWidth >= 3840
+            ? 16
+            : Math.round(6 + ((viewportWidth - 1280) * 10) / 2560),
       recommendedTargetFPS: isMobile ? 30 : 0,
       recommendedBrightness: isDarkMode ? 1.1 : 1.0,
       browser,

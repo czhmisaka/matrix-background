@@ -17,14 +17,21 @@
 
 export { themes } from './themes';
 export { VARIANT_DEFAULTS } from './variant-defaults';
-export type { BitmapSource } from './bitmap';
+export type { BitmapSource, TextToBitmapOptions } from './bitmap';
 
 // 调色板 / LUT(纯函数,SSR 安全)
 export { LUT_SIZE, hslToRGBA, applyTP, PaletteLUT, type RGBALUT } from './palette-lut';
 
 // 位图:仅纯数据转换与代码生成
 export { channelsToCode, WAVE_TYPES, COMBINE_MODES, evalWave, evalChannels } from './curves/waves';
-export { controlPointsToCode, buildLUT, sampleLUT, LUT_RESOLUTION, CONTROL_POINTS, DEFAULT_CONTROL_POINTS } from './curves/lut';
+export {
+  controlPointsToCode,
+  buildLUT,
+  sampleLUT,
+  LUT_RESOLUTION,
+  CONTROL_POINTS,
+  DEFAULT_CONTROL_POINTS,
+} from './curves/lut';
 export { PRESETS } from './curves/presets';
 
 // 用户函数编译(纯字符串 → 函数,与 DOM 无关)
@@ -42,7 +49,7 @@ export type {
   ThemeFactory,
   ThemeResult,
   ThemeParams,
-  VariantParams
+  VariantParams,
 } from '../types';
 
 export type { Preset, WaveType, CombineMode, WaveChannel, SandboxContext } from './curves/presets';
