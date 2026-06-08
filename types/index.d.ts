@@ -455,7 +455,11 @@ export interface MatrixRainInstance {
   /** 热更新颜色动态曲线 */
   setColorCurve(code: string | null): void;
 
-  /** 设置目标位图(0-1 灰度, 长度 r * i) + 计时器自动重置 */
+  /**
+   * 设置目标位图(0-1 灰度, 长度 r * i) + 计时器自动重置
+   * @throws {RangeError} 当 Float32Array 长度 > 10000 cells(防内存炸弹)或与 targetCols × targetRows 不一致
+   * @since 0.2.0 输入校验(0.1.0 仅接受 Float32Array,0.2.0 起支持 `{ cols, rows, data }` 包装对象)
+   */
   setTargetBitmap(bitmap: Float32Array | { cols: number; rows: number; data: Float32Array } | null, opts?: {
     fadeIn?: number;
     hold?: number;
@@ -488,9 +492,10 @@ export interface MatrixRainInstance {
    * - alpha=1 时完全等价于未启用
    * @param alpha 目标透明度 0-1
    * @param dur 可选 · 渐变时长(秒)。不传 = 立即切换;>0 = 在 dur 秒内线性插值
+   * @since 0.2.0
    */
   setTransitionAlpha(alpha: number, dur?: number): void;
-  /** 读取当前 transition alpha(测试用) */
+  /** 读取当前 transition alpha(测试用) @since 0.2.0 */
   getTransitionAlpha?(): number;
 
   /** 读取当前 fps */
@@ -519,6 +524,7 @@ export interface MatrixRainInstance {
    * - transitionAlpha: 当前 instance-level 软淡入/淡出 alpha
    * - phaseTransition / themeTransition / themeParamsTransition / variantTransition:
    *   过渡进行中时返回 { fromPhase?, progress, dur };null = 不在过渡
+   * @since 0.2.0
    */
   getTargetState?(): {
     active: boolean;
@@ -550,7 +556,10 @@ export type ViewportBucket = 'mobile' | 'tablet' | 'desktop' | 'wide';
 /** 浏览器型号(粗粒度 · UA 正则) */
 export type BrowserName = 'Chrome' | 'Firefox' | 'Safari' | 'Edge' | 'Opera' | 'IE' | 'Unknown';
 
-/** 环境检测结果 */
+/**
+ * 环境检测结果
+ * @since 0.2.0
+ */
 export interface EnvironmentInfo {
   /** 是否移动端(UA + 视口分档 + coarse pointer 综合判断) */
   isMobile: boolean;
@@ -587,6 +596,11 @@ export const MatrixRain: {
   readonly activeCount: number;
   /** 从 snapshot 还原一个实例(SSR hydration) */
   fromSnapshot(json: string | MatrixRainSnapshot, options?: { canvas?: HTMLCanvasElement; container?: HTMLElement }): MatrixRainInstance;
-  /** 环境检测 */
+  /**
+   * 环境检测(读 navigator.userAgent + matchMedia + 视口宽)
+   * - SSR / Node 环境安全调用:返回 `browser: 'Unknown'` / `viewportWidth: 0` / `devicePixelRatio: 1`
+   * - 用于:启动时自动选择 `fontSize` / `targetFPS` / `brightness`,无需硬编码设备分支
+   * @since 0.2.0
+   */
   detect(): EnvironmentInfo;
 };

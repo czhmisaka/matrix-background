@@ -5,26 +5,67 @@ All notable changes to `@xietuier/matrix-rain` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — 0.2.0 计划
+## [Unreleased]
 
-> 计划随 `docs/audit-docs-2026-06-08.md` P0 / P1 项落地。**未发布**。
+待开发。下一版可能方向见 [`project_roadmap.md`](./docs/project_roadmap.md)。
 
-### Added(计划)
+---
 
-- `MatrixRain.detect(): EnvironmentInfo` —— 读 `navigator.userAgent` + `matchMedia('(prefers-color-scheme: dark)')` + 视口宽,补齐 `types/index.d.ts:577` 声明缺口(对应 audit P0)
-- 增补 README §`setTransitionAlpha` 段(对应 audit P0)
-- 增补 README §`noise-converge` 5 字段段(对应 audit P1)
-- 增补 README §`FitMode` / `targetFitMode` 段(对应 audit P1)
-- 增补 README §5 类 transition duration option 段(对应 audit P1)
-- 增补 4 个回调签名段:`onFrame` / `onResize` / `onThemeChange` / `onTargetFinish`
-- 增补 5 个调试 getter 段:`getOptions` / `serialize` / `getDiagnostics` / `getTargetState` / `getClickBurstState`
-- `CONTRIBUTING.md` —— PR / commit / 测试规范(对应 audit §3)
-- `DEPLOY.md` —— NPM publish / CDN 同步 / tag 规范(对应 audit §3)
+## [0.2.0] - 2026-06-08
 
-### Changed(计划)
+> 自 0.1.0 起累计 **23 个 commit**。`docs/` 6 份审计报告落地;`MatrixRain.detect()` 首版;`setTargetBitmap` 严输入校验;`FitMode` 默认改 `contain`(详见 §Changed);`ARCHITECTURE.md` 4 层模型。
 
-- `MatrixRain.detect()` 实际返回值与 `types/index.d.ts:577` 声明对齐(目前未实现)
-- README 标注对齐实际默认行为(`targetHold` 默认 `Infinity` 修复自相矛盾)
+### Added
+
+#### 新 API 与加固
+
+- **`MatrixRain.detect(): EnvironmentInfo`** —— 读 `navigator.userAgent` + `matchMedia('(prefers-color-scheme: dark)')` + 视口宽,返回 `{isMobile, isDarkMode, recommendedFontSize, recommendedTargetFPS, recommendedBrightness, browser, viewport, viewportWidth, devicePixelRatio}`,SSR / 不识别时优雅降级为 `Unknown` / `0` / `1`。补齐 `types/index.d.ts:577` 长期声明缺口。配套 `test/detect.mjs`。
+- **`setTargetBitmap` 输入校验** —— `Float32Array` 大小 cap(`> 10000` cells 直接 throw),shape 与 `targetCols` × `targetRows` 一致性检查,`null` / `BitmapSource` 对象双分支支持。配套 `test/set-target-bitmap-validation.mjs`。
+- **Sandbox 补强** —— `validateUserFunction` 拦截 `this.constructor.constructor` (Function 构造器逃逸) + `async function` + `function*` generator + `await`,黑名单 + 步数上限 + 字符串上限维持原状。配套 `test/sandbox.mjs` 新增 5 用例。
+
+#### 文档与可访问性
+
+- **a11y P0 修复** —— 4 个 `<select>` 加显式 `name` + 显式 label;移除重复 `<main>`(`<main>` → `<section>`);5 个 icon-only 控件加 `aria-label`;聊天输入框加 `aria-label`;`aria-live` polite region 提示动态内容。
+- **README 扩 5 段** —— `setTransitionAlpha` / `FitMode` / `targetFitMode` / 5 类 transition duration / 4 个回调 / 5 个调试 getter,完整覆盖 `types/index.d.ts` 公开 API。
+- **`ARCHITECTURE.md`** —— 4 层用户函数驱动(ABCD)架构图 + 数据流 + 引擎循环时序 + 状态机详解,496 行。
+
+#### 测试
+
+- **`test/themes.mjs`** —— 8 用例,覆盖 5 主题 × unknown theme 静默返回 / coldFrom / warmFrom / 拼色主题 / `setTheme` keepPaletteParams 等。
+- **`test/edge-cases.mjs`** —— 17 用例,覆盖极端输入(0 视口、负字号、NaN DPR、显式 destroy × 多次调用、未调用 `matrixRain` 直接销毁、ASCII 极小字符集等)。
+- **现有 12 个 test 脚本** —— 持续维护,总用例数 ≥ 70。
+
+#### 安全
+
+- **CSP meta + 安全 headers** —— `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; ...">` 注入 demo / docs;`X-Frame-Options: DENY` + `X-Content-Type-Options: nosniff` + `Referrer-Policy: strict-origin-when-cross-origin`。详见 `docs/audit-security-2026-06-08.md`。
+
+#### 工具链
+
+- **lint / format 工具链** —— ESLint 9 flat config + Prettier 3 + Husky 9 + lint-staged 15 + commitlint 19(Conventional Commits)。`npm run lint` / `npm run format` / `npm run prepare` 全链路打通。详见 `commitlint.config.cjs` / `lint-staged.config.cjs`。
+
+#### 审计文档(6 份)
+
+- `docs/audit-a11y-2026-06-08.md` —— axe-core 12 路由扫描 + 残留 gap
+- `docs/audit-perf-2026-06-08.md` —— P0/P1/P2 优化路线图(NPM -1.8MB / site -1MB)
+- `docs/audit-security-2026-06-08.md` —— v-html / sandbox / localStorage / CSP 评估
+- `docs/audit-code-quality-2026-06-08.md` —— `noUnusedLocals` / `noUnusedParameters` 启用 + 死代码清理
+- `docs/audit-test-coverage-2026-06-08.md` —— 现有 12 个 test 脚本覆盖率图 + 缺失测试提案
+- `docs/audit-docs-2026-06-08.md` —— README / JSDoc / missing-doc 列表
+
+### Changed
+
+- **BREAKING** `FitMode` 默认从 `actual` 改为 `contain` —— `setTargetBitmap` 缩放行为以等比完整显示为目标,可能四周留白适配。需 1:1 像素对齐(像素艺术、极小位图)的用户必须显式传 `targetFitMode: 'actual'`。`FitMode` 新增 `'auto'` 档 —— 引擎扫描非零像素 bbox,智能选择 contain / actual。
+- README `targetHold` 默认值标注从含糊描述改为明确 `Infinity`(修复自相矛盾)。
+
+### Performance
+
+- **禁 sourcemap** —— `tsup` 配置移除 `sourcemap: true`,NPM 包体积 **-1.8MB**(从 2.0MB → 0.2MB),site 端 \*\*-1MB`(从 1.2MB → 0.2MB)。
+- **Fraunces italic 路由级 preload** —— `AILandingPage` 路由切换前 `document.head` 注入 `<link rel="preload" as="font" crossorigin>` → LCP 字体加载减少 ~120ms。
+- **AITunePage 68ms longtask 拆异步** —— LLM 预热 `dynamic import()` 延后到首帧渲染后,`PRESETS` 模块懒加载,长任务从 68ms 拆为 2 个 < 30ms 任务,主线程释放给首帧绘制。
+
+### Security
+
+- **CSP meta + `X-Frame-Options`** —— demo / docs 页 `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; ...">` 显式声明;demo 服务端响应头加 `X-Frame-Options: DENY` 防止 clickjacking。详见 §Added > Security。
 
 ---
 
@@ -51,20 +92,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 12 个公开 method API(`MatrixRainInstance`)
 
-| 方法 | 用途 |
-|---|---|
-| `setTheme(name)` | 切换主题(可指定 `coldFrom` / `warmFrom` 拼色) |
-| `setThemeParams(p)` / `setColdThemeParams(p)` / `setWarmThemeParams(p)` | 热更新 ThemeParams 7 字段 |
-| `setVariantParams(p)` | 热更新 VariantParams 11 字段 |
-| `setHueRotate(speed, amount)` | 持续 hue 旋转 |
-| `setColorOverrides(fn)` | 注入颜色回调 |
-| `setFlickerSpeed(n)` | 热更新闪烁速度倍率 |
-| `setDensity(fontSize)` | 热更新字符大小 |
-| `setPalettes(cold, warm)` | 注入自定义 HSLPalette |
-| `setTargetFPS(n)` | 限频(0 = 不限) |
-| `setTargetBitmap(bmp, opts)` | 启用位图收敛目标(噪声→收敛 5 段状态机) |
-| `clearTargetBitmap()` | 立即终止位图状态机 |
-| `destroy()` / `pause()` / `resume()` / `getFPS()` | 生命周期 |
+| 方法                                                                    | 用途                                          |
+| ----------------------------------------------------------------------- | --------------------------------------------- |
+| `setTheme(name)`                                                        | 切换主题(可指定 `coldFrom` / `warmFrom` 拼色) |
+| `setThemeParams(p)` / `setColdThemeParams(p)` / `setWarmThemeParams(p)` | 热更新 ThemeParams 7 字段                     |
+| `setVariantParams(p)`                                                   | 热更新 VariantParams 11 字段                  |
+| `setHueRotate(speed, amount)`                                           | 持续 hue 旋转                                 |
+| `setColorOverrides(fn)`                                                 | 注入颜色回调                                  |
+| `setFlickerSpeed(n)`                                                    | 热更新闪烁速度倍率                            |
+| `setDensity(fontSize)`                                                  | 热更新字符大小                                |
+| `setPalettes(cold, warm)`                                               | 注入自定义 HSLPalette                         |
+| `setTargetFPS(n)`                                                       | 限频(0 = 不限)                                |
+| `setTargetBitmap(bmp, opts)`                                            | 启用位图收敛目标(噪声→收敛 5 段状态机)        |
+| `clearTargetBitmap()`                                                   | 立即终止位图状态机                            |
+| `destroy()` / `pause()` / `resume()` / `getFPS()`                       | 生命周期                                      |
 
 #### Transition 过渡系统(10 类别)
 
