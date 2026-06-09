@@ -165,7 +165,7 @@ export function useMatrixRain(
       o.targetFPS,
       o.trailAlpha,
       o.maxDPR,
-      o.sparks ?? o.sparkProbability,
+      o.sparkProbability,
       o.hueRotateSpeed,
       o.renderScale,
       o.clickBurst,
@@ -175,7 +175,6 @@ export function useMatrixRain(
       o.warmthLerp,
       o.lightCenter,
       o.driftSpeed,
-      o.transitionAlpha,
     ];
   };
   watch(renderKey, () => {
@@ -187,10 +186,12 @@ export function useMatrixRain(
     const o = unref(optionsRef);
     // 软更新(直接调 setter,不走 mount/destroy)
     try {
-      if (o.theme !== undefined) inst.setTheme(o.theme);
+      // setTheme 只接受 ThemeName(string),不接受 { coldFrom, warmFrom } 拼色对象
+      // — 拼色场景走 renderKey 硬重建(由 matrixRain init 时构造)
+      if (typeof o.theme === 'string') inst.setTheme(o.theme);
       if (o.fontSize !== undefined) inst.setDensity(o.fontSize);
       if (o.charset !== undefined) /* charset 需 _reload(): setCharsetFunc 暂未暴露,skip */ void 0;
-      if (o.coldPalette || o.warmPalette) inst.setPalettes(o.coldPalette, o.warmPalette);
+      if (o.coldPalette && o.warmPalette) inst.setPalettes(o.coldPalette, o.warmPalette);
       if (o.themeParams) inst.setThemeParams(o.themeParams);
       if (o.variant) inst.setVariantParams({});
       if (o.targetFPS !== undefined) inst.setTargetFPS(o.targetFPS);
