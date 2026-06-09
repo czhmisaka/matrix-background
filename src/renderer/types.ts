@@ -79,6 +79,16 @@ export interface MatrixRainRenderer {
   render(state: MatrixRainState, dt: number): void;
 
   /**
+   * 每帧绘制开始时调用(rAF 内,drawTrail 之后、drawChar 循环之前)
+   * - canvas2d: 不实现(no-op)
+   * - webgl/webgpu: 重置内部 `_drawCallIdx` 计数器, 给本帧的 drawChar 序号从 0 开始
+   *
+   * **必须 optional**,canvas2d 不实现此方法
+   * @since 0.4.1
+   */
+  beginFrame?(): void;
+
+  /**
    * 销毁 renderer(释放 GL context / 删 program / 删 buffer)
    * **必须幂等** —— `destroy()` 第二次调用 no-op
    */
@@ -136,6 +146,19 @@ export interface MatrixRainRenderer {
    * @param a    alpha 0-1
    */
   drawChar(ch: number, cx: number, cy: number, r: number, g: number, b: number, a: number): void;
+
+  /**
+   * 当 grid 维度变化时通知 renderer(重 alloc instance buffer 等 GPU 资源)
+   * 调用时机: engine.ts 的 `buildGrid()` 末尾(setDensity / resize / 初始化后)
+   * - canvas2d: 不实现(无 instance buffer)
+   * - webgl/webgpu: 删旧 buffer, 按新 cols*rows 重 alloc
+   *
+   * **必须 optional**,canvas2d 不实现此方法
+   * @param cols grid 列数 (state.r)
+   * @param rows grid 行数 (state.i)
+   * @since 0.4.1
+   */
+  resizeGrid?(cols: number, rows: number): void;
 }
 
 /**

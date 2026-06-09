@@ -264,6 +264,9 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       state.b.push(row);
     }
     syncFrameCtxSize();
+    // 0.4.1+ 修复 P0-5: grid 维度变化后通知 renderer 重 alloc instance buffer
+    // canvas2d 不实现此方法(无 instance buffer); webgl/webgpu 走 resizeGrid 重建 VBO
+    state.renderer.resizeGrid?.(state.r, state.i);
     if (state.targetBitmap) applyTargetFitMode();
     if (state.targetBitmap && state.targetActive && state.targetPhase === 'noise-converge') {
       recomputeTargetLockTimes();
@@ -700,6 +703,9 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
 
       // 残影拖尾(0.4.0+ 走 renderer)
       state.renderer.drawTrail(8, 8, 18, state.cfg.trailAlpha, state.a, state.o);
+      // 0.4.1+: webgl/webgpu 在 drawChar 循环开始前重置内部 cell 计数器
+      // canvas2d 不实现此方法(no-op)
+      state.renderer.beginFrame?.();
       // 设置 font size(renderer 内部 cache,只 size 变化时真设 ctx.font)
       state.renderer.setFontSize(state.ef);
       // 注: textBaseline/textAlign 在 renderer.init() 内 set 一次,rAF 循环不再设
@@ -712,6 +718,10 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       } else if (state.variant === 'ripple') {
         drawRipple(state);
       }
+
+      // 0.4.1+: webgl/webgpu 在 cell 循环写完 instance buffer 后真正 submit GPU 命令
+      // canvas2d 的 render() 是 no-op(绘制已在 drawChar 内联完成)
+      state.renderer.render(state, state.lastDt);
 
       // onFrame
       fireOnFrame();
