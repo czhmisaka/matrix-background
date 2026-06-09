@@ -140,41 +140,51 @@ export function useMatrixRain(
   });
 
   // 0.4.0+ watch 拆分:
-  // - renderKey: 改 canvas / renderer → 必须硬重建(canvas 绑死 context)
-  // - effectKey: 改 theme / fontSize / charset / 等参数 → 走 setter 软更新(无 rAF 抖)
+  // - renderKey: 改 canvas / renderer / variant / charset / 任何没有 setter 的字段 → 硬重建
+  // - effectKey: 改 theme / fontSize / themeParams / variantParams / ... 有 setter 的字段 → 软更新
+  //
+  // 0.4.1 修复 P1-1/2/3:
+  // - variant 之前传空对象 setVariantParams({}) 切不动 variant → 改走硬重建
+  // - charset 之前 skip → 改走硬重建
+  // - 11+ 没有 setter 的字段(trailAlpha/maxDPR/sparkProbability/clickBurst/
+  //   flickerRates/warmthRadius/warmthLerp/lightCenter/driftSpeed)之前在
+  //   effectKey 监听但 apply 分支空跳过 → 改走硬重建
   //
   // 注: 旧版单一 deep watch → 任何字段都触发软销毁重建。WebGL 模式下 shader 编译
   // 需 10-50ms,频繁 rebuild 会让用户体验明显卡顿。拆分后:
   // - 调主题: setTheme 走 setter, 1-2 帧过渡
-  // - 改 renderer: _reload() 硬重建, 一次性
+  // - 改 renderer / variant / charset / 物理参数: _reload() 硬重建, 一次性
   const renderKey = (): unknown => {
     const o = unref(optionsRef);
-    return [o.renderer, canvasRef.value];
+    return [
+      o.renderer,
+      o.variant,
+      o.charset,
+      o.trailAlpha,
+      o.maxDPR,
+      o.sparkProbability,
+      o.clickBurst,
+      o.flickerRates,
+      o.warmthRadius,
+      o.warmthLerp,
+      o.lightCenter,
+      o.driftSpeed,
+      canvasRef.value,
+    ];
   };
   const effectKey = (): unknown => {
     const o = unref(optionsRef);
     return [
       o.theme,
       o.fontSize,
-      o.charset,
       o.coldPalette,
       o.warmPalette,
       o.themeParams,
-      o.variant,
       o.variantParams,
       o.targetFPS,
-      o.trailAlpha,
-      o.maxDPR,
-      o.sparkProbability,
-      o.hueRotateSpeed,
       o.renderScale,
-      o.clickBurst,
-      o.flickerRates,
       o.flickerSpeed,
-      o.warmthRadius,
-      o.warmthLerp,
-      o.lightCenter,
-      o.driftSpeed,
+      o.hueRotateSpeed,
     ];
   };
   watch(renderKey, () => {
@@ -190,13 +200,13 @@ export function useMatrixRain(
       // — 拼色场景走 renderKey 硬重建(由 matrixRain init 时构造)
       if (typeof o.theme === 'string') inst.setTheme(o.theme);
       if (o.fontSize !== undefined) inst.setDensity(o.fontSize);
-      if (o.charset !== undefined) /* charset 需 _reload(): setCharsetFunc 暂未暴露,skip */ void 0;
       if (o.coldPalette && o.warmPalette) inst.setPalettes(o.coldPalette, o.warmPalette);
       if (o.themeParams) inst.setThemeParams(o.themeParams);
-      if (o.variant) inst.setVariantParams({});
+      if (o.variantParams) inst.setVariantParams(o.variantParams);
       if (o.targetFPS !== undefined) inst.setTargetFPS(o.targetFPS);
       if (o.renderScale !== undefined) inst.setRenderScale(o.renderScale);
       if (o.flickerSpeed !== undefined) inst.setFlickerSpeed(o.flickerSpeed);
+      if (typeof o.hueRotateSpeed === 'number') inst.setHueRotate(o.hueRotateSpeed);
     } catch (e) {
       console.error('[useMatrixRain] soft update failed:', e);
     }
