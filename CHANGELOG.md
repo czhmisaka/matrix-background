@@ -5,6 +5,41 @@ All notable changes to `@xietuier/matrix-rain` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-06-10
+
+### Fixed — 0.4.0 渲染器虚假实现修复
+
+0.4.0 已发布的 WebGL / WebGPU 渲染器是 fake 实现:`tsc --noEmit` 静态类型 clean、`npm test 21/21` 通过(MockCanvas 只验"不抛")、`npm run bench:renderer 29 fps`(只读 `getFPS()` 不读像素),三层假绿信号互相佐证。但真浏览器选 `renderer: 'webgl'` 或 `'webgpu'` 会看到空白/24 字符画面。详见 `docs/audit-fake-impl-2026-06-10.md`(6 P0 + 4 P1 + 3 P2)。
+
+本版本修复:
+
+- **P0-7** `MatrixRainRenderer.render()` 从未被引擎调过 — WebGL/WebGPU 的 `drawArraysInstanced` 和 `queue.submit` 都是死代码。修法:引擎 rAF 加 `state.renderer.render(state, lastDt)` 调用 + 接口加 optional `beginFrame()` 钩子。canvas2d 不实现两个新方法(no-op),向后兼容。
+- **P0-1** `drawChar(ch, ...)` 之前把 charset index(0..24)当 instance buffer 槽位用,32K 个 cell 应画但实际只画 24 个。修法:渲染器内部加 `_drawCallIdx` 计数器,`beginFrame()` 重置 0,`drawChar()` 按 `_drawCallIdx * STRIDE` 写槽位,`render()` 按 `_drawCallIdx` 作 `drawArraysInstanced` 实例数。接口签名不变。
+- **P0-5** `buildGrid()` 重算 grid 后没通知 renderer 重 alloc instance buffer。修法:接口加 `resizeGrid?(cols, rows)`,`buildGrid()` 末尾调通(canvas2d 不实现)。
+- **P0-2 / P0-3 / P0-4 / P0-6** WebGPU compute pass 完全 fake:cellsBuffer 创建后没写入、compute 输出没人读、`read-only-storage` 与 WGSL `read_write` 不兼容(真 Chrome 113+ 会在 `createComputePipeline()` 抛 ValidationError 开机即崩)、warmth params 硬编码忽略 state。修法:**直接删 compute 整套**(字段、方法、shader import、render() 内 beginComputePass 块)。"WebGPU compute 并行 warmth" 留 0.5.0 重新设计。
+- **P1-1** site useMatrixRain `setVariantParams({})` 传空对象切不动 variant。**P1-2** 11+ effectKey 字段没对应 setter 但 apply 分支空跳过。**P1-3** charset 写死 skip。修法:把所有"没 setter 的字段"移到 renderKey 走硬重建,effectKey 只保留 10 个真有 setter 的字段。
+- **P1-4** bench 只读 fps 不验证像素。修法:借鉴 `scripts/e2e-demos.py` 的 hash 模式,采集 canvas 中心 200×200 像素算 djb2 hash + nonZeroRatio,`< 5%` 视为 fake 渲染 → `process.exit(2)`。
+- **P2-2** `setFontSize(_px)` 忽略 px 参数固定 32。修法:`_cellSizePx = px * dpr` 让 quad 跟随 fontSize 缩放(atlas 仍 bake 32px,sampler 自动 downscale)。
+
+### 附带修复
+
+- **async-init 竞态**:引擎用 `void renderer.init().catch(...)` 不 await。WebGL/WebGPU 的 atlas fetch 异步未完成时,rAF 已经在调 render/drawChar,读到 null shader uniforms 崩溃。修法:渲染器加 `_initialized = true` 标志(init 末尾设),`render/beginFrame/drawChar/resizeGrid` 全部加 `if (!this._initialized) return` 守卫。
+- **WebGL `preserveDrawingBuffer`**:Chromium 默认 false,composited 后 framebuffer 内容可能丢,headless bench 的 `readPixels`/`drawImage(webglCanvas)` 读不到上一帧。`init()` 创建 context 时显式传 `preserveDrawingBuffer: true`。
+- **bench 调用签名**:之前 `matrixRain(canvas, options)` 是错的 —— 正确是 `matrixRain({ canvas, ...options })`,canvas 当 options 对象传给引擎导致用户 canvas 永远不被画。
+- **bench 页面 baseURL**:`page.setContent('...')` 让页面在 about:blank 下,相对 URL `/atlas/...` 无法 fetch。改:`page.goto('http://bench-host/')` + `page.route` fulfill。
+
+### 验证
+
+| 检查                            | 结果                                                   |
+| ------------------------------- | ------------------------------------------------------ |
+| `npm run type-check`            | ✅ 0 错                                                |
+| `cd site && npm run type-check` | ✅ 0 错                                                |
+| `npm test`                      | ✅ 21/21 全部通过                                      |
+| `npm run build`                 | ✅ 全 entry success(165 KB raw / 39 KB gzip)           |
+| `npm run bench:renderer`        | ✅ 4 场景 nonZeroRatio = 100%(canvas2d/webgl 都真渲染) |
+
+---
+
 ## [0.4.0] - 2026-06-09
 
 ### Added

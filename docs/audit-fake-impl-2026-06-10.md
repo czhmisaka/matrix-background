@@ -330,3 +330,41 @@ P0-2 / P0-3 / P0-6:WebGPU compute 改成"真有用"或者直接删 compute pass(
 1. **不要发布 0.4.0 到 npm**,先修 P0-1 + P0-4 + P0-5 + P1-1
 2. 加 Playwright headed 像素 hash 测试,把这次的 fake 兜底
 3. 把现状写进 CHANGELOG 的 "Known limitations" — 不能让用户踩
+
+---
+
+## 修复进度(0.4.1 · 2026-06-10)
+
+| ID | 状态 | 修复 commit | 备注 |
+|---|---|---|---|
+| **P0-1** drawChar 用 ch 当 cell index | ✅ 已修 | [a32ecf2](../) | 渲染器加 `_drawCallIdx` 计数器, beginFrame 重置 |
+| **P0-2** WebGPU compute 输出无人读 | ✅ 已修 | [a32ecf2](../) | 删 compute pass 整套(P0-2/3/4/6 同步) |
+| **P0-3** WebGPU cellsBuffer 未写入 | ✅ 已修 | [a32ecf2](../) | 同上(删除) |
+| **P0-4** WebGPU BindGroupLayout 不匹配 | ✅ 已修 | [a32ecf2](../) | 同上(删除) |
+| **P0-5** buildGrid 后 instance buffer 不 resize | ✅ 已修 | [f7e0287](../) | 接口加 resizeGrid?, buildGrid 末尾调通 |
+| **P0-6** WebGPU 硬编码光源 | ✅ 已修 | [a32ecf2](../) | 同 P0-2(删除整个 warmthParams) |
+| **P0-7** (plan 阶段新发现) render() 从未被调 | ✅ 已修 | [f7e0287](../) | engine.draw() 末尾调 renderer.render() |
+| **P1-1** site variant 切不动 | ✅ 已修 | [4080e8d](../) | variant 移到 renderKey 走硬重建 |
+| **P1-2** site effectKey 11+ 字段空跳过 | ✅ 已修 | [4080e8d](../) | 移到 renderKey 走硬重建 |
+| **P1-3** site charset 写死 skip | ✅ 已修 | [4080e8d](../) | 移到 renderKey 走硬重建 |
+| **P1-4** bench 只读 fps 不验像素 | ✅ 已修 | [d6425d0](../) | 加 djb2 hash + nonZeroRatio gate(< 5% 退出码 2) |
+| **P2-1** Node 测试只验"不抛" | ⏸ 留 0.5.0 | — | 需要 Playwright headed Chromium + 真 GPU,CI 配置复杂 |
+| **P2-2** setFontSize 忽略 px | ✅ 已修 | [a32ecf2](../) | `_cellSizePx = px * dpr` |
+| **P2-3** drawTrail _w/_h 参数无害 | ⏸ 留 cleanup | — | 接口签名误导,但功能无影响 |
+
+### 附带发现的次生 bug(0.4.1 一并修了)
+
+- **async-init 竞态**:`void renderer.init().catch(...)` 不 await,WebGL/WebGPU init 跑完前 rAF 已调 render/drawChar 读到 null shader uniforms 崩。修法:加 `_initialized` 标志守卫。
+- **WebGL `preserveDrawingBuffer`**:Chromium 默认 false,headless bench 读不到上一帧像素。修法:`getContext('webgl2', { preserveDrawingBuffer: true })`。
+- **bench `matrixRain(canvas, options)` 调用签名错**:正确是 `matrixRain({ canvas, ...options })`。0.4.0 bench 之所以拿到 fps 完全是因为引擎自创了 detached canvas,用户的 canvas 从未被画。
+- **bench 页面 baseURL = about:blank**:相对 URL `/atlas/...` 无法 fetch。修法:`page.goto('http://bench-host/')` + `page.route` fulfill。
+
+### 端到端验证(0.4.1)
+
+```
+npm run type-check          # 0 错
+cd site && npm run type-check  # 0 错
+npm test                    # 21/21 全部通过
+npm run build               # 全 entry success
+npm run bench:renderer      # 4 场景 nonZeroRatio = 100% (真渲染)
+```
