@@ -2,7 +2,7 @@
 
 > **目的**: 帮助新人理解"ABCD 4 层模型 + 渲染管线 + 状态机 + 缓存"是怎么串成一个 60fps 的 Canvas 2D 数字雨引擎。
 >
-> **范围**: `src/` 全量(13 个 `.ts` 文件) + `types/index.d.ts` + `src/matrix-rain.css`。
+> **范围**: `src/` 全量 `.ts` 文件 + `types/index.d.ts` + `src/matrix-rain.css`。
 >
 > **不覆盖**: site 路由 / Vue 组件 / Playwright 测试 — 见 `site/src/` 与 `docs/A11Y-AUDIT-2026-06-08.md`。
 >
