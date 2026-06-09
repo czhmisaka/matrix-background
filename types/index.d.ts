@@ -719,6 +719,12 @@ export interface EnvironmentInfo {
   viewportWidth: number;
   /** devicePixelRatio(SSR / 不可用时为 1) */
   devicePixelRatio: number;
+  /** 0.4.0+ 浏览器支持 WebGL2(98% 覆盖) */
+  hasWebGL2: boolean;
+  /** 0.4.0+ 浏览器支持 WebGPU(75% 覆盖,Firefox 暂未) */
+  hasWebGPU: boolean;
+  /** 0.4.0+ 根据 viewport + fontSize + 浏览器能力推荐的 renderer */
+  recommendedRenderer: 'canvas2d' | 'webgl' | 'webgpu';
 }
 
 /** 默认主题导出 */

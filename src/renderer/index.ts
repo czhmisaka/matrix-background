@@ -67,18 +67,17 @@ export const createRenderer = async (type: RendererImpl): Promise<MatrixRainRend
 export { setAtlasUrls } from './webgl-renderer';
 
 /**
- * Auto-pick: 根据用户配置 / 环境选择最合适的 renderer
- * Phase 1 实现: 'auto' → 'canvas2d'
- * Phase 3 扩展: 估算 cell 数 × viewport, 选 canvas2d / webgl / webgpu
+ * Auto-pick: 根据用户配置 / 环境 / viewport 选最合适的 renderer
+ * Phase 3 实现: 估算 cell 数 × viewport, 选 canvas2d / webgl / webgpu
  *
  * @since 0.4.0
  */
-export const autoPickRenderer = (options: { renderer?: RendererType }): RendererImpl => {
+export { autoPickRenderer, estimateCells, detectEnvironment, THRESHOLDS } from './auto-pick';
+export type { AutoPickOptions, EnvironmentCaps } from './auto-pick';
+
+/** @deprecated 用 './auto-pick' 里的版本(viewport-aware) */
+export const autoPickRendererLegacy = (options: { renderer?: RendererType }): RendererImpl => {
   const t = resolveRenderer(options.renderer);
-  if (t === 'auto') {
-    // Phase 1: 默认 canvas2d
-    // Phase 3: 基于 viewport × cell density 估算
-    return 'canvas2d';
-  }
+  if (t === 'auto') return 'canvas2d';
   return t as RendererImpl;
 };

@@ -156,8 +156,19 @@ const resampleBitmap = (
  * rain.destroy();
  */
 export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance {
-  // ============ 0. 0.4.0+ 选择 renderer ============
-  const impl: RendererImpl = autoPickRenderer({ renderer: options.renderer });
+  // ============ 0. 0.4.0+ 选择 renderer (Phase 3: viewport-aware auto-pick) ============
+  // 取当前 viewport(默认 window.innerWidth × window.innerHeight,buildGrid 之后会重新校准)
+  const initialViewport =
+    typeof window !== 'undefined'
+      ? { w: window.innerWidth, h: window.innerHeight }
+      : { w: 1920, h: 1080 };
+  const initialDpr =
+    typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1;
+  const impl: RendererImpl = autoPickRenderer({
+    matrixRain: { renderer: options.renderer, fontSize: options.fontSize },
+    viewport: initialViewport,
+    dpr: initialDpr,
+  });
 
   // ============ 0.5 同步创建 renderer instance(同步, 不 init)============
   // 0.4.0+ Phase 2B: 静态 import (Phase 3 改 esbuild dynamic chunk 拆体积)

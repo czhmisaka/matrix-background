@@ -50,16 +50,25 @@ export function useMatrixRain(
   const softDestroy = (inst: MatrixRainInstance | null, dur: number): Promise<void> => {
     if (!inst) return Promise.resolve();
     if (dur <= 0) {
-      try { inst.destroy(); } catch {}
+      try {
+        inst.destroy();
+      } catch {}
       return Promise.resolve();
     }
     return new Promise<void>((resolve) => {
-      try { inst.setTransitionAlpha(1.0, dur); } catch { resolve(); return; }
+      try {
+        inst.setTransitionAlpha(1.0, dur);
+      } catch {
+        resolve();
+        return;
+      }
       const start = performance.now();
       const tick = () => {
         const elapsed = (performance.now() - start) / 1000;
         if (elapsed >= dur) {
-          try { inst.destroy(); } catch {}
+          try {
+            inst.destroy();
+          } catch {}
           resolve();
           return;
         }
@@ -86,9 +95,11 @@ export function useMatrixRain(
           instance.value.setTransitionAlpha(0);
           if (pendingFadeInTimer !== null) clearTimeout(pendingFadeInTimer);
           pendingFadeInTimer = window.setTimeout(() => {
-            try { instance.value?.setTransitionAlpha(1.0, mountFadeInDur); } catch {}
+            try {
+              instance.value?.setTransitionAlpha(1.0, mountFadeInDur);
+            } catch {}
             pendingFadeInTimer = null;
-          }, 16);  // 等首帧渲染后再启动 fade
+          }, 16); // 等首帧渲染后再启动 fade
         } catch {
           // 旧版本无 setTransitionAlpha,忽略
         }
@@ -127,7 +138,71 @@ export function useMatrixRain(
       void softDestroy(inst, destroyFadeOutDur);
     }
   });
-  watch(() => unref(optionsRef), () => { void mount(); }, { deep: true });
+
+  // 0.4.0+ watch 拆分:
+  // - renderKey: 改 canvas / renderer → 必须硬重建(canvas 绑死 context)
+  // - effectKey: 改 theme / fontSize / charset / 等参数 → 走 setter 软更新(无 rAF 抖)
+  //
+  // 注: 旧版单一 deep watch → 任何字段都触发软销毁重建。WebGL 模式下 shader 编译
+  // 需 10-50ms,频繁 rebuild 会让用户体验明显卡顿。拆分后:
+  // - 调主题: setTheme 走 setter, 1-2 帧过渡
+  // - 改 renderer: _reload() 硬重建, 一次性
+  const renderKey = (): unknown => {
+    const o = unref(optionsRef);
+    return [o.renderer, canvasRef.value];
+  };
+  const effectKey = (): unknown => {
+    const o = unref(optionsRef);
+    return [
+      o.theme,
+      o.fontSize,
+      o.charset,
+      o.coldPalette,
+      o.warmPalette,
+      o.themeParams,
+      o.variant,
+      o.variantParams,
+      o.targetFPS,
+      o.trailAlpha,
+      o.maxDPR,
+      o.sparks ?? o.sparkProbability,
+      o.hueRotateSpeed,
+      o.renderScale,
+      o.clickBurst,
+      o.flickerRates,
+      o.flickerSpeed,
+      o.warmthRadius,
+      o.warmthLerp,
+      o.lightCenter,
+      o.driftSpeed,
+      o.transitionAlpha,
+    ];
+  };
+  watch(renderKey, () => {
+    void mount();
+  });
+  watch(effectKey, (_n, _o, onCleanup) => {
+    const inst = instance.value;
+    if (!inst) return;
+    const o = unref(optionsRef);
+    // 软更新(直接调 setter,不走 mount/destroy)
+    try {
+      if (o.theme !== undefined) inst.setTheme(o.theme);
+      if (o.fontSize !== undefined) inst.setDensity(o.fontSize);
+      if (o.charset !== undefined) /* charset 需 _reload(): setCharsetFunc 暂未暴露,skip */ void 0;
+      if (o.coldPalette || o.warmPalette) inst.setPalettes(o.coldPalette, o.warmPalette);
+      if (o.themeParams) inst.setThemeParams(o.themeParams);
+      if (o.variant) inst.setVariantParams({});
+      if (o.targetFPS !== undefined) inst.setTargetFPS(o.targetFPS);
+      if (o.renderScale !== undefined) inst.setRenderScale(o.renderScale);
+      if (o.flickerSpeed !== undefined) inst.setFlickerSpeed(o.flickerSpeed);
+    } catch (e) {
+      console.error('[useMatrixRain] soft update failed:', e);
+    }
+    onCleanup(() => {
+      /* noop */
+    });
+  });
 
   return instance;
 }

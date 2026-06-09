@@ -133,12 +133,16 @@ export const MatrixRain = {
         viewport: 'desktop',
         viewportWidth: 0,
         devicePixelRatio: 1,
+        hasWebGL2: false,
+        hasWebGPU: false,
+        recommendedRenderer: 'canvas2d',
       };
     }
 
     const w = window as any;
     const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
     const viewportWidth = typeof w.innerWidth === 'number' ? w.innerWidth : 0;
+    const viewportHeight = typeof w.innerHeight === 'number' ? w.innerHeight : 0;
     const dpr = typeof w.devicePixelRatio === 'number' ? w.devicePixelRatio : 1;
     const browser = detectBrowser(ua);
     const viewport = pickViewportBucket(viewportWidth);
@@ -151,22 +155,48 @@ export const MatrixRain = {
       /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) ||
       (typeof w.matchMedia === 'function' && w.matchMedia('(pointer: coarse)').matches);
 
+    // 0.4.0+ 浏览器能力探测
+    const hasWebGL2 = (() => {
+      try {
+        const c = document.createElement('canvas');
+        return !!c.getContext('webgl2');
+      } catch {
+        return false;
+      }
+    })();
+    const hasWebGPU =
+      typeof navigator !== 'undefined' && typeof (navigator as any).gpu !== 'undefined';
+
+    const recommendedFontSize =
+      viewportWidth < 1280
+        ? 4
+        : viewportWidth >= 3840
+          ? 16
+          : Math.round(6 + ((viewportWidth - 1280) * 10) / 2560);
+
+    // 0.4.0+ 推荐 renderer(viewport × cell density)
+    const recommendedRenderer: 'canvas2d' | 'webgl' | 'webgpu' = (() => {
+      const cells =
+        Math.ceil((viewportWidth * dpr) / recommendedFontSize) *
+        Math.ceil((viewportHeight * dpr) / recommendedFontSize);
+      if (cells >= 500_000 && hasWebGPU) return 'webgpu';
+      if (cells >= 100_000 && hasWebGL2) return 'webgl';
+      return 'canvas2d';
+    })();
+
     return {
       isMobile,
       isDarkMode,
-      // 推荐 fontSize:与 engine buildGrid 同公式(720p→6,4K→16 线性)
-      recommendedFontSize:
-        viewportWidth < 1280
-          ? 4
-          : viewportWidth >= 3840
-            ? 16
-            : Math.round(6 + ((viewportWidth - 1280) * 10) / 2560),
+      recommendedFontSize,
       recommendedTargetFPS: isMobile ? 30 : 0,
       recommendedBrightness: isDarkMode ? 1.1 : 1.0,
       browser,
       viewport,
       viewportWidth,
       devicePixelRatio: dpr,
+      hasWebGL2,
+      hasWebGPU,
+      recommendedRenderer,
     };
   },
 };

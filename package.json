@@ -76,7 +76,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json,md}\" \"site/src/**/*.{ts,tsx,vue,css,json,md}\" \"*.{json,md,cjs,js}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json,md}\" \"site/src/**/*.{ts,tsx,vue,css,json,md}\" \"*.{json,md,cjs,js}\"",
     "prepare": "husky",
-    "test": "node test/smoke.mjs && node test/leak.mjs && node test/frame-rate.mjs && node test/events.mjs && node test/sandbox.mjs && node test/noise-converge.mjs && node test/canvas-remove.mjs && node test/transitions.mjs && node test/text-fit.mjs && node test/set-target-bitmap-validation.mjs && node test/detect.mjs && node test/themes.mjs && node test/edge-cases.mjs && node test/image-converge.mjs && node test/render-scale.mjs && node test/renderer-canvas2d.mjs && node test/atlas-load.mjs && node test/renderer-webgl.mjs && node test/easing.mjs",
+    "test": "node test/smoke.mjs && node test/leak.mjs && node test/frame-rate.mjs && node test/events.mjs && node test/sandbox.mjs && node test/noise-converge.mjs && node test/canvas-remove.mjs && node test/transitions.mjs && node test/text-fit.mjs && node test/set-target-bitmap-validation.mjs && node test/detect.mjs && node test/themes.mjs && node test/edge-cases.mjs && node test/image-converge.mjs && node test/render-scale.mjs && node test/renderer-canvas2d.mjs && node test/atlas-load.mjs && node test/renderer-webgl.mjs && node test/auto-pick.mjs && node test/easing.mjs",
     "test:smoke": "node test/smoke.mjs",
     "test:leak": "node test/leak.mjs",
     "test:frame-rate": "node test/frame-rate.mjs",
