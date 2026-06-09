@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>matrix-rain renderer bench</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; }
+#info { position: fixed; top: 8px; left: 8px; z-index: 999; font: 11px monospace; color: #0f0; background: rgba(0,0,0,0.7); padding: 6px 10px; border-radius: 4px; white-space: pre; }
+</style>
+</head>
+<body>
+<div id="info">init...</div>
+<script type="module">
+import { matrixRain } from './dist/index.js';
+
+const info = document.getElementById('info');
+const p = new URLSearchParams(location.search);
+const renderer = p.get('renderer') || 'canvas2d';
+const vpW = +p.get('w') || 1920;
+const vpH = +p.get('h') || 1080;
+const fs = +p.get('fs') || 14;
+const dur = +p.get('dur') || 5;
+const idle = +p.get('idle') || 2;
+
+info.textContent = `[${renderer}] ${vpW}\u00d7${vpH} fs=${fs}\nidle ${idle}s...`;
+
+const canvas = document.createElement('canvas');
+canvas.style.cssText = 'width:100vw;height:100vh;display:block';
+document.body.appendChild(canvas);
+
+const rain = await matrixRain(canvas, { renderer, fontSize: fs, theme: 'matrix-green', variant: 'classic' });
+
+setTimeout(() => {
+  info.textContent = `[${renderer}] ${vpW}\u00d7${vpH} fs=${fs}\nsampling... 0/${dur}s`;
+  const samples = [];
+  let n = 0;
+  const iv = setInterval(() => {
+    const fps = rain.getFPS();
+    samples.push(fps);
+    n++;
+    info.textContent = `[${renderer}] ${vpW}\u00d7${vpH} fs=${fs}\nsampling... ${n}/${dur}s\nfps=${fps}`;
+    if (n >= dur) {
+      clearInterval(iv);
+      const sum = samples.reduce((a,b)=>a+b,0);
+      const avg = (sum/samples.length).toFixed(1);
+      const min = Math.min(...samples).toFixed(1);
+      const max = Math.max(...samples).toFixed(1);
+      const s = [...samples].sort((a,b)=>a-b);
+      const p50 = s[Math.floor(s.length*.5)].toFixed(1);
+      const p95 = s[Math.floor(s.length*.95)].toFixed(1);
+      window.__RESULT__ = {renderer,viewport:`${vpW}\u00d7${vpH}`,fontSize:fs,avgFps:+avg,minFps:+min,maxFps:+max,p50Fps:+p50,p95Fps:+p95,samples};
+      window.__DONE__ = true;
+      info.textContent = `[${renderer}] ${vpW}\u00d7${vpH} fs=${fs}\nDONE avg=${avg} p50=${p50}`;
+      setTimeout(()=>rain.destroy(), 100);
+    }
+  }, 1000);
+}, idle * 1000);
+</script>
+</body>
+</html>

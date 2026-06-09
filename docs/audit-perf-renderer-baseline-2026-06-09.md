@@ -127,16 +127,20 @@
 
 ## 3. 性能矩阵(综合估算)
 
-| 场景 | cells | canvas2d | webgl | webgpu | auto pick |
+| 场景 | cells | canvas2d (Playwright) | webgl (Playwright) | webgpu | auto pick |
 |---|---:|---:|---:|---:|---|
-| 1080p + fontSize 14 | 10K | 60 fps | 60 fps | 60 fps | canvas2d |
-| 1440p + fontSize 8 | 32K | 60 fps | 60 fps | 60 fps | canvas2d |
-| 1440p + fontSize 4 | 162K | 25 fps | 60 fps | 60 fps | webgl |
-| 4K + fontSize 8 | 230K | 30 fps | 60 fps | 60 fps | webgl |
-| 4K + fontSize 6 | 518K | 10 fps | 60 fps | 60 fps | webgl |
-| 4K + fontSize 4 | 2.3M | < 2 fps | 35 fps | 60 fps | webgl |
-| 8K + fontSize 4 | 2.1M | < 5 fps | 30 fps | 60 fps | webgpu |
-| 8K + fontSize 2 | 8.4M | < 1 fps | 10 fps | 60 fps | webgpu |
+| 1080p + fontSize 14 | 10K | ✅ 29.3 fps avg | (auto 走 canvas2d) | N/A (headless 无 WebGPU) | canvas2d |
+| 1440p + fontSize 8 | 32K | ✅ 29.3 fps avg | N/A | N/A | canvas2d |
+| 1440p + fontSize 4 | 230K | N/A | ✅ 29.8 fps avg | N/A | webgl |
+| 4K + fontSize 4 | 518K | N/A | ✅ 29.5 fps avg | N/A | webgl |
+
+> **实测说明 (2026-06-09, 第二次 run 2026-06-10 复测)**:
+> - 4 个场景已在 Playwright headless Chromium 中实测（`npm run bench:renderer`）
+> - canvas2d 和 webgl 渲染器均正常工作，无崩溃
+> - headless Chromium 帧率受限于 ~28-30 fps（无 GPU 加速）
+> - 完整性能差异（canvas2d vs webgl）需要在有 GPU 加速的 headed Chromium 中测试
+> - WebGPU 完整渲染验证需要 Chrome 113+ headed 模式
+> - 测试数据: `docs/bench-results-2026-06-09.json`（最近一次复测覆盖原文件，时间戳保留为 ISO 字符串）
 
 **auto 算法阈值**:
 - `< 100K cells` → canvas2d

@@ -96,6 +96,7 @@
     "test:esm": "node test/esm-load.mjs",
     "test:usability": "node test/usability.mjs",
     "test:e2e:demos": "/Users/chenzhihan/anaconda3/bin/python3 scripts/e2e-demos.py",
+    "bench:renderer": "node scripts/bench-renderer.mjs",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {

@@ -2,27 +2,32 @@
  * @xietuier/matrix-rain · WebGPU Shaders (WGSL) (0.4.0+ Phase 4)
  *
  * **架构**:
- * 1. **Compute shader** (`warmth.wgsl`): 每帧并行更新 cell.warmth / cell.phase
+ * 1. **Compute shader** (`warmth.wgsl`): 每帧并行更新 cell.warmth
  *    - 8.4M cells × 60fps 跑 compute 不可能慢 (1-2ms)
- * 2. **Render pipeline** (vertex + fragment): instanced draw,共享 atlas
+ * 2. **Render pipeline** (vertex + fragment): instanced draw, 共享 atlas
  * 3. **Bind groups**:
- *    - group(0): uniforms (viewport, time, atlas)
- *    - group(1): cells storage buffer
- *    - group(2): instance data (per-frame)
+ *    - Compute: @group(0) @binding(0) cells (storage, read_only)
+ *                @group(0) @binding(1) params (uniform)
+ *    - Render:  @group(0) @binding(0) uniforms (uniform, 16 bytes)
+ *                @group(0) @binding(1) atlasTex (texture_2d)
+ *                @group(0) @binding(2) atlasSampler (sampler)
+ *    - Trail:   @group(0) @binding(0) trailColor (uniform, vec4)
  *
- * **WGSL** = WebGPU Shading Language (类似 Rust)
+ * **WGSL 规范要求**:
+ * - runtime-sized array 不能嵌套在 struct 内，必须直接声明为顶层 var 类型
+ * - uniform buffer 字段必须 16-byte 对齐
  *
  * @since 0.4.0
  */
 
 /**
- * Compute shader · 并行更新 cell.warmth / cell.bright
+ * Compute shader · 并行更新 cell.warmth
  *
- * 注: warmth 阻尼公式 (与 draw-helpers.ts:73-78 保持 100% 一致)
+ * 注: 算法与 draw-helpers.ts 中的 CPU 路径保持 100% 一致
  *   C = h - M, A = s - p
  *   B = sqrt(C² + A²)
- *   H = max(0, 1 - B / (state.i * state.cfg.warmthRadius))
- *   warmth += (H - warmth) * state.cfg.warmthLerp
+ *   H = max(0, 1 - B / (rows * warmthRadius))
+ *   warmth += (H - warmth) * warmthLerp
  *
  * WGSL: @compute + @workgroup_size(64)  (GPU 一次处理 64 cells)
  */
@@ -38,11 +43,8 @@ struct Cell {
   locked: u32,
 }
 
-struct CellBuffer {
-  cells: array<Cell>,
-}
-
-@group(0) @binding(0) var<storage, read_write> cells: CellBuffer;
+// runtime-sized array 必须直接声明，不嵌套在 struct 内（WGSL 规范）
+@group(0) @binding(0) var<storage, read_write> cells: array<Cell>;
 
 struct WarmthParams {
   lightCenterX: f32,
@@ -55,7 +57,7 @@ struct WarmthParams {
   gridCols: f32,
   wallTime: f32,
   targetActive: u32,
-  _pad0: u32,
+  _pad0: u32,  // 对齐填充
   _pad1: u32,
   _pad2: u32,
 }
@@ -65,9 +67,8 @@ struct WarmthParams {
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let idx = gid.x;
-  if (idx >= arrayLength(&cells.cells)) { return; }
+  if (idx >= arrayLength(&cells)) { return; }
 
-  // 注: 简化版,只更新 warmth / bright,其他字段 CPU 端调
   let s = f32(idx) / params.gridCols;
   let h = f32(idx) - s * params.gridCols;
   let lightX = params.lightCenterX * params.gridCols +
@@ -78,15 +79,20 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let A = s - lightY;
   let B = sqrt(C * C + A * A);
   let H = max(0.0, 1.0 - B / (params.gridRows * params.warmthRadius));
-  cells.cells[idx].warmth += (H - cells.cells[idx].warmth) * params.warmthLerp;
+
+  // 读取当前值，计算新值，写回
+  let old = cells[idx].warmth;
+  cells[idx].warmth = old + (H - old) * params.warmthLerp;
 }
 `;
 
 /**
  * Vertex shader · instanced draw
  *
- * 注: 共享 atlas + palette LUT texture,与 WebGL2 类似
- * 区别: WGSL 用 @vertex / @fragment
+ * 与 WebGL2 vertex shader 功能完全一致：
+ * - 4 顶点 triangle-strip quad (vertex_index 0-3)
+ * - 每个实例有 12 个 float (48 bytes): [pos.xy, charIdx, pad, color.rgba, uv0.xy, uv1.xy]
+ * - 输出 clip-space position + atlas UV + fragment color
  */
 export const RENDER_VERTEX_SHADER = /* wgsl */ `
 struct VertexOutput {
@@ -98,7 +104,7 @@ struct VertexOutput {
 struct VertexUniforms {
   viewport: vec2<f32>,
   cellSize: f32,
-  _pad: f32,
+  _pad: f32,  // 16-byte 对齐填充
 }
 
 @group(0) @binding(0) var<uniform> uniforms: VertexUniforms;
@@ -113,17 +119,20 @@ struct InstanceInput {
 
 @vertex
 fn main(input: InstanceInput, @builtin(vertex_index) vid: u32) -> VertexOutput {
-  let quadU = f32((vid == 1u || vid == 3u) ? 1u : 0u);
-  let quadV = f32((vid == 2u || vid == 3u) ? 1u : 0u);
+  // 4-vertex triangle-strip quad
+  let quadU = select(0.0, 1.0, vid == 1u || vid == 3u);
+  let quadV = select(0.0, 1.0, vid == 2u || vid == 3u);
 
   var output: VertexOutput;
   output.uv = mix(input.uv0, input.uv1, vec2<f32>(quadU, quadV));
   output.color = input.color;
 
+  // 计算角落坐标 (左上角为 origin, +x 右, +y 下)
   let corner = input.pos + vec2<f32>(
     (quadU - 0.5) * uniforms.cellSize,
     (quadV - 0.5) * uniforms.cellSize
   );
+  // NDC 变换 (0..viewport → -1..+1, Y 轴翻转)
   let ndc = (corner / uniforms.viewport) * 2.0 - vec2<f32>(1.0);
   output.position = vec4<f32>(ndc.x, -ndc.y, 0.0, 1.0);
   return output;
@@ -131,7 +140,9 @@ fn main(input: InstanceInput, @builtin(vertex_index) vid: u32) -> VertexOutput {
 `;
 
 /**
- * Fragment shader · 采样 atlas,乘 color
+ * Fragment shader · 采样 atlas 纹理 alpha，乘 color
+ *
+ * 与 WebGL2 fragment shader 功能完全一致
  */
 export const RENDER_FRAGMENT_SHADER = /* wgsl */ `
 @group(0) @binding(1) var atlasTex: texture_2d<f32>;
@@ -150,7 +161,7 @@ fn main(input: VertexOutput) -> @location(0) vec4<f32> {
 }
 `;
 
-/** Trail (全屏 fade) shader */
+/** Trail (全屏 fade) shader — 与 WebGL2 trail 功能完全一致 */
 export const TRAIL_VERTEX_SHADER = /* wgsl */ `
 struct VertexOutput {
   @builtin(position) position: vec4<f32>,
@@ -158,20 +169,21 @@ struct VertexOutput {
 
 @vertex
 fn main(@builtin(vertex_index) vid: u32) -> VertexOutput {
-  let x = f32((vid == 1u || vid == 3u) ? 1 : -1);
-  let y = f32((vid == 2u || vid == 3u) ? 1 : -1);
+  // ND 全屏 quad: 4 顶点 triangle-strip
+  let x = select(-1.0, 1.0, vid == 1u || vid == 3u);
+  let y = select(-1.0, 1.0, vid == 2u || vid == 3u);
   var output: VertexOutput;
-  output.position = vec4<f32>(f32(x), f32(y), 0.0, 1.0);
+  output.position = vec4<f32>(x, y, 0.0, 1.0);
   return output;
 }
 `;
 
 export const TRAIL_FRAGMENT_SHADER = /* wgsl */ `
+@group(0) @binding(0) var<uniform> trailColor: vec4<f32>;
+
 struct VertexOutput {
   @builtin(position) position: vec4<f32>,
 }
-
-@group(0) @binding(0) var<uniform> trailColor: vec4<f32>;
 
 @fragment
 fn main(_input: VertexOutput) -> @location(0) vec4<f32> {

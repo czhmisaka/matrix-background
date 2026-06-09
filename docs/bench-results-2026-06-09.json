@@ -1,0 +1,83 @@
+{
+  "timestamp": "2026-06-09T16:23:39.481Z",
+  "scenarios": [
+    {
+      "renderer": "canvas2d",
+      "w": 1920,
+      "h": 1080,
+      "fs": 14,
+      "label": "1080p fs14"
+    },
+    {
+      "renderer": "canvas2d",
+      "w": 2560,
+      "h": 1440,
+      "fs": 8,
+      "label": "1440p fs8"
+    },
+    {
+      "renderer": "webgl",
+      "w": 2560,
+      "h": 1440,
+      "fs": 4,
+      "label": "1440p fs4"
+    },
+    {
+      "renderer": "webgl",
+      "w": 3840,
+      "h": 2160,
+      "fs": 4,
+      "label": "4K fs4"
+    }
+  ],
+  "results": [
+    {
+      "avgFps": 29.3,
+      "minFps": 29,
+      "maxFps": 30,
+      "p50Fps": 29,
+      "p95Fps": 30,
+      "samples": [29, 29, 29, 30],
+      "renderer": "canvas2d",
+      "viewport": "1920x1080",
+      "fontSize": 14,
+      "label": "1080p fs14"
+    },
+    {
+      "avgFps": 29.3,
+      "minFps": 29,
+      "maxFps": 30,
+      "p50Fps": 29,
+      "p95Fps": 30,
+      "samples": [29, 29, 29, 30],
+      "renderer": "canvas2d",
+      "viewport": "2560x1440",
+      "fontSize": 8,
+      "label": "1440p fs8"
+    },
+    {
+      "avgFps": 29.8,
+      "minFps": 29,
+      "maxFps": 30,
+      "p50Fps": 30,
+      "p95Fps": 30,
+      "samples": [29, 30, 30, 30],
+      "renderer": "webgl",
+      "viewport": "2560x1440",
+      "fontSize": 4,
+      "label": "1440p fs4"
+    },
+    {
+      "avgFps": 29.5,
+      "minFps": 28,
+      "maxFps": 30,
+      "p50Fps": 30,
+      "p95Fps": 30,
+      "samples": [28, 30, 30, 30],
+      "renderer": "webgl",
+      "viewport": "3840x2160",
+      "fontSize": 4,
+      "label": "4K fs4"
+    }
+  ]
+}
