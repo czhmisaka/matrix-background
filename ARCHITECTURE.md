@@ -579,10 +579,127 @@ graph TD
 
 ## 11 · 版本与变更追踪
 
-| 版本  | 日期       | 关键变更                                                                |
-| ----- | ---------- | ----------------------------------------------------------------------- |
-| 0.1.0 | 2026-06-08 | 首发(详见 `CHANGELOG.md`)                                               |
-| 0.2.0 | 待定       | FitMode 默认 `contain`(BREAKING)+ 文档补全 + `MatrixRain.detect()` 补全 |
+| 版本  | 日期       | 关键变更                                                                                   |
+| ----- | ---------- | ------------------------------------------------------------------------------------------ |
+| 0.4.0 | 2026-06-09 | 多渲染器可插拔(canvas2d / webgl2 / webgpu)+ auto-pick + build-time atlas + 9 ease 中断回退 |
+| 0.3.0 | 2026-06-09 | renderScale 动态分辨率(局部子格)+ textToBitmap 自定义字体 + CJK 识别                       |
+| 0.2.0 | 2026-06-08 | detect() + setTargetBitmap 严校验 + FitMode 默认 contain + ARCHITECTURE 4 层               |
+| 0.1.0 | 2026-06-08 | 首发(详见 `CHANGELOG.md`)                                                                  |
+
+---
+
+## 12 · Renderer 架构(0.4.0+)
+
+### 12.1 三层分层
+
+```
+MatrixRainState (renderer-agnostic 共享):
+  - b: Cell[][] · r/i/ef · paletteLUT · targetBitmap
+  - fps / wallTime · 主题/变体/位图/过渡所有 CPU 状态
+  - canvas: HTMLCanvasElement (所有 renderer 共用 DOM)
+  - renderer: MatrixRainRenderer (新增 0.4.0+, 替代原 state.ctx)
+       ↑ 边界规则: renderer 只读 state, 不得写
+
+MatrixRainRenderer 接口契约:
+  init(canvas, state): Promise<void>  ← WebGPU 异步
+  resize(w, h, dpr): void
+  render(state, dt): void
+  destroy(): void  (幂等)
+  pause() / resume(): void
+  + 4 个 drawing primitive: drawTrail / setFontSize / setCharset / drawChar
+
+实现:
+  - Canvas2DRenderer (默认 / 0 体积 / 100% 覆盖)
+  - WebGLRenderer    (WebGL2 instanced + atlas texture, 98% 覆盖)
+  - WebGPURenderer   (compute shader + instanced, 75% 覆盖)
+```
+
+### 12.2 Auto-Pick 算法(0.4.0+)
+
+```ts
+// src/renderer/auto-pick.ts
+function pickRenderer(options, viewport, dpr) {
+  if (options.renderer !== 'auto') return options.renderer; // 用户显式选
+  const cells = estimateCells(viewport.w, viewport.h, options.fontSize ?? 14, dpr);
+  if (cells >= 500_000 && hasWebGPU) return 'webgpu';
+  if (cells >= 100_000 && hasWebGL2) return 'webgl';
+  return 'canvas2d';
+}
+```
+
+| cells 范围 | 推荐 renderer               | 浏览器覆盖     |
+| ---------- | --------------------------- | -------------- |
+| < 100K     | canvas2d                    | 100%           |
+| 100K-500K  | webgl                       | 98%            |
+| > 500K     | webgpu (↓ webgl ↓ canvas2d) | 75% (99% 降级) |
+
+### 12.3 state vs renderer 边界
+
+- **state 持有**: Cell 数组、调色板、时间、targetBitmap、hooks
+- **renderer 私有**: GL programs / buffers / textures / canvas context
+- **state 不持 ctx**: 0.4.0 之前 `state.ctx: CanvasRenderingContext2D` (canvas2d specific) → 0.4.0 改为 `state.renderer: MatrixRainRenderer` (renderer-agnostic)
+- **state 不持 atlas**: atlas 由 renderer 私有 (canvas2d 不需要, webgl/webgpu 共享 `dist/atlas/jetbrains-mono-32.png`)
+
+### 12.4 字符 Atlas (0.4.0+ Phase 2A)
+
+- **Build-time 烘焙**(`scripts/build-atlas.mjs`): 1024×1024 PNG + JSON sidecar
+- **224 字符** (0x20-0xFF, ASCII + Latin-1)
+- **24px 字体** + 4px padding
+- **GPU 端染色**: 白字透明背景, runtime fragment shader 乘 vColor
+
+### 12.5 三 renderer 性能特征
+
+| 场景                | cells | canvas2d |  webgl | webgpu |
+| ------------------- | ----: | -------: | -----: | -----: |
+| 1080p + fontSize 14 |   10K |   60 fps | 60 fps | 60 fps |
+| 4K + fontSize 4     |  518K |   10 fps | 60 fps | 60 fps |
+| 8K + fontSize 2     |  8.4M |  < 1 fps | 10 fps | 60 fps |
+
+**为什么 webgl/webgpu 更快**:
+
+- fillText 软件渲染 5-10 μs/cell × 518K = 4 秒/帧
+- instanced draw 1-2ms/帧 (6 个数量级差距)
+- WebGPU compute 把 warmth 阻尼从 CPU 移到 GPU (8.4M cells 并行)
+
+### 12.6 降级链 + 包大小
+
+```
+renderer: 'webgpu'  → 失败 → 'webgl'  → 失败 → 'canvas2d' (兜底)
+75% 浏览器           98% 浏览器                  100% 浏览器
+```
+
+**包大小** (0.4.0 commit e73fc84):
+
+- `dist/index.js` 34.7 KB gzip(3 renderer 全部静态打包)
+- 0.4.1 计划: esbuild `splitting: true` + `manualChunks` 拆 webgl/webgpu → canvas2d 默认路径恢复 ~28 KB gzip
+
+---
+
+## 13 · 数据流总图(0.4.0+ 渲染器集成)
+
+```
+matrixRain(options)
+  ↓
+autoPickRenderer(options, viewport, dpr)  ← Phase 3
+  ↓ impl: 'canvas2d' | 'webgl' | 'webgpu'
+new XxxRenderer()
+  ↓ renderer.init(canvas, state)  ← WebGPU 异步 await adapter
+renderer.setCharset(state.charset)
+renderer.resize(w, h, dpr)
+  ↓
+[ rAF 主循环 ]
+  ↓
+drawChar(ch, x, y, r, g, b, a)  → renderer.drawChar (4800+ 次/帧)
+drawTrail(r, g, b, a, w, h)     → renderer.drawTrail
+setFontSize(px)                  → renderer.setFontSize
+  ↓
+renderer.render(state, dt)        ← WebGL/WebGPU instanced draw
+                                   Canvas 2D: no-op (drawing 已调 drawChar)
+  ↓
+destroy()                         → renderer.destroy() (释放 GL 资源)
+```
+
+| 0.2.0 | 待定 | FitMode 默认 `contain`(BREAKING)+ 文档补全 + `MatrixRain.detect()` 补全 |
 
 ---
 

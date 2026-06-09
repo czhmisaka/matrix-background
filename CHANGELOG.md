@@ -9,6 +9,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **多渲染器可插拔架构(0.4.0+)** —— 新增 `MatrixRainRenderer` 接口契约,支持 3 个渲染后端:
+  - **`canvas2d`** —— 默认 / 零额外体积 / 100% 浏览器覆盖 · 软件 fillText · 适合 1080p + fontSize ≥ 8
+  - **`webgl`** —— WebGL2 instanced rendering + 字符 atlas · 适合 4K + fontSize 4-6 (60 fps 跑 518K cells)
+  - **`webgpu`** —— WebGPU compute shader (warmth 阻尼并行) + instanced render · 适合 8K + fontSize 2
+  - **`auto`** —— Phase 3 实现 viewport × cell density 智能选最合适的 renderer
+    - `< 100K cells` → canvas2d
+    - `100K-500K cells` → webgl
+    - `> 500K cells` → webgpu (失败降级 webgl)
+  - 降级链 `webgpu → webgl → canvas2d` (100% 浏览器总覆盖)
+  - 新增 `MatrixRainOptions.renderer?: 'canvas2d' | 'webgl' | 'webgpu' | 'auto'` (默认 `'auto'`)
+  - Web Component: `<matrix-rain renderer="webgl">` 同步 attribute
+  - `MatrixRain.detect()` 扩展 3 字段: `hasWebGL2` / `hasWebGPU` / `recommendedRenderer`
+  - `useMatrixRain` composable watch 拆分:`renderKey` (renderer/canvas) → 硬重建,`effectKey` (theme/param 等 20 字段) → 软更新 setter(WebGL shader 编译 10-50ms 不再因主题切换触发)
+  - **`MatrixRainRenderer` 接口**:
+    - `init(canvas, state): Promise<void>` (WebGPU 异步 adapter 申请)
+    - `resize(w, h, dpr)` (DPR 缩放)
+    - `render(state, dt)` (WebGL/WebGPU 走 instanced / compute,Canvas 2D 走 no-op)
+    - `destroy()` 幂等
+    - `pause() / resume()` 转发
+    - `drawTrail / setFontSize / setCharset / drawChar` 4 个 drawing primitive
+  - **边界规则**(写进 types.ts 注释):
+    - Renderer 只读 state (b/charset/paletteLUT/effectiveTp/cfg/canvas)
+    - Renderer 不得写 state 任何字段
+    - Renderer 私有状态 (programs/buffers/atlas) 放 renderer 实例内
+    - destroy() 必须幂等
+    - resize() 必须先 `canvas.width = canvas.width` 强制重置
+    - init() 是 Promise (WebGPU 异步)
+  - **Build-time 字符 Atlas** —— `scripts/build-atlas.mjs` 在 `npm run build` 末尾自动跑,生成 `dist/atlas/jetbrains-mono-32.png` (20.6 KB, 1024×1024, 224 字符 0x20-0xFF) + JSON sidecar (UV 坐标 + 字符度量)
+  - **Phase 5 优化空间**: esbuild `splitting: true` + `manualChunks` 拆 webgl/webgpu → canvas2d 默认路径恢复 ~28 KB gzip
+  - 配套文档:
+    - `docs/atlas-format.md` —— 字符布局图 + JSON schema + WebGL/WebGPU 加载示例
+    - `docs/audit-perf-renderer-baseline-2026-06-09.md` —— 3 renderer × 8 场景性能矩阵
+  - 配套测试 (5 个新 .mjs, 共 36 case):
+    - `test/renderer-canvas2d.mjs` (10 case) —— 默认 canvas2d 行为 / webgl/webgpu throw
+    - `test/atlas-load.mjs` (9 case) —— PNG magic / JSON schema / 字符覆盖
+    - `test/renderer-webgl.mjs` (5 case) —— Node 端类型/集成验证
+    - `test/auto-pick.mjs` (9 case) —— 显式/auto/renderScale/3 变体
+    - `test/renderer-webgpu.mjs` (6 case) —— Node 端类型/集成验证
+
 - **过渡曲线 + 打断与回退(0.4.0+)** —— 新增 `EasingMode = 'smooth' | 'linear'` 全局曲线模式,以及 4 个过渡 setter 的 `dur` + `easing` per-call 覆盖。所有过渡现在都正确**支持打断与回退**:mid-flight 调用时,`from` 取当前显示值(插值),不是旧快照,保证视觉上平滑衔接(无突跳)。
   - 新增 `MatrixRainOptions.easing?: 'smooth' | 'linear'`(默认 `'smooth'` = cubic ease)
   - 新增 `setEasing(mode)` / `getEasing()` 热更新

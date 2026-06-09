@@ -373,16 +373,17 @@ export default function MatrixBg() {
 
 **基础**
 
-| 字段           | 类型               | 默认               | 说明                                                                                   |
-| -------------- | ------------------ | ------------------ | -------------------------------------------------------------------------------------- |
-| `theme`        | `ThemeName`        | `'silicon-valley'` | 主题预设 · `silicon-valley` / `matrix-green` / `lava-red` / `cyber-blue` / `pure-mono` |
-| `variant`      | `VariantName`      | `'classic'`        | 变体 · `classic` / `avalanche` / `ripple` / `ascii`                                    |
-| `fontSize`     | `number`           | `14`               | 字符宽(px)                                                                             |
-| `charset`      | `string`           | `'0123456789'`     | 字符集                                                                                 |
-| `trailAlpha`   | `number`           | `0.18`             | 残影 alpha,0.05=长拖尾 / 0.5=无拖尾                                                    |
-| `maxDPR`       | `number`           | `2`                | DPR 上限,性能优先设 1                                                                  |
-| `renderScale`  | `number \| 'auto'` | `1`                | 局部子格渲染倍率(0.3.0+)· 详见[§动态分辨率 / 局部子格](#动态分辨率--局部子格)          |
-| `flickerSpeed` | `number`           | `1`                | 闪烁速度倍率 · 0=冻结 1=默认 3=狂暴                                                    |
+| 字段           | 类型                                          | 默认               | 说明                                                                                   |
+| -------------- | --------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------- |
+| `theme`        | `ThemeName`                                   | `'silicon-valley'` | 主题预设 · `silicon-valley` / `matrix-green` / `lava-red` / `cyber-blue` / `pure-mono` |
+| `variant`      | `VariantName`                                 | `'classic'`        | 变体 · `classic` / `avalanche` / `ripple` / `ascii`                                    |
+| `fontSize`     | `number`                                      | `14`               | 字符宽(px)                                                                             |
+| `charset`      | `string`                                      | `'0123456789'`     | 字符集                                                                                 |
+| `trailAlpha`   | `number`                                      | `0.18`             | 残影 alpha,0.05=长拖尾 / 0.5=无拖尾                                                    |
+| `maxDPR`       | `number`                                      | `2`                | DPR 上限,性能优先设 1                                                                  |
+| `renderScale`  | `number \| 'auto'`                            | `1`                | 局部子格渲染倍率(0.3.0+)· 详见[§动态分辨率 / 局部子格](#动态分辨率--局部子格)          |
+| `flickerSpeed` | `number`                                      | `1`                | 闪烁速度倍率 · 0=冻结 1=默认 3=狂暴                                                    |
+| `renderer`     | `'canvas2d' \| 'webgl' \| 'webgpu' \| 'auto'` | `'auto'`           | 渲染器选择(0.4.0+)· 详见[§渲染器选择](#渲染器选择-040)                                 |
 
 **颜色 / 调色板**
 
@@ -1005,13 +1006,106 @@ const clientInstance = MatrixRain.fromSnapshot(json, { container: document.body 
 
 ## 🛠️ 性能调优
 
-| 场景       | 改法                                                                                                  |
-| ---------- | ----------------------------------------------------------------------------------------------------- |
-| 老旧设备   | `maxDPR: 1`                                                                                           |
-| 移动端     | `fontSize: 18`                                                                                        |
-| 4K 屏      | `maxDPR: 1`(默认已限 2)                                                                               |
-| 隐藏时省电 | `document.addEventListener('visibilitychange', () => document.hidden ? rain.pause() : rain.resume())` |
-| 无障碍     | CSS 已内置 `prefers-reduced-motion` 处理                                                              |
+| 场景                  | 改法                                                                                                  |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
+| 老旧设备              | `maxDPR: 1`                                                                                           |
+| 移动端                | `fontSize: 18`                                                                                        |
+| 4K 屏                 | `maxDPR: 1`(默认已限 2)                                                                               |
+| 隐藏时省电            | `document.addEventListener('visibilitychange', () => document.hidden ? rain.pause() : rain.resume())` |
+| 无障碍                | CSS 已内置 `prefers-reduced-motion` 处理                                                              |
+| **精细字体 + 大画布** | `renderer: 'webgl'` 或 `'webgpu'`(详见[§渲染器选择](#渲染器选择-040))                                 |
+
+---
+
+## 渲染器选择(0.4.0+)
+
+`matrixRain` 支持 3 个 GPU 渲染后端,根据场景自动或显式选。
+
+### 3 个渲染器对比
+
+| Renderer   | 底层 API  | 字符绘制方式          | 适用场景               | 浏览器覆盖 |
+| ---------- | --------- | --------------------- | ---------------------- | ---------- |
+| `canvas2d` | Canvas 2D | `fillText()` 软件渲染 | 1080p + fontSize ≥ 8   | 100%       |
+| `webgl`    | WebGL 2   | instanced 纹理 quad   | 4K + fontSize 4-6      | 98%        |
+| `webgpu`   | WebGPU    | instanced + compute   | 8K + fontSize 2 (极端) | 75%        |
+
+### 用法
+
+```js
+// 1) auto 模式(默认)· 按 viewport × cell 数量自动选
+matrixRain({ renderer: 'auto' });
+//   < 100K cells   → canvas2d
+//   100K-500K cells → webgl
+//   > 500K cells   → webgpu(若可用), 否则 webgl, 否则 canvas2d
+
+// 2) 显式选(强制用 webgl,即使 < 100K cells)
+matrixRain({ renderer: 'webgl' });
+
+// 3) Web Component 同步 attribute
+<matrix-rain renderer="webgl"></matrix-rain>;
+```
+
+### 推荐:用 `MatrixRain.detect()` 取推荐配置
+
+```js
+const env = MatrixRain.detect();
+matrixRain({
+  renderer: env.recommendedRenderer, // 'canvas2d' | 'webgl' | 'webgpu'
+  fontSize: env.recommendedFontSize, // 4-16 自适应
+  targetFPS: env.recommendedTargetFPS, // 移动端 30
+});
+```
+
+### 性能基准(2026-06-09 + 理论估算)
+
+| 场景                      | canvas2d   | webgl      | webgpu     |
+| ------------------------- | ---------- | ---------- | ---------- |
+| 1080p + fontSize 14 (10K) | **60 fps** | 60 fps     | 60 fps     |
+| 1440p + fontSize 8 (32K)  | 60 fps     | 60 fps     | 60 fps     |
+| 4K + fontSize 6 (230K)    | ~30 fps    | **60 fps** | 60 fps     |
+| 4K + fontSize 4 (518K)    | ~10 fps    | **60 fps** | 60 fps     |
+| 8K + fontSize 4 (2.1M)    | < 5 fps    | ~30 fps    | **60 fps** |
+| 8K + fontSize 2 (8.4M)    | < 1 fps    | ~10 fps    | **60 fps** |
+
+**为什么 canvas2d 在 4K 跑不动**:
+
+- fillText 是浏览器软件渲染,5-10 μs/cell
+- 518K cells × 8 μs = 4 秒/帧(60 fps 需 ≤16.67ms)
+
+**为什么 webgl 快**:
+
+- 1 次 `drawArraysInstanced(TRIANGLE_STRIP, 0, 4, 518K)` = 1-2ms
+- 字符是预烘焙的 atlas 纹理(无字形 shaping 开销)
+
+**为什么 webgpu 在 8K 才需要**:
+
+- compute shader 跑 warmth 阻尼(8.4M cells 并行)= 5-10ms
+- vs webgl 用 CPU 算 warmth:2.1M × ~5ns = 10-20ms(占 1 帧)
+- webgpu 把 warmth 移到 GPU,释放 CPU 给 userFunc / setTargetBitmap
+
+### 降级链
+
+`auto` 模式下,任何 renderer 失败自动降级:
+
+```
+webgpu 失败 (无 navigator.gpu)  → webgl
+webgl 失败 (无 webgl2 context)  → canvas2d
+canvas2d 永远支持               (兜底)
+```
+
+降级时 console.warn 一次(不会刷屏)。
+
+### 包大小预算
+
+| 路径        | 体积 (gzip) | 加载策略                                     |
+| ----------- | ----------- | -------------------------------------------- |
+| `index.js`  | **34.7 KB** | 默认(canvas2d + webgl + webgpu 全部静态打包) |
+| `webgl.js`  | 待拆        | Phase 5:esbuild dynamic chunk                |
+| `webgpu.js` | 待拆        | Phase 5:同上                                 |
+| `atlas/`    | ~20 KB PNG  | build-time 生成,dist 静态资源                |
+
+**0.4.0 默认所有 renderer 静态打包**(+7 KB gzip vs 0.2.x)。
+**0.4.1 计划**:`renderer: 'webgl' | 'webgpu'` 走 dynamic chunk,canvas2d 默认路径恢复零增量。
 
 ---
 
