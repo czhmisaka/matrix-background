@@ -27,10 +27,10 @@ export type { MatrixRainRenderer, RendererImpl, RendererType };
 export { resolveRenderer };
 
 /**
- * 创建 renderer 实例(同步, 不 init)
- * - canvas2d: 直接 `new Canvas2DRenderer()`
- * - webgl:   动态 `import('./webgl-renderer')` 后 `new WebGLRenderer()`
- * - webgpu:  动态 `import('./webgpu-renderer')` 后 `new WebGPURenderer()`
+ * 创建 renderer 实例(异步, dynamic import)
+ * - canvas2d: 静态 import (eager, 默认路径)
+ * - webgl:    动态 import (lazy, 用户显式选 webgl 才加载)
+ * - webgpu:   动态 import (lazy, Phase 4 引入)
  *
  * 注: 此函数返回 renderer 实例, 调用方需自行 await `renderer.init()`
  *
@@ -40,9 +40,12 @@ export const createRenderer = async (type: RendererImpl): Promise<MatrixRainRend
   switch (type) {
     case 'canvas2d':
       return new Canvas2DRenderer();
-    case 'webgl':
-      // Phase 2B 动态 import
-      throw new Error('[matrix-rain] WebGL renderer not yet implemented (Phase 2B)');
+    case 'webgl': {
+      // 动态 import: webgl-renderer 只在用户选 webgl 时加载
+      // 注: 静态 import 会被 tsup tree-shake 掉,体积零增量(默认 canvas2d 路径)
+      const mod = await import('./webgl-renderer');
+      return new mod.WebGLRenderer();
+    }
     case 'webgpu':
       // Phase 4 动态 import
       throw new Error('[matrix-rain] WebGPU renderer not yet implemented (Phase 4)');
@@ -50,6 +53,18 @@ export const createRenderer = async (type: RendererImpl): Promise<MatrixRainRend
       throw new Error(`[matrix-rain] Unknown renderer type: ${type as string}`);
   }
 };
+
+/**
+ * 设置 atlas URL(供 WebGL/WebGPU renderer 加载纹理)
+ * - 浏览器: 由 engine.ts 在 import 时调一次
+ * - IIFE / script tag: 在 <script> 加载完调一次
+ *
+ * 注: 这里直接 import webgl-renderer(非 dynamic),保证 setAtlasUrls 是 sync
+ * - 同步保证: setAtlasUrls() 调完后 __atlasJsonUrl/__atlasPngUrl 立即可用
+ *
+ * @since 0.4.0
+ */
+export { setAtlasUrls } from './webgl-renderer';
 
 /**
  * Auto-pick: 根据用户配置 / 环境选择最合适的 renderer

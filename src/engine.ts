@@ -43,7 +43,8 @@ import {
 } from './engine/draw-helpers';
 import { createSetters } from './engine/setters';
 import { Canvas2DRenderer } from './renderer/canvas2d-renderer';
-import { autoPickRenderer } from './renderer/index';
+import { WebGLRenderer } from './renderer/webgl-renderer';
+import { autoPickRenderer, setAtlasUrls } from './renderer/index';
 import type { MatrixRainRenderer, RendererImpl } from './renderer/types';
 
 // ==================== DevTools 调试钩 ====================
@@ -156,14 +157,20 @@ const resampleBitmap = (
  */
 export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance {
   // ============ 0. 0.4.0+ 选择 renderer ============
-  // Phase 1 只支持 canvas2d; 'webgl' / 'webgpu' / 某些 'auto' 暂 throw
   const impl: RendererImpl = autoPickRenderer({ renderer: options.renderer });
+
+  // ============ 0.5 同步创建 renderer instance(同步, 不 init)============
+  // 0.4.0+ Phase 2B: 静态 import (Phase 3 改 esbuild dynamic chunk 拆体积)
   const renderer: MatrixRainRenderer = (() => {
     switch (impl) {
       case 'canvas2d':
         return new Canvas2DRenderer();
       case 'webgl':
-        throw new Error('[matrix-rain] WebGL renderer not yet implemented (Phase 2B)');
+        // 0.4.0+ Phase 2B: webgl 走静态 import
+        // 注: canvas2d 默认 chunk 会包含 webgl 代码 (~5-8 KB gzip 增量)
+        // Phase 3 优化:用 esbuild dynamic chunk 把 webgl 拆出去
+        // Phase 2B 验证:先用静态 import 跑通,Phase 3 再优化体积
+        return new WebGLRenderer();
       case 'webgpu':
         throw new Error('[matrix-rain] WebGPU renderer not yet implemented (Phase 4)');
     }
@@ -171,9 +178,27 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
 
   // ============ 1. 创建 state(传入 renderer)============
   const state = createMatrixRainState(options, renderer);
-  // 同步触发 init(对 canvas2d 是 sync, 内部 body 立即执行, this._ctx 已 set)
-  void renderer.init(state.canvas, state);
+
+  // webgl 路径下, init 之前需要先 set atlas URL
+  // 静态 import WebGLRenderer 不会带 atlas URL,所以在 matrixRain 入口注入
+  // 注: 必须在 init() 之前调(否则 webgl 找不到 atlas 抛错)
+  if (impl === 'webgl') {
+    setAtlasUrls('/atlas/jetbrains-mono-32.json', '/atlas/jetbrains-mono-32.png');
+  }
+
+  // 同步触发 init(对 canvas2d 是 sync; webgl 是 async, 内部 await atlas PNG load)
+  // 异步 init 期间, renderer 的 drawChar / drawTrail 等都 early-return
+  // (canvas2d: this._ctx 已 set; webgl: this._gl 是 null 直到 init 完成)
+  // 注: webgl 路径下 init 可能 fail(atlas fetch 失败 / 无 webgl2 context),
+  //     不应 unhandled rejection — 静默 catch + warn 一次
+  void renderer.init(state.canvas, state).catch((e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+
+    console.warn(`[matrix-rain] renderer.init() failed: ${msg}`);
+  });
   renderer.setCharset(state.charset);
+  // 同步 resize(DPR 缩放)
+  renderer.resize(state.a, state.o, state.n);
 
   // ============ 2. 定义内部 helpers(本 closure 内,作为 hooks 注入)============
   const buildGrid = (): void => {
