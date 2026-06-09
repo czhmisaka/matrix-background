@@ -5,41 +5,29 @@
       <span :class="['status', llmConfigured ? 'ok' : 'err']">{{ llmStatus }}</span>
     </summary>
     <div class="hint">
-      👋 请填入兼容 OpenAI Chat Completions 的端点(如 MiniMax / OpenAI / 其它)。
-      🔒 key 仅存浏览器 localStorage,不上传任何服务。
+      👋 请填入兼容 OpenAI Chat Completions 的端点(如 MiniMax / OpenAI / 其它)。 🔒 key 仅存浏览器
+      localStorage,不上传任何服务。
     </div>
     <div class="field">
       <label>API Base URL</label>
       <input
         type="text"
         v-model="cfg.baseUrl"
-        placeholder="https://api.minimax.io/v1"
+        placeholder="必填 · 例如 https://your-llm.example.com/v1"
         spellcheck="false"
-      >
+        required
+      />
     </div>
     <div class="field">
       <label>API Key</label>
-      <input
-        type="password"
-        v-model="cfg.apiKey"
-        placeholder="eyJhbGciOi..."
-        autocomplete="off"
-      >
+      <input type="password" v-model="cfg.apiKey" placeholder="eyJhbGciOi..." autocomplete="off" />
     </div>
     <div class="field">
       <label>模型名</label>
-      <input
-        type="text"
-        v-model="cfg.model"
-        placeholder="MiniMax-M3"
-      >
+      <input type="text" v-model="cfg.model" placeholder="MiniMax-M3" />
     </div>
     <div class="field row">
-      <input
-        id="cfg-vision"
-        type="checkbox"
-        v-model="cfg.visionEnabled"
-      >
+      <input id="cfg-vision" type="checkbox" v-model="cfg.visionEnabled" />
       <label for="cfg-vision">启用视觉审核(送截图给 LLM)</label>
     </div>
   </details>
@@ -70,7 +58,9 @@ defineProps<{ cfg: LlmConfig; llmConfigured: boolean; llmStatus: string }>();
   font-size: 11px;
   list-style: none;
 }
-.llm-config summary::-webkit-details-marker { display: none; }
+.llm-config summary::-webkit-details-marker {
+  display: none;
+}
 .llm-config summary::before {
   content: '▸';
   color: var(--accent);
@@ -78,7 +68,9 @@ defineProps<{ cfg: LlmConfig; llmConfigured: boolean; llmStatus: string }>();
   display: inline-block;
   width: 12px;
 }
-.llm-config[open] summary::before { transform: rotate(90deg); }
+.llm-config[open] summary::before {
+  transform: rotate(90deg);
+}
 .label {
   color: var(--accent);
   letter-spacing: 0.08em;
@@ -92,8 +84,12 @@ defineProps<{ cfg: LlmConfig; llmConfigured: boolean; llmStatus: string }>();
   border: 1px solid currentColor;
   font-family: var(--font-mono);
 }
-.status.ok { color: rgb(46, 213, 115); }
-.status.err { color: rgb(255, 100, 100); }
+.status.ok {
+  color: rgb(46, 213, 115);
+}
+.status.err {
+  color: rgb(255, 100, 100);
+}
 
 .hint {
   font-size: 10.5px;
@@ -105,11 +101,20 @@ defineProps<{ cfg: LlmConfig; llmConfigured: boolean; llmStatus: string }>();
   background: rgba(0, 0, 0, 0.3);
   border-radius: 4px;
 }
-.field { margin-top: 8px; }
-.field.row { display: flex; align-items: center; gap: 8px; }
-.field.row label { margin: 0; cursor: pointer; }
-.field input[type="text"],
-.field input[type="password"] {
+.field {
+  margin-top: 8px;
+}
+.field.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.field.row label {
+  margin: 0;
+  cursor: pointer;
+}
+.field input[type='text'],
+.field input[type='password'] {
   width: 100%;
   margin-top: 4px;
   padding: 6px 8px;
@@ -121,8 +126,8 @@ defineProps<{ cfg: LlmConfig; llmConfigured: boolean; llmStatus: string }>();
   font-size: 11px;
   outline: none;
 }
-.field input[type="text"]:focus,
-.field input[type="password"]:focus {
+.field input[type='text']:focus,
+.field input[type='password']:focus {
   border-color: rgb(0, 229, 255);
 }
 .field label {
@@ -134,7 +139,7 @@ defineProps<{ cfg: LlmConfig; llmConfigured: boolean; llmStatus: string }>();
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-.field input[type="checkbox"] {
+.field input[type='checkbox'] {
   width: auto;
   margin: 0;
 }

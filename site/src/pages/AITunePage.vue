@@ -94,7 +94,7 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 const currentOptions = ref<Partial<MatrixRainOptions>>({
   theme: 'silicon-valley',
   variant: 'classic',
-  fontSize: 14,
+  fontSize: undefined, // 自适应
   trailAlpha: 0.18,
   maxDPR: 2,
 });

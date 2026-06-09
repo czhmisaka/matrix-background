@@ -6,6 +6,13 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Site 本地资产 (由 scripts/copy-site-assets.mjs 在 site predev/prebuild 时自动写入)
+site/public/matrix-rain/
+site/dist/
+
+# 内部任务跟踪（每轮 AI 工作的临时 todo，不进 git）
+task.md
+
 # Logs
 *.log
 npm-debug.log*

@@ -20,6 +20,19 @@
             >npm install</a
           >
         </div>
+        <div class="hero-prompt" @click="copyPrompt">
+          <span class="prompt-sigil" aria-hidden="true">$</span>
+          <span class="prompt-cmd">npm install @xietuier/matrix-rain</span>
+          <span class="prompt-cursor" aria-hidden="true">▍</span>
+          <button
+            type="button"
+            class="prompt-copy"
+            :class="{ copied }"
+            :aria-label="copied ? '已复制' : '复制命令'"
+          >
+            {{ copied ? '✓' : '⎘' }}
+          </button>
+        </div>
         <div class="hero-meta">
           <span class="meta-item"
             ><span class="meta-dot" style="--c: var(--c-silicon)"></span>noise-converge 涌现</span
@@ -43,9 +56,38 @@ import { textToBitmap, type MatrixRainInstance } from '@xietuier/matrix-rain';
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const { current: theme } = useTheme();
 
+// 终端 prompt 复制状态
+const copied = ref(false);
+let copyTimer: ReturnType<typeof setTimeout> | null = null;
+async function copyPrompt() {
+  const cmd = 'npm install @xietuier/matrix-rain';
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(cmd);
+    } else {
+      // fallback: textarea + execCommand
+      const ta = document.createElement('textarea');
+      ta.value = cmd;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    copied.value = true;
+    if (copyTimer) clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => {
+      copied.value = false;
+    }, 1500);
+  } catch {
+    // silent
+  }
+}
+
 const options = computed(() => ({
   theme: theme.value,
-  fontSize: 16,
+  fontSize: undefined, // 让 buildGrid 按 canvas 自适应(<600px → 8px,否则 6px)
   trailAlpha: 0.15,
   targetPhase: 'noise-converge' as const,
   targetNoiseDuration: 0.5,
@@ -64,8 +106,8 @@ function regenerate() {
   const inst = instance.value as MatrixRainInstance | null;
   const cv = canvasRef.value;
   if (!inst || !cv) return;
-  const cols = Math.max(8, Math.floor(cv.width / 16));
-  const rows = Math.max(6, Math.floor(cv.height / 16));
+  const cols = Math.max(8, Math.floor(cv.width / 6));
+  const rows = Math.max(6, Math.floor(cv.height / 6));
   try {
     const bm = textToBitmap('matrix-rain', cols, rows);
     inst.setTargetBitmap(bm, {
@@ -83,21 +125,21 @@ function regenerate() {
   }
 }
 
-// 路由级 preload:Fraunces italic 仅 hero H1 用到,其他路由不需要主动预载
+// 路由级 preload:Space Grotesk (替代 Fraunces,新 H1 字体) 仅 hero 路由预载
 let fontPreloadLink: HTMLLinkElement | null = null;
 let regenerateTimer: ReturnType<typeof setTimeout> | null = null;
 let regenerateInterval: ReturnType<typeof setInterval> | null = null;
 
 onMounted(() => {
   // 仅在 hero 路由插入 preload,避免 12/12 路由全局拉
-  if (typeof document !== 'undefined' && !document.querySelector('link[data-fraunces-preload]')) {
+  if (typeof document !== 'undefined' && !document.querySelector('link[data-sg-preload]')) {
     fontPreloadLink = document.createElement('link');
     fontPreloadLink.rel = 'preload';
     fontPreloadLink.as = 'font';
     fontPreloadLink.type = 'font/woff2';
-    fontPreloadLink.href = '/dist/fonts/fraunces-italic.woff2';
+    fontPreloadLink.href = '/dist/fonts/space-grotesk-500.woff2';
     fontPreloadLink.crossOrigin = 'anonymous';
-    fontPreloadLink.setAttribute('data-fraunces-preload', '');
+    fontPreloadLink.setAttribute('data-sg-preload', '');
     document.head.appendChild(fontPreloadLink);
   }
 
@@ -117,6 +159,10 @@ onBeforeUnmount(() => {
   if (regenerateInterval) {
     clearInterval(regenerateInterval);
     regenerateInterval = null;
+  }
+  if (copyTimer) {
+    clearTimeout(copyTimer);
+    copyTimer = null;
   }
   if (fontPreloadLink && fontPreloadLink.parentNode) {
     fontPreloadLink.parentNode.removeChild(fontPreloadLink);
@@ -163,11 +209,143 @@ h1 {
   max-width: 640px;
   line-height: 1.55;
 }
+
+/* 大屏适配(2026-06-08)· 与全站 style.css 6 档断点对齐
+ * 1280+: hero 高度从 92vh 降到 88vh,字稍微再涨
+ * 1920+: 88vh, h1 → 96
+ * 2560+: 86vh, h1 → 108, hero-sub 字号也升
+ * 3840+: 84vh, h1 → 120, overlay padding 加大 */
+@media (min-width: 1280px) {
+  .hero {
+    min-height: 90vh;
+  }
+  h1 {
+    font-size: clamp(48px, 5.6vw, 96px);
+  }
+}
+@media (min-width: 1920px) {
+  .hero {
+    min-height: 88vh;
+  }
+  .hero-overlay {
+    padding: 160px 0 140px;
+  }
+  h1 {
+    font-size: clamp(56px, 5vw, 104px);
+  }
+  .hero-sub {
+    font-size: 20px;
+    max-width: 720px;
+  }
+}
+@media (min-width: 2560px) {
+  .hero {
+    min-height: 86vh;
+  }
+  .hero-overlay {
+    padding: 180px 0 160px;
+  }
+  h1 {
+    font-size: clamp(64px, 4.4vw, 116px);
+  }
+  .hero-sub {
+    font-size: 22px;
+    max-width: 800px;
+  }
+}
+@media (min-width: 3840px) {
+  .hero {
+    min-height: 84vh;
+  }
+  .hero-overlay {
+    padding: 220px 0 200px;
+  }
+  h1 {
+    font-size: clamp(80px, 3.6vw, 128px);
+  }
+  .hero-sub {
+    font-size: 26px;
+    max-width: 920px;
+  }
+  .hero-ctas {
+    gap: 24px;
+  }
+  .btn {
+    font-size: 16px;
+    padding: 14px 24px;
+  }
+}
 .hero-ctas {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.hero-prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 12px 16px;
   margin-bottom: 32px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: text;
+  user-select: all;
+  transition: border-color 160ms ease;
+}
+.hero-prompt:hover {
+  border-color: var(--accent);
+}
+.prompt-sigil {
+  color: var(--accent);
+  font-weight: 600;
+  user-select: none;
+}
+.prompt-cmd {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.prompt-cursor {
+  color: var(--accent);
+  animation: blink 1s step-end infinite;
+  user-select: none;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.prompt-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 160ms ease;
+  user-select: none;
+  padding: 0;
+  line-height: 1;
+}
+.prompt-copy:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.prompt-copy.copied {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 .hero-meta {
   display: flex;

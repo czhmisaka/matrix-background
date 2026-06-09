@@ -58,12 +58,21 @@
         <span>© 2026 czhmisaka · @xietuier</span>
         <span class="dot">·</span>
         <span>本地部署 · 无 CDN</span>
+        <span class="dot">·</span>
+        <span class="build-hash">
+          <span class="pulse-dot" style="color: var(--accent)" aria-hidden="true"></span>
+          build {{ commitHash.slice(0, 7) }} · v{{ version }}
+        </span>
       </div>
     </div>
   </footer>
 </template>
 
-<script setup lang="ts"></script>
+<script setup lang="ts">
+// build hash & version · 由 Vite 在构建时注入;无 CI 时 fallback 到固定值
+const commitHash = (import.meta.env.VITE_COMMIT_HASH as string) || 'a1b2c3d';
+const version = (import.meta.env.VITE_PKG_VERSION as string) || '1.0.0';
+</script>
 
 <style scoped>
 .footer {
@@ -153,6 +162,16 @@
 }
 .dot {
   opacity: 0.4;
+}
+.build-hash {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
 }
 
 @media (max-width: 768px) {

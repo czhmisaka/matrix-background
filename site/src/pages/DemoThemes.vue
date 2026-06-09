@@ -4,7 +4,10 @@
       <header class="page-header">
         <span class="tag">Themes</span>
         <h1>冷暖主题混合</h1>
-        <p class="lead">用 <code>coldFrom</code> × <code>warmFrom</code> 双主题拼色,5 主题任意两两组合,会得到 25 种渐变。下方是 5 个推荐组合。</p>
+        <p class="lead">
+          用 <code>coldFrom</code> × <code>warmFrom</code> 双主题拼色,5 主题任意两两组合,会得到 25
+          种渐变。下方是 5 个推荐组合。
+        </p>
       </header>
 
       <div class="layout">
@@ -21,12 +24,14 @@
 
         <aside class="control-panel">
           <h2>手动选择</h2>
-          <label>Cold From
+          <label
+            >Cold From
             <select v-model="coldFrom" aria-label="冷色主题">
               <option v-for="t in themes" :key="t" :value="t">{{ t }}</option>
             </select>
           </label>
-          <label>Warm From
+          <label
+            >Warm From
             <select v-model="warmFrom" aria-label="暖色主题">
               <option v-for="t in themes" :key="t" :value="t">{{ t }}</option>
             </select>
@@ -35,7 +40,8 @@
           <h2 class="mt-32">推荐组合</h2>
           <div class="presets">
             <button
-              v-for="p in presets" :key="p.name"
+              v-for="p in presets"
+              :key="p.name"
               type="button"
               :class="['preset', { active: coldFrom === p.cold && warmFrom === p.warm }]"
               :aria-pressed="coldFrom === p.cold && warmFrom === p.warm"
@@ -51,7 +57,12 @@
           </div>
 
           <h2 class="mt-32">代码</h2>
-          <pre class="code" role="region" tabindex="0" aria-label="当前 matrixRain 调用代码"><code>matrixRain({{ '{' }}
+          <pre
+            class="code"
+            role="region"
+            tabindex="0"
+            aria-label="当前 matrixRain 调用代码"
+          ><code>matrixRain({{ '{' }}
   canvas: ...,
   theme: {{ '{' }} coldFrom: '{{ coldFrom }}', warmFrom: '{{ warmFrom }}' {{ '}' }}
 {{ '}' }});</code></pre>
@@ -63,16 +74,27 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, computed } from 'vue';
-import { matrixRain, textToBitmap, type MatrixRainInstance, type ThemeName } from '@xietuier/matrix-rain';
+import {
+  matrixRain,
+  textToBitmap,
+  type MatrixRainInstance,
+  type ThemeName,
+} from '@xietuier/matrix-rain';
 import { useTheme } from '@/composables/useTheme';
 
-const themes: ThemeName[] = ['silicon-valley', 'matrix-green', 'lava-red', 'cyber-blue', 'pure-mono'];
+const themes: ThemeName[] = [
+  'silicon-valley',
+  'matrix-green',
+  'lava-red',
+  'cyber-blue',
+  'pure-mono',
+];
 const presets: Array<{ name: string; cold: ThemeName; warm: ThemeName }> = [
   { name: '硅谷冷 → 熔岩暖', cold: 'silicon-valley', warm: 'lava-red' },
-  { name: '纯青 → 极光',     cold: 'matrix-green',  warm: 'cyber-blue' },
-  { name: '赛博蓝 → 紫罗兰', cold: 'cyber-blue',    warm: 'pure-mono' },
-  { name: '熔岩 → 硅谷',     cold: 'lava-red',      warm: 'silicon-valley' },
-  { name: '极光蓝 → 硅',     cold: 'cyber-blue',    warm: 'silicon-valley' }
+  { name: '纯青 → 极光', cold: 'matrix-green', warm: 'cyber-blue' },
+  { name: '赛博蓝 → 紫罗兰', cold: 'cyber-blue', warm: 'pure-mono' },
+  { name: '熔岩 → 硅谷', cold: 'lava-red', warm: 'silicon-valley' },
+  { name: '极光蓝 → 硅', cold: 'cyber-blue', warm: 'silicon-valley' },
 ];
 
 const coldFrom = ref<ThemeName>('silicon-valley');
@@ -88,7 +110,7 @@ function create() {
   inst = matrixRain({
     canvas: canvasRef.value,
     theme: { coldFrom: coldFrom.value, warmFrom: warmFrom.value },
-    fontSize: 14,
+    fontSize: undefined, // 自适应
     trailAlpha: 0.2,
     targetPhase: 'noise-converge',
     targetNoiseDuration: 0.4,
@@ -97,22 +119,25 @@ function create() {
     targetLockOrder: 'center',
     targetFadeIn: 0.3,
     targetHold: 3.0,
-    targetFadeOut: 2.0
+    targetFadeOut: 2.0,
   });
   setTimeout(() => {
     if (!inst || !canvasRef.value) return;
-    const cols = Math.max(8, Math.floor(canvasRef.value.width / 14));
-    const rows = Math.max(6, Math.floor(canvasRef.value.height / 14));
+    const cols = Math.max(8, Math.floor(canvasRef.value.width / 6));
+    const rows = Math.max(6, Math.floor(canvasRef.value.height / 6));
     inst.setTargetBitmap(textToBitmap('THEMES', cols, rows), {
       phase: 'noise-converge',
       lockOrder: 'center',
-      lockStability: 0.85
+      lockStability: 0.85,
     });
   }, 300);
 }
 
 onMounted(create);
-onBeforeUnmount(() => { inst?.destroy(); inst = null; });
+onBeforeUnmount(() => {
+  inst?.destroy();
+  inst = null;
+});
 
 watch([coldFrom, warmFrom], () => create());
 
@@ -137,7 +162,11 @@ function applyPreset(p: { cold: ThemeName; warm: ThemeName }) {
   border-radius: var(--radius);
   overflow: hidden;
 }
-.canvas-wrap canvas { width: 100%; height: 100%; display: block; }
+.canvas-wrap canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
 .canvas-overlay {
   position: absolute;
   inset: 0;
@@ -162,7 +191,10 @@ function applyPreset(p: { cold: ThemeName; warm: ThemeName }) {
   color: var(--c, var(--text));
   text-shadow: 0 0 12px var(--c, var(--text));
 }
-.overlay-x { color: var(--text-faint); font-size: 18px; }
+.overlay-x {
+  color: var(--text-faint);
+  font-size: 18px;
+}
 
 .control-panel {
   background: var(--bg-elev);
@@ -170,9 +202,20 @@ function applyPreset(p: { cold: ThemeName; warm: ThemeName }) {
   border-radius: var(--radius);
   padding: 24px;
 }
-.control-panel h3, .control-panel h2 { font-size: 16px; margin: 0 0 12px; font-weight: 500; }
-.mt-32 { margin-top: 32px !important; }
-.presets { display: flex; flex-direction: column; gap: 8px; }
+.control-panel h3,
+.control-panel h2 {
+  font-size: 16px;
+  margin: 0 0 12px;
+  font-weight: 500;
+}
+.mt-32 {
+  margin-top: 32px !important;
+}
+.presets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .preset {
   display: flex;
   justify-content: space-between;
@@ -187,12 +230,29 @@ function applyPreset(p: { cold: ThemeName; warm: ThemeName }) {
   color: var(--text-muted);
   transition: all 160ms ease;
 }
-.preset:hover { color: var(--text); border-color: var(--border-strong); }
-.preset.active { color: var(--text); border-color: var(--accent); background: rgba(122, 247, 212, 0.04); }
-.preset-name { font-size: 12px; }
-.preset-pair { display: flex; gap: 6px; align-items: center; }
-.preset-pair span { color: var(--c, var(--text)); }
-.preset-x { color: var(--text-faint) !important; }
+.preset:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.preset.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(122, 247, 212, 0.04);
+}
+.preset-name {
+  font-size: 12px;
+}
+.preset-pair {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.preset-pair span {
+  color: var(--c, var(--text));
+}
+.preset-x {
+  color: var(--text-faint) !important;
+}
 .code {
   font-size: 12px;
   background: var(--bg);
@@ -202,6 +262,8 @@ function applyPreset(p: { cold: ThemeName; warm: ThemeName }) {
 }
 
 @media (max-width: 920px) {
-  .layout { grid-template-columns: 1fr; }
+  .layout {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -4,15 +4,28 @@
       <header class="page-header">
         <span class="tag">Emergence</span>
         <h1>噪声 → 收敛</h1>
-        <p class="lead">5 段状态机:<b>noise</b>(0.5s 全屏噪点)→ <b>converge</b>(1.5s 逐 cell 锁定)→ <b>hold</b> → <b>dissolve</b>(反向解锁融化)→ <b>idle</b>。7 锁定顺序 × 3 滑块 × rAF debounce 输入框。</p>
+        <p class="lead">
+          5 段状态机:<b>noise</b>(0.5s 全屏噪点)→ <b>converge</b>(1.5s 逐 cell 锁定)→ <b>hold</b> →
+          <b>dissolve</b>(反向解锁融化)→ <b>idle</b>。7 锁定顺序 × 3 滑块 × rAF debounce 输入框。
+        </p>
       </header>
 
       <div class="stage">
         <canvas ref="canvasRef" aria-hidden="true"></canvas>
         <div class="phase-indicator" role="group" aria-label="涌现动画状态">
           <div class="label">Current Phase</div>
-          <div class="phase" :data-phase="phase" role="status" aria-live="polite" :aria-label="`当前阶段 ${phase}`">{{ phase }}</div>
-          <div class="time" aria-hidden="true">t = {{ elapsed.toFixed(2) }}s · {{ lockedCount }}/{{ totalTargets }} locked</div>
+          <div
+            class="phase"
+            :data-phase="phase"
+            role="status"
+            aria-live="polite"
+            :aria-label="`当前阶段 ${phase}`"
+          >
+            {{ phase }}
+          </div>
+          <div class="time" aria-hidden="true">
+            t = {{ elapsed.toFixed(2) }}s · {{ lockedCount }}/{{ totalTargets }} locked
+          </div>
         </div>
       </div>
 
@@ -31,7 +44,7 @@
               maxlength="20"
               placeholder="MATRIX"
               aria-label="目标文本(将涌现的内容)"
-            >
+            />
             <button class="btn btn-sm" @click="applyBitmap(inputText)">应用</button>
           </div>
         </div>
@@ -43,11 +56,15 @@
             <button
               :class="['btn', 'btn-sm', { active: currentPhase === 'fade' }]"
               @click="setPhase('fade')"
-            >fade (传统淡入)</button>
+            >
+              fade (传统淡入)
+            </button>
             <button
               :class="['btn', 'btn-sm', { active: currentPhase === 'noise-converge' }]"
               @click="setPhase('noise-converge')"
-            >noise-converge (涌现)</button>
+            >
+              noise-converge (涌现)
+            </button>
           </div>
         </div>
 
@@ -57,10 +74,13 @@
             <label>targetLockOrder</label>
             <div class="lock-orders">
               <button
-                v-for="o in lockOrders" :key="o"
+                v-for="o in lockOrders"
+                :key="o"
                 :class="['btn', 'btn-sm', { active: currentLockOrder === o }]"
                 @click="setLockOrder(o)"
-              >{{ o }}</button>
+              >
+                {{ o }}
+              </button>
             </div>
           </div>
         </div>
@@ -69,29 +89,59 @@
           <h3>④ 调参</h3>
           <div class="row">
             <label for="dnoise-noiseDur">noiseDuration</label>
-            <input id="dnoise-noiseDur" type="range" min="0" max="3" step="0.1" v-model.number="noiseDur" @input="onSliderInput" @change="applyBitmap(inputText)"
-                   aria-label="全屏噪点时长(秒)"
-                   :aria-valuemin="0" :aria-valuemax="3"
-                   :aria-valuenow="noiseDur"
-                   :aria-valuetext="`${noiseDur.toFixed(1)} 秒`">
+            <input
+              id="dnoise-noiseDur"
+              type="range"
+              min="0"
+              max="3"
+              step="0.1"
+              v-model.number="noiseDur"
+              @input="onSliderInput"
+              @change="applyBitmap(inputText)"
+              aria-label="全屏噪点时长(秒)"
+              :aria-valuemin="0"
+              :aria-valuemax="3"
+              :aria-valuenow="noiseDur"
+              :aria-valuetext="`${noiseDur.toFixed(1)} 秒`"
+            />
             <span class="val" aria-hidden="true">{{ noiseDur.toFixed(1) }}s</span>
           </div>
           <div class="row">
             <label for="dnoise-convergeDur">convergeDuration</label>
-            <input id="dnoise-convergeDur" type="range" min="0.1" max="5" step="0.1" v-model.number="convergeDur" @input="onSliderInput" @change="applyBitmap(inputText)"
-                   aria-label="逐 cell 锁定时长(秒)"
-                   :aria-valuemin="0.1" :aria-valuemax="5"
-                   :aria-valuenow="convergeDur"
-                   :aria-valuetext="`${convergeDur.toFixed(1)} 秒`">
+            <input
+              id="dnoise-convergeDur"
+              type="range"
+              min="0.1"
+              max="5"
+              step="0.1"
+              v-model.number="convergeDur"
+              @input="onSliderInput"
+              @change="applyBitmap(inputText)"
+              aria-label="逐 cell 锁定时长(秒)"
+              :aria-valuemin="0.1"
+              :aria-valuemax="5"
+              :aria-valuenow="convergeDur"
+              :aria-valuetext="`${convergeDur.toFixed(1)} 秒`"
+            />
             <span class="val" aria-hidden="true">{{ convergeDur.toFixed(1) }}s</span>
           </div>
           <div class="row">
             <label for="dnoise-lockStab">lockStability</label>
-            <input id="dnoise-lockStab" type="range" min="0" max="1" step="0.05" v-model.number="lockStability" @input="onSliderInput" @change="applyBitmap(inputText)"
-                   aria-label="锁定后字符稳定性"
-                   :aria-valuemin="0" :aria-valuemax="1"
-                   :aria-valuenow="lockStability"
-                   :aria-valuetext="lockStability.toFixed(2)">
+            <input
+              id="dnoise-lockStab"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              v-model.number="lockStability"
+              @input="onSliderInput"
+              @change="applyBitmap(inputText)"
+              aria-label="锁定后字符稳定性"
+              :aria-valuemin="0"
+              :aria-valuemax="1"
+              :aria-valuenow="lockStability"
+              :aria-valuetext="lockStability.toFixed(2)"
+            />
             <span class="val" aria-hidden="true">{{ lockStability.toFixed(2) }}</span>
           </div>
         </div>
@@ -118,8 +168,18 @@ let phaseRaf = 0;
 // —— 表单状态 ——
 const inputText = ref('MATRIX');
 const currentPhase = ref<'fade' | 'noise-converge'>('noise-converge');
-const currentLockOrder = ref<'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft'>('random');
-const lockOrders = ['random', 'topdown', 'bottomup', 'center', 'edge', 'leftright', 'rightleft'] as const;
+const currentLockOrder = ref<
+  'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft'
+>('random');
+const lockOrders = [
+  'random',
+  'topdown',
+  'bottomup',
+  'center',
+  'edge',
+  'leftright',
+  'rightleft',
+] as const;
 const noiseDur = ref(0.5);
 const convergeDur = ref(1.5);
 const lockStability = ref(0.7);
@@ -140,8 +200,8 @@ function log(msg: string) {
 function applyBitmap(rawText: string) {
   if (!inst || !canvasRef.value) return;
   const text = (rawText || '').trim() || ' ';
-  const cols = Math.max(8, Math.floor(canvasRef.value.width / 14));
-  const rows = Math.max(6, Math.floor(canvasRef.value.height / 14));
+  const cols = Math.max(8, Math.floor(canvasRef.value.width / 6));
+  const rows = Math.max(6, Math.floor(canvasRef.value.height / 6));
   inst.setTargetBitmap(textToBitmap(text, cols, rows), {
     phase: currentPhase.value,
     noiseDuration: noiseDur.value,
@@ -150,9 +210,11 @@ function applyBitmap(rawText: string) {
     lockStability: lockStability.value,
     hold: Infinity,
     fadeOut: 2.0,
-    anchor: 'center'
+    anchor: 'center',
   });
-  log(`<span class="log-tag">[target]</span> set bitmap "${text}" phase=${currentPhase.value} order=${currentLockOrder.value}`);
+  log(
+    `<span class="log-tag">[target]</span> set bitmap "${text}" phase=${currentPhase.value} order=${currentLockOrder.value}`
+  );
   // 阶段指示器由 rAF 循环读取 instance.getTargetState() 实时刷新
 }
 
@@ -166,7 +228,9 @@ function onTextInput() {
 }
 
 // 滑块 input 不立即重建(避免拖拽过程中频繁销毁),只改 ref;change 时才 apply
-function onSliderInput() { /* 触发 reactivity 但不重建 */ }
+function onSliderInput() {
+  /* 触发 reactivity 但不重建 */
+}
 
 function setPhase(p: 'fade' | 'noise-converge') {
   currentPhase.value = p;
@@ -197,11 +261,11 @@ onMounted(() => {
   inst = matrixRain({
     canvas: canvasRef.value,
     theme: theme.value,
-    fontSize: 14,
+    fontSize: undefined, // 自适应
     trailAlpha: 0.2,
     onTargetFinish: () => {
       log('<span class="log-tag">[target]</span> noise-converge 动画结束,onTargetFinish 触发');
-    }
+    },
   });
   // 初始应用
   setTimeout(() => applyBitmap(inputText.value), 300);
@@ -219,7 +283,9 @@ watch(theme, (t) => inst?.setTheme(t));
 </script>
 
 <style scoped>
-.demo-noise { padding-bottom: 80px; }
+.demo-noise {
+  padding-bottom: 80px;
+}
 .stage {
   position: relative;
   width: 100%;
@@ -231,10 +297,15 @@ watch(theme, (t) => inst?.setTheme(t));
   overflow: hidden;
   margin-bottom: 32px;
 }
-.stage canvas { width: 100%; height: 100%; display: block; }
+.stage canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
 .phase-indicator {
   position: absolute;
-  top: 24px; right: 24px;
+  top: 24px;
+  right: 24px;
   z-index: 10;
   font-family: var(--font-mono);
   font-size: 12px;
@@ -246,18 +317,37 @@ watch(theme, (t) => inst?.setTheme(t));
   backdrop-filter: blur(8px);
   min-width: 160px;
 }
-.phase-indicator .label { color: #aaa; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
+.phase-indicator .label {
+  color: #aaa;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
 .phase-indicator .phase {
   color: #ff5c7c;
   font-size: 18px;
   font-weight: 600;
   letter-spacing: 0.04em;
 }
-.phase-indicator .phase[data-phase="hold"] { color: #7af7d4; }
-.phase-indicator .phase[data-phase="converge"] { color: #a8a3ff; }
-.phase-indicator .phase[data-phase="noise"] { color: #ff5c7c; }
-.phase-indicator .phase[data-phase="dissolve"] { color: #fbbf24; }
-.phase-indicator .time { color: #888; font-size: 10px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.phase-indicator .phase[data-phase='hold'] {
+  color: #7af7d4;
+}
+.phase-indicator .phase[data-phase='converge'] {
+  color: #a8a3ff;
+}
+.phase-indicator .phase[data-phase='noise'] {
+  color: #ff5c7c;
+}
+.phase-indicator .phase[data-phase='dissolve'] {
+  color: #fbbf24;
+}
+.phase-indicator .time {
+  color: #888;
+  font-size: 10px;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
 
 .control-panel {
   background: var(--bg-elev);
@@ -306,7 +396,7 @@ watch(theme, (t) => inst?.setTheme(t));
   flex-direction: row;
   align-items: center;
 }
-.row > input[type=text] {
+.row > input[type='text'] {
   background: var(--bg-elev-2);
   border: 1px solid var(--border-strong);
   border-radius: 4px;
@@ -320,7 +410,10 @@ watch(theme, (t) => inst?.setTheme(t));
   text-transform: none;
   letter-spacing: 0;
 }
-.row > input[type=range] { width: 200px; max-width: 100%; }
+.row > input[type='range'] {
+  width: 200px;
+  max-width: 100%;
+}
 .val {
   color: var(--text);
   font-family: var(--font-mono);
@@ -329,8 +422,15 @@ watch(theme, (t) => inst?.setTheme(t));
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.row-locks { align-items: flex-start; }
-.lock-orders { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+.row-locks {
+  align-items: flex-start;
+}
+.lock-orders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
 .btn.active {
   background: rgba(255, 92, 124, 0.2);
   color: #ff5c7c;
@@ -347,15 +447,35 @@ watch(theme, (t) => inst?.setTheme(t));
   border-radius: 6px;
   padding: 8px 12px;
 }
-.log-line { padding: 2px 0; }
-.log-tag { color: #ff5c7c; }
+.log-line {
+  padding: 2px 0;
+}
+.log-tag {
+  color: #ff5c7c;
+}
 
 @media (max-width: 700px) {
-  .row { flex-direction: column; align-items: stretch; }
-  .row > label { min-width: 0; }
-  .row > input[type=range] { width: 100%; }
-  .row > input[type=text] { max-width: none; }
-  .phase-indicator { top: 12px; right: 12px; padding: 8px 12px; min-width: 140px; }
-  .phase-indicator .phase { font-size: 14px; }
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .row > label {
+    min-width: 0;
+  }
+  .row > input[type='range'] {
+    width: 100%;
+  }
+  .row > input[type='text'] {
+    max-width: none;
+  }
+  .phase-indicator {
+    top: 12px;
+    right: 12px;
+    padding: 8px 12px;
+    min-width: 140px;
+  }
+  .phase-indicator .phase {
+    font-size: 14px;
+  }
 }
 </style>

@@ -344,7 +344,7 @@ onMounted(() => {
   inst = matrixRain({
     canvas: canvasRef.value,
     theme: theme.value,
-    fontSize: 14,
+    fontSize: undefined, // 自适应
     trailAlpha: 0.2,
     onTargetFinish: () => {
       log('<span class="log-tag">[target]</span> noise-converge 淑出完成,onTargetFinish 触发');

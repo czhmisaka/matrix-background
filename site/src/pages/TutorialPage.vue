@@ -72,10 +72,13 @@
           <h3>② pnpm</h3>
           <pre><code><span class="tk-kw">$</span> pnpm add @xietuier/matrix-rain
 <span class="tk-kw">$</span> yarn add @xietuier/matrix-rain</code></pre>
-          <h3>③ CDN (UMD)</h3>
-          <p>不想要打包步骤?UMD 兜底,直接 <code>&lt;script&gt;</code> 引入:</p>
-          <pre><code><span class="tk-tag">&lt;link</span> <span class="tk-attr">rel</span>=<span class="tk-st">"stylesheet"</span> <span class="tk-attr">href</span>=<span class="tk-st">"https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain/dist/matrix-rain.css"</span><span class="tk-tag">&gt;</span>
-<span class="tk-tag">&lt;script</span> <span class="tk-attr">src</span>=<span class="tk-st">"https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain/dist/index.umd.js"</span><span class="tk-tag">&gt;&lt;/script&gt;</span>
+          <h3>③ 本地 UMD(自托管 dist)</h3>
+          <p>
+            不想要打包步骤?把 <code>dist/</code> 里两个文件拷到站点根目录的
+            <code>matrix-rain/</code>,直接 <code>&lt;script&gt;</code> 引入:
+          </p>
+          <pre><code><span class="tk-tag">&lt;link</span> <span class="tk-attr">rel</span>=<span class="tk-st">"stylesheet"</span> <span class="tk-attr">href</span>=<span class="tk-st">"/matrix-rain/matrix-rain.css"</span><span class="tk-tag">&gt;</span>
+<span class="tk-tag">&lt;script</span> <span class="tk-attr">src</span>=<span class="tk-st">"/matrix-rain/index.umd.js"</span><span class="tk-tag">&gt;&lt;/script&gt;</span>
 <span class="tk-tag">&lt;script&gt;</span>
   <span class="tk-kw">const</span> rain = MatrixRain.matrixRain({ canvas: document.querySelector(<span class="tk-st">'canvas'</span>) });
 <span class="tk-tag">&lt;/script&gt;</span></code></pre>
@@ -177,7 +180,7 @@ rain.<span class="tk-fn">setTargetBitmap</span>(bitmap, { phase: <span class="tk
 
 <span class="tk-kw">const</span> canvasRef = <span class="tk-fn">ref</span>&lt;HTMLCanvasElement | <span class="tk-kw">null</span>&gt;(<span class="tk-kw">null</span>);
 <span class="tk-kw">const</span> theme = <span class="tk-fn">ref</span>(<span class="tk-st">'silicon-valley'</span>);
-<span class="tk-kw">const</span> options = <span class="tk-fn">computed</span>(() =&gt; ({ theme: theme.value, fontSize: <span class="tk-num">14</span> }));
+<span class="tk-kw">const</span> options = <span class="tk-fn">computed</span>(() =&gt; ({ theme: theme.value, fontSize: <span class="tk-num">6</span> }));
 
 <span class="tk-fn">useMatrixRain</span>(options, canvasRef);
 <span class="tk-tag">&lt;/script&gt;</span>
@@ -204,19 +207,22 @@ rain.<span class="tk-fn">setTargetBitmap</span>(bitmap, { phase: <span class="tk
 }</code></pre>
         </article>
 
-        <!-- 8 · CDN / IIFE -->
+        <!-- 8 · 本地 UMD / IIFE -->
         <article v-else-if="active === 'cdn'">
-          <h2>纯 HTML + <em class="grad">CDN</em></h2>
-          <p>无构建步骤的最简 HTML,适合 demo / 静态页面:</p>
+          <h2>纯 HTML + <em class="grad">本地 UMD</em></h2>
+          <p>
+            无构建步骤的最简 HTML,适合 demo / 静态页面。资源全部走站点本地
+            <code>/matrix-rain/</code>:
+          </p>
           <pre><code><span class="tk-com">&lt;!DOCTYPE html&gt;</span>
 <span class="tk-tag">&lt;html&gt;</span>
 <span class="tk-tag">&lt;head&gt;</span>
-  <span class="tk-tag">&lt;link</span> <span class="tk-attr">rel</span>=<span class="tk-st">"stylesheet"</span> <span class="tk-attr">href</span>=<span class="tk-st">"https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain/dist/matrix-rain.css"</span><span class="tk-tag">&gt;</span>
+  <span class="tk-tag">&lt;link</span> <span class="tk-attr">rel</span>=<span class="tk-st">"stylesheet"</span> <span class="tk-attr">href</span>=<span class="tk-st">"/matrix-rain/matrix-rain.css"</span><span class="tk-tag">&gt;</span>
 <span class="tk-tag">&lt;/head&gt;</span>
 <span class="tk-tag">&lt;body&gt;</span>
   <span class="tk-tag">&lt;canvas</span> <span class="tk-attr">id</span>=<span class="tk-st">"bg"</span> <span class="tk-attr">style</span>=<span class="tk-st">"position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;"</span><span class="tk-tag">&gt;&lt;/canvas&gt;</span>
 
-  <span class="tk-tag">&lt;script</span> <span class="tk-attr">src</span>=<span class="tk-st">"https://cdn.jsdelivr.net/npm/@xietuier/matrix-rain/dist/index.umd.js"</span><span class="tk-tag">&gt;&lt;/script&gt;</span>
+  <span class="tk-tag">&lt;script</span> <span class="tk-attr">src</span>=<span class="tk-st">"/matrix-rain/index.umd.js"</span><span class="tk-tag">&gt;&lt;/script&gt;</span>
   <span class="tk-tag">&lt;script&gt;</span>
     <span class="tk-kw">const</span> rain = MatrixRain.<span class="tk-fn">matrixRain</span>({
       canvas: document.<span class="tk-fn">getElementById</span>(<span class="tk-st">'bg'</span>),
@@ -225,6 +231,10 @@ rain.<span class="tk-fn">setTargetBitmap</span>(bitmap, { phase: <span class="tk
   <span class="tk-tag">&lt;/script&gt;</span>
 <span class="tk-tag">&lt;/body&gt;</span>
 <span class="tk-tag">&lt;/html&gt;</span></code></pre>
+          <p class="tk-hint">
+            把 <code>node_modules/@xietuier/matrix-rain/dist/matrix-rain.css</code> 和
+            <code>index.umd.js</code> 拷到站点 <code>public/matrix-rain/</code> 即可。
+          </p>
         </article>
 
         <!-- 9 · API · Options -->
@@ -415,7 +425,7 @@ rain.<span class="tk-fn">setTargetBitmap</span>(bitmap, { phase: <span class="tk
           <pre><code><span class="tk-kw">const</span> rain = <span class="tk-fn">matrixRain</span>({
   canvas,
   theme: <span class="tk-st">'silicon-valley'</span>,
-  fontSize: <span class="tk-num">14</span>,
+  fontSize: <span class="tk-num">6</span>,
   trailAlpha: <span class="tk-num">0.18</span>,
   variant: <span class="tk-st">'classic'</span>
 });
@@ -698,6 +708,99 @@ const variantList = [
   .tab {
     padding: 6px 10px;
     font-size: 11px;
+  }
+}
+
+/* 桌面中-大屏适配(2026-06-08)· 让 tabs / code 块 / 表格随屏宽
+ * 1280+: tab padding 加大、code 块字号微调
+ * 1920+: tab fontSize 14、tab-content 字号 16、行高更松
+ * 2560+: tab fontSize 16,code 块 14px
+ * 3840+: 全屏适配,tabs 字号 18,code 块 16px,表格 padding 加大 */
+@media (min-width: 1280px) {
+  .tab {
+    padding: 10px 18px;
+    font-size: 13px;
+  }
+  .tab-content {
+    padding: 36px 36px;
+  }
+  .tab-content h3 {
+    font-size: 22px;
+  }
+  .tab-content p,
+  .tab-content li {
+    font-size: 15px;
+  }
+}
+@media (min-width: 1920px) {
+  .tab {
+    padding: 12px 22px;
+    font-size: 14px;
+  }
+  .tab-content {
+    padding: 44px 48px;
+  }
+  .tab-content h2 {
+    font-size: 32px;
+  }
+  .tab-content h3 {
+    font-size: 24px;
+  }
+  .tab-content p,
+  .tab-content li {
+    font-size: 16px;
+    line-height: 1.7;
+  }
+  pre {
+    font-size: 14px;
+  }
+}
+@media (min-width: 2560px) {
+  .tab {
+    padding: 14px 26px;
+    font-size: 16px;
+  }
+  .tab-content {
+    padding: 56px 64px;
+  }
+  .tab-content h2 {
+    font-size: 38px;
+  }
+  .tab-content h3 {
+    font-size: 28px;
+  }
+  .tab-content p,
+  .tab-content li {
+    font-size: 18px;
+    line-height: 1.75;
+  }
+  pre {
+    font-size: 16px;
+    padding: var(--gap-5) var(--gap-6);
+  }
+}
+@media (min-width: 3840px) {
+  .tab {
+    padding: 18px 32px;
+    font-size: 18px;
+  }
+  .tab-content {
+    padding: 72px 88px;
+  }
+  .tab-content h2 {
+    font-size: 48px;
+  }
+  .tab-content h3 {
+    font-size: 32px;
+  }
+  .tab-content p,
+  .tab-content li {
+    font-size: 20px;
+    line-height: 1.8;
+  }
+  pre {
+    font-size: 18px;
+    padding: var(--gap-6) var(--gap-7);
   }
 }
 </style>

@@ -56,7 +56,7 @@ const LLM_STORAGE_KEY = 'mr-llm-config-v1';
 
 function readStored(): LlmConfig {
   const defaults: LlmConfig = {
-    baseUrl: 'https://api.minimax.io/v1',
+    baseUrl: '',
     apiKey: '',
     model: 'MiniMax-M3',
     visionEnabled: true,
@@ -325,7 +325,7 @@ export function useAitune(opts: {
   // 初始使用默认值(零成本);真正的 localStorage 读取推迟到 idle,
   // 避免与 matrix-rain 引擎初始化在同一个 longtask 内抢主线程
   const llmConfig = reactive<LlmConfig>({
-    baseUrl: 'https://api.minimax.io/v1',
+    baseUrl: '',
     apiKey: '',
     model: 'MiniMax-M3',
     visionEnabled: true,
@@ -352,7 +352,7 @@ export function useAitune(opts: {
     { deep: true }
   );
 
-  const llmConfigured = () => !!llmConfig.apiKey.trim();
+  const llmConfigured = () => !!llmConfig.baseUrl.trim() && !!llmConfig.apiKey.trim();
   const llmStatus = () =>
     llmConfigured()
       ? `✓ ${llmConfig.model || 'auto'} @ ${llmConfig.baseUrl ? new URL(llmConfig.baseUrl).host : 'no host'}`
@@ -451,7 +451,7 @@ export function useAitune(opts: {
     const t = (text || '').trim() || ' ';
     const w = canvas.value.clientWidth;
     const h = canvas.value.clientHeight;
-    const fontSize = (currentOptions.value.fontSize as number) || 14;
+    const fontSize = (currentOptions.value.fontSize as number) || 6;
     const cols = Math.max(8, Math.ceil(w / fontSize));
     const rows = Math.max(6, Math.ceil(h / (fontSize * 1.1)));
     try {
@@ -477,7 +477,7 @@ export function useAitune(opts: {
       const img = await fileToImage(file);
       const w = canvas.value.clientWidth;
       const h = canvas.value.clientHeight;
-      const fontSize = (currentOptions.value.fontSize as number) || 14;
+      const fontSize = (currentOptions.value.fontSize as number) || 6;
       const cols = Math.max(8, Math.ceil(w / fontSize));
       const rows = Math.max(6, Math.ceil(h / (fontSize * 1.1)));
       const bitmap = imageToBitmap(img, cols, rows);

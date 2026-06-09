@@ -38,11 +38,11 @@
             >Font Size <span class="cv">{{ params.fontSize }}px</span>
             <input
               type="range"
-              min="10"
+              min="4"
               max="28"
               v-model.number="params.fontSize"
               aria-label="字符网格宽度(像素)"
-              :aria-valuemin="10"
+              :aria-valuemin="4"
               :aria-valuemax="28"
               :aria-valuenow="params.fontSize"
               :aria-valuetext="`${params.fontSize} 像素`"
@@ -186,7 +186,7 @@
 
         <div class="canvas-area">
           <div class="canvas-wrap">
-            <canvas ref="canvasRef" aria-hidden="true"></canvas>
+            <canvas ref="canvasRef" aria-hidden="true" @pointermove="onCanvasMove"></canvas>
             <div class="overlay-info" role="group" aria-label="涌现动画状态">
               <span
                 class="info-pill"
@@ -197,6 +197,12 @@
                 >{{ phase }}</span
               >
               <span class="info-pill mono" aria-hidden="true">{{ elapsed.toFixed(2) }}s</span>
+              <span class="info-pill coords-readout" aria-hidden="true"
+                >x:{{ String(coords.x).padStart(3, '0') }} y:{{
+                  String(coords.y).padStart(3, '0')
+                }}
+                · cell R{{ coords.row }}:C{{ coords.col }}</span
+              >
             </div>
           </div>
         </div>
@@ -260,7 +266,7 @@ interface Params {
 const defaults: Params = {
   theme: 'silicon-valley',
   variant: 'classic',
-  fontSize: 16,
+  fontSize: 6,
   trailAlpha: 0.18,
   maxDPR: 2,
   brightness: 1,
@@ -276,6 +282,7 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 const targetText = ref('MATRIX');
 const phase = ref<'idle' | 'noise' | 'converge' | 'hold' | 'dissolve'>('idle');
 const elapsed = ref(0);
+const coords = reactive({ x: 0, y: 0, row: 0, col: 0 });
 let inputRaf: number | null = null;
 let phaseRaf = 0;
 
@@ -395,6 +402,19 @@ function phaseTick() {
   phaseRaf = requestAnimationFrame(phaseTick);
 }
 
+// canvas 鼠标坐标 readout · 跟 cell R:C 同步
+function onCanvasMove(ev: PointerEvent) {
+  const cv = canvasRef.value;
+  if (!cv) return;
+  const rect = cv.getBoundingClientRect();
+  const x = Math.round(ev.clientX - rect.left);
+  const y = Math.round(ev.clientY - rect.top);
+  coords.x = Math.max(0, Math.min(x, rect.width));
+  coords.y = Math.max(0, Math.min(y, rect.height));
+  coords.col = Math.max(0, Math.floor(coords.x / params.fontSize));
+  coords.row = Math.max(0, Math.floor(coords.y / params.fontSize));
+}
+
 /**
  * 关键修复:原版直接调 matrixRain() 后没有 watch params,
  * 导致 theme/variant/fontSize/trailAlpha/maxDPR/brightness/phase/duration/lockStability/lockOrder 全部不生效。
@@ -452,9 +472,12 @@ onBeforeUnmount(() => {
 }
 .pg-grid {
   display: grid;
+  /* 桌面起步:面板 320px 固定,canvas 占满剩余
+   * 大屏:面板加宽 360-400px,canvas 也有合理 max-width 不至于太宽 */
   grid-template-columns: 320px 1fr;
   gap: 24px;
   margin-bottom: 32px;
+  align-items: start;
 }
 .params {
   background: var(--bg-elev);
@@ -526,6 +549,10 @@ onBeforeUnmount(() => {
 
 .canvas-area {
   min-width: 0;
+  /* 大屏 canvas 也不无限拉伸,留 1280 上限 */
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
 }
 .canvas-wrap {
   position: relative;
@@ -610,6 +637,103 @@ onBeforeUnmount(() => {
   }
   .params {
     max-height: none;
+  }
+}
+
+/* 桌面中-大屏适配(2026-06-08)· 面板加宽 · 字号 scale
+ * 1280+: 面板 360,canvas max-width 不动
+ * 1440+: 面板 400
+ * 1920+: 面板 440,canvas 高度也加
+ * 2560+: 面板 480
+ * 3840+: 面板 540,所有字号 14-15 */
+@media (min-width: 1280px) {
+  .pg-grid {
+    grid-template-columns: 360px 1fr;
+    gap: 32px;
+  }
+  .params {
+    padding: 28px;
+  }
+  .params h3 {
+    font-size: 12px;
+  }
+}
+@media (min-width: 1440px) {
+  .pg-grid {
+    grid-template-columns: 400px 1fr;
+    gap: 36px;
+  }
+  .params {
+    padding: 32px;
+  }
+  .params h3 {
+    font-size: 13px;
+  }
+}
+@media (min-width: 1920px) {
+  .pg-grid {
+    grid-template-columns: 440px 1fr;
+    gap: 40px;
+  }
+  .params {
+    padding: 36px;
+  }
+  .params h3 {
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .params label {
+    font-size: 12px;
+  }
+  .code-output pre {
+    font-size: 14px;
+    padding: 20px;
+  }
+}
+@media (min-width: 2560px) {
+  .pg-grid {
+    grid-template-columns: 480px 1fr;
+    gap: 48px;
+  }
+  .params {
+    padding: 40px;
+  }
+  .params h3 {
+    font-size: 14px;
+  }
+  .params label {
+    font-size: 13px;
+  }
+  .code-output pre {
+    font-size: 16px;
+    padding: 24px;
+  }
+}
+@media (min-width: 3840px) {
+  .pg-grid {
+    grid-template-columns: 540px 1fr;
+    gap: 56px;
+  }
+  .params {
+    padding: 48px;
+  }
+  .params h3 {
+    font-size: 15px;
+    letter-spacing: 0.18em;
+  }
+  .params label {
+    font-size: 14px;
+  }
+  .code-output pre {
+    font-size: 18px;
+    padding: 32px;
+  }
+  .info-pill {
+    font-size: 13px;
+    padding: 6px 14px;
+  }
+  .code-output h3 {
+    font-size: 22px;
   }
 }
 </style>
