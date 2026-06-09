@@ -44,6 +44,7 @@ import {
 import { createSetters } from './engine/setters';
 import { Canvas2DRenderer } from './renderer/canvas2d-renderer';
 import { WebGLRenderer } from './renderer/webgl-renderer';
+import { WebGPURenderer } from './renderer/webgpu-renderer';
 import { autoPickRenderer, setAtlasUrls } from './renderer/index';
 import type { MatrixRainRenderer, RendererImpl } from './renderer/types';
 
