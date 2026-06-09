@@ -67,7 +67,6 @@ export class WebGLRenderer implements MatrixRainRenderer {
   readonly type: RendererImpl = 'webgl';
 
   private _gl: GL | null = null;
-  private _canvas: HTMLCanvasElement | null = null;
 
   /** atlas 加载结果 */
   private _atlasJson: AtlasJson | null = null;
@@ -78,13 +77,6 @@ export class WebGLRenderer implements MatrixRainRenderer {
   /** GL programs / locations */
   private _program: WebGLProgram | null = null;
   private _trailProgram: WebGLProgram | null = null;
-  private _attribs: {
-    aPos: number;
-    aCharIdx: number;
-    aColor: number;
-    aUV0: number;
-    aUV1: number;
-  } | null = null;
   private _uniforms: {
     uViewport: WebGLUniformLocation | null;
     uCellSize: WebGLUniformLocation | null;
@@ -128,7 +120,6 @@ export class WebGLRenderer implements MatrixRainRenderer {
     if (this._destroyed) {
       throw new Error('[WebGLRenderer] init() called after destroy()');
     }
-    this._canvas = canvas;
 
     // 1. WebGL2 context (NOT 2d!)
     const gl = canvas.getContext('webgl2', { alpha: true, antialias: true });
@@ -167,7 +158,6 @@ export class WebGLRenderer implements MatrixRainRenderer {
     // 4. 编译 shader
     this._program = this._compileProgram(gl, VERTEX_SHADER, FRAGMENT_SHADER);
     this._trailProgram = this._compileProgram(gl, TRAIL_VERTEX_SHADER, TRAIL_FRAGMENT_SHADER);
-    this._attribs = this._bindAttribLocations(gl, this._program);
     this._uniforms = {
       uViewport: gl.getUniformLocation(this._program, 'uViewport'),
       uCellSize: gl.getUniformLocation(this._program, 'uCellSize'),
@@ -238,6 +228,7 @@ export class WebGLRenderer implements MatrixRainRenderer {
     if (this._destroyed || this._paused || !this._gl) return;
     const gl = this._gl;
     if (this._instanceCount === 0) return;
+    if (!this._instanceBuffer) return;
 
     // 1. 残影拖尾(每帧全屏 alpha fade)
     this._renderTrail(gl, state);
@@ -288,7 +279,6 @@ export class WebGLRenderer implements MatrixRainRenderer {
       if (this._atlasTex) gl.deleteTexture(this._atlasTex);
     }
     this._gl = null;
-    this._canvas = null;
     this._instanceBuffer = null;
     this._atlasJson = null;
     this._atlasLookup = null;
@@ -461,24 +451,5 @@ export class WebGLRenderer implements MatrixRainRenderer {
       throw new Error(`[WebGLRenderer] shader compile failed: ${log}`);
     }
     return sh;
-  }
-
-  private _bindAttribLocations(
-    gl: GL,
-    prog: WebGLProgram
-  ): {
-    aPos: number;
-    aCharIdx: number;
-    aColor: number;
-    aUV0: number;
-    aUV1: number;
-  } {
-    return {
-      aPos: gl.getAttribLocation(prog, 'aPos'),
-      aCharIdx: gl.getAttribLocation(prog, 'aCharIdx'),
-      aColor: gl.getAttribLocation(prog, 'aColor'),
-      aUV0: gl.getAttribLocation(prog, 'aUV0'),
-      aUV1: gl.getAttribLocation(prog, 'aUV1'),
-    };
   }
 }

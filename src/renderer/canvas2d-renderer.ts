@@ -47,7 +47,6 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
 
   /** Canvas 2D 渲染上下文(私有,外部不暴露) */
   private _ctx: CanvasRenderingContext2D | null = null;
-  private _canvas: HTMLCanvasElement | null = null;
 
   /** 当前 font size 缓存(只在 size 变化时重设 ctx.font) */
   private _currentFontPx = 0;
@@ -63,7 +62,6 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
 
   async init(canvas: HTMLCanvasElement, _state: MatrixRainState): Promise<void> {
     if (this._destroyed) throw new Error('[Canvas2DRenderer] init() called after destroy()');
-    this._canvas = canvas;
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) throw new Error('[Canvas2DRenderer] Failed to get 2D context');
     this._ctx = ctx;
@@ -90,7 +88,6 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
     if (this._destroyed) return;
     this._destroyed = true;
     this._ctx = null;
-    this._canvas = null;
     this._currentFontPx = 0;
     this._charset = '';
   }
