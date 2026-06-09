@@ -46,9 +46,12 @@ export const createRenderer = async (type: RendererImpl): Promise<MatrixRainRend
       const mod = await import('./webgl-renderer');
       return new mod.WebGLRenderer();
     }
-    case 'webgpu':
-      // Phase 4 动态 import
-      throw new Error('[matrix-rain] WebGPU renderer not yet implemented (Phase 4)');
+    case 'webgpu': {
+      // 动态 import: webgpu-renderer 只在用户选 webgpu 时加载
+      // Phase 4 实现:完整 WebGPU compute + render pipeline
+      const mod = await import('./webgpu-renderer');
+      return new mod.WebGPURenderer();
+    }
     default:
       throw new Error(`[matrix-rain] Unknown renderer type: ${type as string}`);
   }

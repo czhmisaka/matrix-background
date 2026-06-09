@@ -183,7 +183,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         // Phase 2B 验证:先用静态 import 跑通,Phase 3 再优化体积
         return new WebGLRenderer();
       case 'webgpu':
-        throw new Error('[matrix-rain] WebGPU renderer not yet implemented (Phase 4)');
+        // 0.4.0+ Phase 4: WebGPU renderer
+        return new WebGPURenderer();
     }
   })();
 
