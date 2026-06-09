@@ -68,6 +68,12 @@ export class WebGLRenderer implements MatrixRainRenderer {
 
   private _gl: GL | null = null;
 
+  /**
+   * init() 完成后置 true(0.4.1+ 修复: engine 不 await renderer.init,
+   * 所以 init 跑完前不允许 render/drawChar/beginFrame, 避免读到 null shader uniforms)
+   */
+  private _initialized = false;
+
   /** atlas 加载结果 */
   private _atlasJson: AtlasJson | null = null;
   private _atlasLookup: Map<number, AtlasUV> | null = null;
@@ -97,7 +103,6 @@ export class WebGLRenderer implements MatrixRainRenderer {
 
   /** Instance buffer: Float32Array, 预分配 r × i × INSTANCE_STRIDE_FLOATS */
   private _instanceBuffer: Float32Array | null = null;
-  private _instanceCount = 0;
   private _cellSizePx = 32; // backing store px 中的 cell size
 
   /** destroy() 幂等 */
@@ -114,6 +119,14 @@ export class WebGLRenderer implements MatrixRainRenderer {
   private _h = 0;
   private _dpr = 1;
 
+  /**
+   * 当前帧内 drawChar 的调用计数(0.4.1+ 修复 P0-1)
+   * 引擎在 rAF 每帧开头调 beginFrame() 重置为 0,
+   * 每次 drawChar 写入第 `_drawCallIdx` 号 instance buffer 槽位后 ++.
+   * render() 最终用此值作为 drawArraysInstanced 的实例数.
+   */
+  private _drawCallIdx = 0;
+
   // ============ Lifecycle ============
 
   async init(canvas: HTMLCanvasElement, state: MatrixRainState): Promise<void> {
@@ -122,7 +135,13 @@ export class WebGLRenderer implements MatrixRainRenderer {
     }
 
     // 1. WebGL2 context (NOT 2d!)
-    const gl = canvas.getContext('webgl2', { alpha: true, antialias: true });
+    // 0.4.1+: preserveDrawingBuffer:true 让 readPixels/drawImage(webglCanvas) 能拿到上一帧的内容
+    // (浏览器默认 false — composited 后 framebuffer 内容可能被丢弃, bench 像素读不出来)
+    const gl = canvas.getContext('webgl2', {
+      alpha: true,
+      antialias: true,
+      preserveDrawingBuffer: true,
+    });
     if (!gl) {
       throw new Error(
         '[WebGLRenderer] WebGL2 not supported (this browser falls back to canvas2d renderer via auto-pick)'
@@ -212,6 +231,9 @@ export class WebGLRenderer implements MatrixRainRenderer {
 
     // 7. Allocate instance buffer (lazy, expanded on resize)
     this._allocateInstanceBuffer(gl, state.r, state.i);
+
+    // 0.4.1+ 修复: engine 不 await init(), 用此标志告诉 render/beginFrame/drawChar 现在可以工作了
+    this._initialized = true;
   }
 
   resize(w: number, h: number, dpr: number): void {
@@ -224,25 +246,36 @@ export class WebGLRenderer implements MatrixRainRenderer {
     this._gl.viewport(0, 0, Math.round(w * dpr), Math.round(h * dpr));
   }
 
+  /**
+   * 0.4.1+: 引擎在 rAF 内、drawTrail 之后、drawChar 循环之前调.
+   * 把 _drawCallIdx 重置为 0,让本帧的 drawChar 写入从槽位 0 开始.
+   */
+  beginFrame(): void {
+    if (!this._initialized) return; // init 还没完成,跳过本帧
+    this._drawCallIdx = 0;
+  }
+
   render(state: MatrixRainState, _dt: number): void {
     if (this._destroyed || this._paused || !this._gl) return;
+    if (!this._initialized) return; // init 还没完成,跳过本帧
     const gl = this._gl;
-    if (this._instanceCount === 0) return;
+    if (this._drawCallIdx === 0) return;
     if (!this._instanceBuffer) return;
 
     // 1. 残影拖尾(每帧全屏 alpha fade)
     this._renderTrail(gl, state);
 
     // 2. 字符 instanced draw
-    //    - 假设 draw-helpers 已调 drawChar 填充 _instanceBuffer
-    //    - 这里上传 buffer + drawArraysInstanced
+    //    - draw-helpers 在本帧内调了 _drawCallIdx 次 drawChar,
+    //      写入了 _instanceBuffer 的前 _drawCallIdx*STRIDE 个 float
+    //    - 这里只上传"用到的部分"+ drawArraysInstanced
     gl.bindBuffer(gl.ARRAY_BUFFER, this._vbo);
     gl.bufferSubData(
       gl.ARRAY_BUFFER,
       0,
       this._instanceBuffer,
       0,
-      this._instanceCount * INSTANCE_STRIDE_FLOATS
+      this._drawCallIdx * INSTANCE_STRIDE_FLOATS
     );
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
@@ -259,8 +292,8 @@ export class WebGLRenderer implements MatrixRainRenderer {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-    // 5. Draw: 4 vertices (TRIANGLE_STRIP quad) × instanceCount
-    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this._instanceCount);
+    // 5. Draw: 4 vertices (TRIANGLE_STRIP quad) × 本帧实际写入的 cell 数
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this._drawCallIdx);
 
     gl.bindVertexArray(null);
   }
@@ -304,11 +337,11 @@ export class WebGLRenderer implements MatrixRainRenderer {
     this._trailA = a;
   }
 
-  setFontSize(_px: number): void {
-    // no-op: 字符 cell size 由 atlas cellSize 固定(32px backing store)
-    // 实际 quad size 跟 DPR 同步
+  setFontSize(px: number): void {
+    // 0.4.1+: cellSize 跟随 fontSize 缩放 (atlas 仍 bake 在 32px, sampler 自动 downscale)
+    // 这样改 fontSize 后 quad 大小同步, 与 canvas2d 视觉一致
     if (this._gl) {
-      this._cellSizePx = 32 * this._dpr; // backing store px
+      this._cellSizePx = px * this._dpr; // backing store px
     }
   }
 
@@ -321,11 +354,18 @@ export class WebGLRenderer implements MatrixRainRenderer {
 
   drawChar(ch: number, cx: number, cy: number, r: number, g: number, b: number, a: number): void {
     if (!this._gl || !this._instanceBuffer || this._paused) return;
-    if (ch < 0 || ch >= this._instanceCount) return;
+    if (!this._initialized) return; // init 还没完成
+    // 0.4.1+ 修复 P0-1: ch 是 charset index (查 atlas/UV 用),
+    // 不是 instance buffer 槽位 — 槽位用 _drawCallIdx 算
+    const slotOff = this._drawCallIdx * INSTANCE_STRIDE_FLOATS;
+    if (slotOff + INSTANCE_STRIDE_FLOATS > this._instanceBuffer.length) return; // 容量守卫
 
     // 查 atlas index
     const chStr = this._charset[ch];
-    if (!chStr) return;
+    if (!chStr) {
+      // charset miss: 不写入,但 _drawCallIdx 也不递增,避免下一次跳格
+      return;
+    }
     const code = chStr.charCodeAt(0);
     const atlasIdx = this._charsetMap?.get(code) ?? 0;
     // 查 UV
@@ -333,21 +373,22 @@ export class WebGLRenderer implements MatrixRainRenderer {
 
     // 写 instance buffer
     // 12 floats per instance: [pos.x, pos.y, charIdx, pad, r, g, b, a, u0, v0, u1, v1]
-    const off = ch * INSTANCE_STRIDE_FLOATS;
     const buf = this._instanceBuffer;
     // backing store px (DPR 缩放)
-    buf[off + 0] = cx * this._dpr; // aPos.x
-    buf[off + 1] = cy * this._dpr; // aPos.y
-    buf[off + 2] = atlasIdx; // aCharIdx
-    buf[off + 3] = 0; // pad
-    buf[off + 4] = r / 255; // aColor.r (0-1)
-    buf[off + 5] = g / 255; // aColor.g
-    buf[off + 6] = b / 255; // aColor.b
-    buf[off + 7] = a; // aColor.a (already 0-1)
-    buf[off + 8] = uv?.u0 ?? 0; // aUV0.x
-    buf[off + 9] = uv?.v0 ?? 0; // aUV0.y
-    buf[off + 10] = uv?.u1 ?? 1; // aUV1.x
-    buf[off + 11] = uv?.v1 ?? 1; // aUV1.y
+    buf[slotOff + 0] = cx * this._dpr; // aPos.x
+    buf[slotOff + 1] = cy * this._dpr; // aPos.y
+    buf[slotOff + 2] = atlasIdx; // aCharIdx
+    buf[slotOff + 3] = 0; // pad
+    buf[slotOff + 4] = r / 255; // aColor.r (0-1)
+    buf[slotOff + 5] = g / 255; // aColor.g
+    buf[slotOff + 6] = b / 255; // aColor.b
+    buf[slotOff + 7] = a; // aColor.a (already 0-1)
+    buf[slotOff + 8] = uv?.u0 ?? 0; // aUV0.x
+    buf[slotOff + 9] = uv?.v0 ?? 0; // aUV0.y
+    buf[slotOff + 10] = uv?.u1 ?? 1; // aUV1.x
+    buf[slotOff + 11] = uv?.v1 ?? 1; // aUV1.y
+
+    this._drawCallIdx++;
   }
 
   // ============ Internal ============
@@ -378,11 +419,9 @@ export class WebGLRenderer implements MatrixRainRenderer {
     const count = cols * rows;
     if (count === 0) {
       this._instanceBuffer = null;
-      this._instanceCount = 0;
       return;
     }
     this._instanceBuffer = new Float32Array(count * INSTANCE_STRIDE_FLOATS);
-    this._instanceCount = count;
     // Re-upload VBO size hint
     gl.bindBuffer(gl.ARRAY_BUFFER, this._vbo);
     gl.bufferData(gl.ARRAY_BUFFER, this._instanceBuffer.byteLength, gl.DYNAMIC_DRAW);
@@ -392,6 +431,7 @@ export class WebGLRenderer implements MatrixRainRenderer {
   /** Public hook: engine.ts resize 时调, 重新分配 instance buffer */
   public resizeGrid(cols: number, rows: number): void {
     if (!this._gl || this._destroyed) return;
+    if (!this._initialized) return; // init() 还没创建 _vbo, 跳过(init 末尾会做首次 allocate)
     this._allocateInstanceBuffer(this._gl, cols, rows);
   }
 

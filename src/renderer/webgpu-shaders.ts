@@ -23,7 +23,13 @@
 /**
  * Compute shader · 并行更新 cell.warmth
  *
- * 注: 算法与 draw-helpers.ts 中的 CPU 路径保持 100% 一致
+ * @deprecated 0.4.1+: WebGPU 渲染器已移除 compute pass(原实现 cellsBuffer
+ *   未写入、render bindgroup 未挂载 cells、layout `read-only-storage` 与
+ *   WGSL `read_write` 不兼容,真 Chrome 113+ 会在 createComputePipeline()
+ *   抛 ValidationError)。compute warmth 留到 0.5.0 重新设计。当前 export
+ *   仅为向后兼容(避免 tsup tree-shake 警告与第三方反序列化失败)。
+ *
+ * 历史算法 (与 draw-helpers.ts 中的 CPU 路径保持 100% 一致):
  *   C = h - M, A = s - p
  *   B = sqrt(C² + A²)
  *   H = max(0, 1 - B / (rows * warmthRadius))
