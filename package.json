@@ -93,6 +93,7 @@
     "test:image-converge": "node test/image-converge.mjs",
     "test:render-scale": "node test/render-scale.mjs",
     "test:easing": "node test/easing.mjs",
+    "test:pixel": "node test/renderer-pixel.mjs",
     "test:esm": "node test/esm-load.mjs",
     "test:usability": "node test/usability.mjs",
     "test:e2e:demos": "/Users/chenzhihan/anaconda3/bin/python3 scripts/e2e-demos.py",

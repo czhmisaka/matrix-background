@@ -348,7 +348,7 @@ P0-2 / P0-3 / P0-6:WebGPU compute 改成"真有用"或者直接删 compute pass(
 | **P1-2** site effectKey 11+ 字段空跳过 | ✅ 已修 | [4080e8d](../) | 移到 renderKey 走硬重建 |
 | **P1-3** site charset 写死 skip | ✅ 已修 | [4080e8d](../) | 移到 renderKey 走硬重建 |
 | **P1-4** bench 只读 fps 不验像素 | ✅ 已修 | [d6425d0](../) | 加 djb2 hash + nonZeroRatio gate(< 5% 退出码 2) |
-| **P2-1** Node 测试只验"不抛" | ⏸ 留 0.5.0 | — | 需要 Playwright headed Chromium + 真 GPU,CI 配置复杂 |
+| **P2-1** Node 测试只验"不抛" | 🔧 Phase 1 落地 | [HEAD](../) | `test/renderer-pixel.mjs` + Playwright Chromium 像素对比;当前 0.4.1 webgl/webgpu 1-81% 匹配,test:pixel 退出码 1 阻止 merge |
 | **P2-2** setFontSize 忽略 px | ✅ 已修 | [a32ecf2](../) | `_cellSizePx = px * dpr` |
 | **P2-3** drawTrail _w/_h 参数无害 | ⏸ 留 cleanup | — | 接口签名误导,但功能无影响 |
 

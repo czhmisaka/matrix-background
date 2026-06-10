@@ -1,0 +1,96 @@
+<!doctype html>
+<!--
+  pixel-demo.html · Phase 1 真像素对比测试 fixture
+
+  用途: 由 test/renderer-pixel.mjs 用 Playwright 加载, 跑 3 个 renderer
+        × 3 个场景, 抓取 canvas 像素与 canvas2d 基准做对比。
+
+  URL 参数:
+    renderer  canvas2d | webgl | webgpu
+    fontSize  数字 (像素)
+    width     视口宽
+    height    视口高
+    waitMs    启动后等多少 ms 再报告"就绪"
+
+  暴露给 Playwright 的全局:
+    window.__ready           boolean  instance 创建成功 = true
+    window.__error           string   创建失败的错误信息
+    window.__frameIdx        number   rAF 计数(每帧 +1)
+    window.__captureFrame()  Promise<Uint8ClampedArray | null>  返回当前 canvas 像素 RGBA
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>matrix-rain pixel fixture</title>
+    <link rel="stylesheet" href="/matrix-rain.css" />
+    <style>
+      html, body { margin: 0; padding: 0; background: #000; overflow: hidden; }
+      /* matrix-rain-wrapper 绝对定位, 这里给 0 高度让 canvas 撑满 */
+      .matrix-rain-wrapper { position: fixed; inset: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="host"></div>
+    <script src="/index.iife.js"></script>
+    <script>
+      (async () => {
+        const params = new URLSearchParams(location.search);
+        const renderer = params.get('renderer') || 'canvas2d';
+        const fontSize = Number(params.get('fontSize') || 14);
+        const waitMs = Number(params.get('waitMs') || 800);
+
+        // 视口由 Playwright 的 setViewportSize 控制, 这里不重写
+        const host = document.getElementById('host');
+
+        window.__frameIdx = 0;
+        window.__ready = false;
+        window.__error = null;
+        window.__captureFrame = async () => {
+          const c = document.querySelector('#matrix-rain-canvas')
+                    || document.querySelector('canvas');
+          if (!c) return null;
+          // 抓帧前用 rAF 等一帧, 保证拿到的是最新已绘制内容
+          await new Promise((r) => requestAnimationFrame(r));
+          // 用 PNG 编码(矩阵雨背景多黑,压缩比 50x+,4K ~500KB 而非 33MB)
+          // toBlob + FileReader 比 toDataURL 省内存, 大画布更稳
+          return await new Promise((resolve) => {
+            c.toBlob((blob) => {
+              if (!blob) { resolve(null); return; }
+              const r = new FileReader();
+              r.onload = () => resolve(r.result);  // data:image/png;base64,...
+              r.onerror = () => resolve(null);
+              r.readAsDataURL(blob);
+            }, 'image/png');
+          });
+        };
+
+        // 简易 rAF 计数器(独立于 matrixRain 内部)
+        (function tick() {
+          window.__frameIdx++;
+          requestAnimationFrame(tick);
+        })();
+
+        try {
+          const inst = MatrixRain.matrixRain({
+            container: host,
+            fontSize,
+            renderer,
+            // 静音 transition / easing 噪声, 保证画面尽快稳定
+            themeTransitionDuration: 0,
+            variantTransitionDuration: 0,
+            clickBurst: false,
+            cursor: false,
+          });
+          window.__inst = inst;
+          // 等 N ms 让引擎跑几帧 + 字体/atlas 加载完
+          await new Promise((r) => setTimeout(r, waitMs));
+          window.__ready = true;
+          console.log(`[pixel-demo] ready renderer=${renderer} fontSize=${fontSize} frameIdx=${window.__frameIdx}`);
+        } catch (e) {
+          window.__error = String(e && e.message || e);
+          console.error('[pixel-demo] init failed:', e);
+        }
+      })();
+    </script>
+  </body>
+</html>

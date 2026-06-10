@@ -5,6 +5,22 @@ All notable changes to `@xietuier/matrix-rain` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-10 (WIP · Phase 1 done)
+
+### Added — 真像素测试基建 (P2-1)
+
+- **`test/renderer-pixel.mjs`** + **`test/fixtures/pixel-demo.html`**: Playwright headed Chromium 像素对比测试,跨 3 个场景(1080p+fs14 / 1440p+fs8 / 4K+fs4)× 3 个 renderer(canvas2d / webgl / webgpu)共 6 个对比 case。`canvas2d` 作基准,`webgl` / `webgpu` 与基准 95% 像素灰度 |Δ| < 5/255 视为通过。
+  - 浏览器端用 `toBlob('image/png')` 编码再 `FileReader.readAsDataURL` 回 Node,避开 4K 33MB RGBA JSON 序列化 OOM。
+  - Node 端用 `@napi-rs/canvas` (`loadImage` + `getImageData`) 解码。
+  - WebGPU 在 headless 中常不可用,自动 `⏭` 跳过而非 fail。
+  - 支持 `--only <renderer>` / `--scenario <name>` / `--threshold <0..1>` / `--waitMs <ms>` 过滤。
+- **`package.json`** 新增 `"test:pixel": "node test/renderer-pixel.mjs"`。
+- **已知失败 (0.4.1 baseline)**: 当前 0.4.1 webgl 仅 1-4% 匹配 canvas2d(P0-1 假实现),webgpu 1-81%(P0-2/3/4/6 假实现),test:pixel 退出码 1 阻塞 merge — **这正是 0.4.0 fake 灾难的安全网**。
+
+### Notes
+
+- 0.5.0 Phase 1 落地;Phase 2-4 仍在规划(`task_plan_0.5.0.md`)。
+
 ## [0.4.1] - 2026-06-10
 
 ### Fixed — 0.4.0 渲染器虚假实现修复
