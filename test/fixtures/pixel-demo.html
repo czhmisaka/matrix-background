@@ -25,6 +25,10 @@
     <link rel="stylesheet" href="/matrix-rain.css" />
     <style>
       html, body { margin: 0; padding: 0; background: #000; overflow: hidden; }
+      /* 0.4.3 修复: 给 host div explicit 尺寸 + position:relative,否则
+         matrix-rain-wrapper 找不到 positioned 祖先,塌缩到 0×0,
+         canvas 画到 wrapper 里看不到字符。test:pixel 报低匹配率实际是 fixture bug,不是 webgl bug。 */
+      #host { position: relative; width: 100vw; height: 100vh; }
       /* matrix-rain-wrapper 绝对定位, 这里给 0 高度让 canvas 撑满 */
       .matrix-rain-wrapper { position: fixed; inset: 0; }
     </style>

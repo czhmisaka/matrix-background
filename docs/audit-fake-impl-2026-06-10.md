@@ -333,7 +333,7 @@ P0-2 / P0-3 / P0-6:WebGPU compute 改成"真有用"或者直接删 compute pass(
 
 ---
 
-## 修复进度(0.5.0 · 2026-06-11 — 全部 13 项修复)
+## 修复进度(0.4.2 · 2026-06-11 — 12 项已修,1 项新发现)
 
 | ID | 状态 | 修复 commit | 备注 |
 |---|---|---|---|
@@ -348,9 +348,10 @@ P0-2 / P0-3 / P0-6:WebGPU compute 改成"真有用"或者直接删 compute pass(
 | **P1-2** site effectKey 11+ 字段空跳过 | ✅ 已修 | [4080e8d](../) | 移到 renderKey 走硬重建 |
 | **P1-3** site charset 写死 skip | ✅ 已修 | [4080e8d](../) | 移到 renderKey 走硬重建 |
 | **P1-4** bench 只读 fps 不验像素 | ✅ 已修 | [d6425d0](../) | 加 djb2 hash + nonZeroRatio gate(< 5% 退出码 2) |
-| **P2-1** Node 测试只验"不抛" | ✅ 已修 | [1790b6f](../) + [HEAD](../) | `test/renderer-pixel.mjs` + Playwright Chromium 像素对比;webgl/webgpu 现需 ≥95% 匹配 canvas2d 才能 merge |
+| **P2-1** Node 测试只验"不抛" | ⏸ 留 followup | [1790b6f](../) (测试基建) | `test/renderer-pixel.mjs` + Playwright **已加**,但**未达 95% 匹配**(见 P-NEW-1)。基建已就位,需先修 WebGL 渲染器才能跑绿 |
 | **P2-2** setFontSize 忽略 px | ✅ 已修 | [a32ecf2](../) | `_cellSizePx = px * dpr` |
 | **P2-3** drawTrail _w/_h 参数 | ✅ 已修 | [0def2f4](../) | 签名清理为 4 参,canvas2d 内部从 `resize()` 缓存取 w/h |
+| **P-NEW-1** WebGL/WebGPU atlas UV Y 轴方向错误(0.4.2 实测发现) | 🆕 未修 | — | test:pixel 实测 webgl 1-3% / webgpu 1-81% 匹配 canvas2d,字符完全不可见。根因:atlas PNG Y 朝下(字符在 y=0..32 cell 顶部),WebGL 默认 Y 朝上(v=0 = PNG y=H-1),vertex shader 没做 Y 翻转,采样命中空 cell 区域。需 0.5.0 修复(候选:vertex shader 翻转 v,或 build-atlas.mjs 把字符放 cell 底部,或 `gl.pixelStorei(UNPACK_FLIP_Y_WEBGL, true)` + 调整 v 范围) |
 
 ### 附带发现的次生 bug(0.4.1 一并修了)
 

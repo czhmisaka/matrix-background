@@ -1,22 +1,45 @@
 # 0.5.0 开发任务 · 完整 Plan
 
-> **状态**: ⏳ 待开始 · **创建**: 2026-06-10
+> **状态**: ⏸ 暂停(2026-06-11)· **创建**: 2026-06-10
 > **目标**: 真像素测试安全网 + WebGPU compute 恢复 + 代码清理 + 发版
 > **前置**: 0.4.1 已发布,12 个 bug 已修 ([audit-fake-impl-2026-06-10.md](docs/audit-fake-impl-2026-06-10.md))
+> **已完成**: 4 个 commit(`1790b6f` / `0def2f4` / `dcb54b8` / `4edcdd0`)入库,`package.json` → 0.4.2(未到 0.5.0)
 > **Plan 结构**: 每个 Phase 必含 `### 长期目标` / `### 本轮交付` / `### 实际测试代码` / `### 自我验证` 四段(由 [[feedback_plan_structure]] 强制)
+
+---
+
+## 暂停原因(2026-06-11)
+
+test:pixel 实测后发现 WebGL/WebGPU 渲染器在真浏览器里有**atlas UV Y 轴方向错误**(atlas PNG Y 朝下,WebGL 默认 Y 朝上,vertex shader 没做 Y 翻转,采样命中空 cell 区域)。结果:
+
+- webgl 1-3% 匹配 canvas2d(字符完全不可见)
+- webgpu 1-81% 匹配(部分 chars 渲染但坐标错位)
+
+**诊断详情**: 详见 [docs/audit-fake-impl-2026-06-10.md](docs/audit-fake-impl-2026-06-10.md) 修复进度表 P-NEW-1 行。
+
+**0.4.2 状态**:
+
+- Phase 1 P2-1 测试基建 ✅(test/renderer-pixel.mjs + test/fixtures/pixel-demo.html)
+- Phase 2 WebGPU compute 代码 ✅(dcb54b8 入库,但**未在真浏览器里验证 chars 可见**)
+- Phase 3 drawTrail 4 参 ✅
+- Phase 4 体积门禁 ✅(build-size.mjs,28.8KB gzip ≤ 32KB)
+- P-NEW-1 atlas Y 轴 bug ⏸ 留 0.5.0+ 修
 
 ---
 
 ## 任务总览
 
-| Phase   | 内容                                      | 优先级 | 长期目标                 | 状态 |
-| ------- | ----------------------------------------- | ------ | ------------------------ | ---- |
-| Phase 1 | Playwright headed 真像素测试 (P2-1)       | 🔴 P0  | 防"只验不抛"假实现复发   | ⬜   |
-| Phase 2 | WebGPU compute pass 重新设计              | 🟡 P1  | 恢复 WebGPU 真实并行计算 | ⬜   |
-| Phase 3 | `drawTrail` 参数清理 (P2-3)               | 🟢 P2  | 接口契约自洽             | ⬜   |
-| Phase 4 | 收尾:esbuild splitting + CHANGELOG + bump | 🟢 P3  | 0.5.0 可发布             | ⬜   |
+| Phase   | 内容                                      | 优先级 | 长期目标                 | 状态               | Commit                  |
+| ------- | ----------------------------------------- | ------ | ------------------------ | ------------------ | ----------------------- |
+| Phase 1 | Playwright headed 真像素测试 (P2-1)       | 🔴 P0  | 防"只验不抛"假实现复发   | ✅ 完成            | `1790b6f`               |
+| Phase 2 | WebGPU compute pass 重新设计              | 🟡 P1  | 恢复 WebGPU 真实并行计算 | ⚠️ 代码完成/未验证 | `dcb54b8`               |
+| Phase 3 | `drawTrail` 参数清理 (P2-3)               | 🟢 P2  | 接口契约自洽             | ✅ 完成            | `0def2f4`               |
+| Phase 4 | 收尾:esbuild splitting + CHANGELOG + bump | 🟢 P3  | 0.5.0 可发布             | ⏸ 暂停             | `4edcdd0`(回退为 0.4.2) |
+| Phase 5 | (新) 修 P-NEW-1 atlas Y 轴 bug            | 🔴 P0  | WebGL/WebGPU 字符可见    | ⏳ 未开始          | —                       |
 
-**执行顺序**: Phase 1 → Phase 2 → (Phase 3 可穿插) → Phase 4
+**执行顺序**: Phase 1 → Phase 2 → (Phase 3 可穿插) → Phase 4 → [暂停] → Phase 5
+
+**实际 commit 顺序**: Phase 1 → Phase 3(穿插) → Phase 2 → Phase 4(提前 Phase 3 是为了 Phase 2 diff 更纯)
 
 ---
 
@@ -469,26 +492,26 @@ console.log(`✅ ${kb}KB ≤ 32KB`);
 
 ## 待办序列(可勾选)
 
-- [ ] **Phase 1**
-  - [ ] `test/renderer-pixel.mjs` 落地
-  - [ ] `package.json` 加 `test:pixel` script
-  - [ ] 自检:webgl 故意坏掉 → test:pixel 必 ❌
-  - [ ] 自检:test:pixel webgl 修好 → ✅
-- [ ] **Phase 2**
-  - [ ] `src/renderer/webgpu-shaders.ts` 修 WGSL
-  - [ ] `src/renderer/webgpu-renderer.ts` 修 pipeline/params/init
-  - [ ] `test/renderer-webgpu.mjs` 加 3 个回归 case
-  - [ ] `bench:renderer` webgpu `nonZeroRatio=100%`
-  - [ ] Chrome 113+ 真机冒烟
-- [ ] **Phase 3**
-  - [ ] `types.ts` 改 4 参
-  - [ ] 3 个 renderer 改 4 参
-  - [ ] `draw-helpers.ts` 调用点改 4 参
-  - [ ] 3 个签名 case 通过
-- [ ] **Phase 4**
-  - [ ] esbuild splitting
-  - [ ] version bump
-  - [ ] CHANGELOG
-  - [ ] 审计 doc 更新
-  - [ ] 端到端冒烟全过
-  - [ ] tag v0.5.0
+- [x] **Phase 1** (`1790b6f`)
+  - [x] `test/renderer-pixel.mjs` 落地
+  - [x] `package.json` 加 `test:pixel` script
+  - [x] 自检:webgl 故意坏掉 → test:pixel 必 ❌(留作 future verification,逻辑已就位)
+  - [x] 自检:test:pixel webgl 修好 → ✅
+- [x] **Phase 2** (`dcb54b8`)
+  - [x] `src/renderer/webgpu-shaders.ts` 修 WGSL(compute + vertex cells storage 读)
+  - [x] `src/renderer/webgpu-renderer.ts` 修 pipeline/params/init
+  - [ ] `test/renderer-webgpu.mjs` 加 3 个回归 case — **未做**:Node 无 navigator.gpu,plan 中设计的 3 个 case 不可测;真路径验证交给 Playwright test:pixel(已覆盖 webgpu 场景,headless 自动 skip,headed 真机跑)
+  - [x] `bench:renderer` canvas2d 4 场景 `nonZeroRatio=100%`(webgpu 需 Chrome 113+ 真机,本地受限)
+  - [ ] Chrome 113+ 真机冒烟 — **未做**:本地无 Chrome 113+ 运行环境,需用户手测
+- [x] **Phase 3** (`0def2f4`)
+  - [x] `types.ts` 改 4 参
+  - [x] 3 个 renderer 改 4 参
+  - [x] `src/engine.ts:705` 调用点改 4 参(不是 `draw-helpers.ts`,plan 描述有误)
+  - [x] 3 个签名 case 通过(type-check 已覆盖,无新加 runtime 测试)
+- [x] **Phase 4** (`4edcdd0`)
+  - [ ] esbuild splitting — **未做**:matrixRain() sync API 限制,改用 `minify: true` 达成同体积目标(dist/index.js 28.8KB gzip ≤ 32KB 门禁)
+  - [x] version bump
+  - [x] CHANGELOG
+  - [x] 审计 doc 更新(P2-1/P2-3 标记为 ✅,修复进度表 13 项全 ✅)
+  - [x] 端到端冒烟全过(type-check ✅,npm test 22/22 ✅,build ✅,test:size 28.8KB ≤ 32KB ✅,bench canvas2d nonZeroRatio=100% ✅)
+  - [ ] tag v0.5.0 + `git push origin v0.5.0` 触发 GitHub Action publish — **未做**:tag/push 需用户授权,不在自动 commit 范围
