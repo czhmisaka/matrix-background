@@ -54,6 +54,10 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
   /** 当前 charset 字符串(由 setCharset 注入) */
   private _charset = '';
 
+  /** CSS 像素视口尺寸(0.5.0+: 由 resize() 写入,drawTrail 不再依赖 _ctx.canvas) */
+  private _w = 0;
+  private _h = 0;
+
   /** destroy() 幂等标记 */
   private _destroyed = false;
 
@@ -71,11 +75,14 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
     this._charset = ''; // engine.ts 会在 init 后调 setCharset(state.charset)
   }
 
-  resize(_w: number, _h: number, dpr: number): void {
+  resize(w: number, h: number, dpr: number): void {
     if (this._destroyed || !this._ctx) return;
     // backing store 已在 engine.ts 那边 `canvas.width = canvas.width` 强制重置
     // 这里只设 transform (DPR 缩放)
     this._ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // 0.5.0+: 缓存 CSS 视口尺寸,drawTrail 用此(避免依赖 _ctx.canvas 兼容性)
+    this._w = w;
+    this._h = h;
   }
 
   render(_state: MatrixRainState, _dt: number): void {
@@ -105,7 +112,7 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
   drawTrail(r: number, g: number, b: number, a: number): void {
     if (!this._ctx || this._paused) return;
     this._ctx.fillStyle = toRgba(r, g, b, a);
-    this._ctx.fillRect(0, 0, this._ctx.canvas.width, this._ctx.canvas.height);
+    this._ctx.fillRect(0, 0, this._w, this._h);
   }
 
   setFontSize(px: number): void {

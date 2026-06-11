@@ -1,0 +1,108 @@
+{
+  "timestamp": "2026-06-11T02:42:01.410Z",
+  "scenarios": [
+    {
+      "renderer": "canvas2d",
+      "w": 1920,
+      "h": 1080,
+      "fs": 14,
+      "label": "1080p fs14"
+    },
+    {
+      "renderer": "canvas2d",
+      "w": 2560,
+      "h": 1440,
+      "fs": 8,
+      "label": "1440p fs8"
+    },
+    {
+      "renderer": "webgl",
+      "w": 2560,
+      "h": 1440,
+      "fs": 4,
+      "label": "1440p fs4"
+    },
+    {
+      "renderer": "webgl",
+      "w": 3840,
+      "h": 2160,
+      "fs": 4,
+      "label": "4K fs4"
+    }
+  ],
+  "results": [
+    {
+      "avgFps": 53.5,
+      "minFps": 53,
+      "maxFps": 55,
+      "p50Fps": 53,
+      "p95Fps": 55,
+      "samples": [53, 53, 53, 55],
+      "pixelHash": 2196163735,
+      "meanR": 9.7,
+      "meanG": 17.3,
+      "meanB": 29.3,
+      "nonZeroRatio": 1,
+      "pixelError": null,
+      "renderer": "canvas2d",
+      "viewport": "1920x1080",
+      "fontSize": 14,
+      "label": "1080p fs14"
+    },
+    {
+      "avgFps": 18.3,
+      "minFps": 18,
+      "maxFps": 19,
+      "p50Fps": 18,
+      "p95Fps": 19,
+      "samples": [18, 18, 18, 19],
+      "pixelHash": 2246356059,
+      "meanR": 40.9,
+      "meanG": 58.8,
+      "meanB": 74.1,
+      "nonZeroRatio": 1,
+      "pixelError": null,
+      "renderer": "canvas2d",
+      "viewport": "2560x1440",
+      "fontSize": 8,
+      "label": "1440p fs8"
+    },
+    {
+      "avgFps": 0,
+      "minFps": 0,
+      "maxFps": 0,
+      "p50Fps": 0,
+      "p95Fps": 0,
+      "samples": [0, 0, 0, 0],
+      "pixelHash": 3845757317,
+      "meanR": 38,
+      "meanG": 38,
+      "meanB": 102,
+      "nonZeroRatio": 1,
+      "pixelError": null,
+      "renderer": "webgl",
+      "viewport": "2560x1440",
+      "fontSize": 4,
+      "label": "1440p fs4"
+    },
+    {
+      "avgFps": 0,
+      "minFps": 0,
+      "maxFps": 0,
+      "p50Fps": 0,
+      "p95Fps": 0,
+      "samples": [0, 0, 0, 0],
+      "pixelHash": 3845757317,
+      "meanR": 38,
+      "meanG": 38,
+      "meanB": 102,
+      "nonZeroRatio": 1,
+      "pixelError": null,
+      "renderer": "webgl",
+      "viewport": "3840x2160",
+      "fontSize": 4,
+      "label": "4K fs4"
+    }
+  ],
+  "nonZeroRatioFloor": 0.05
+}

@@ -1,56 +1,59 @@
 /**
- * @xietuier/matrix-rain · WebGPU Shaders (WGSL) (0.4.0+ Phase 4)
+ * @xietuier/matrix-rain · WebGPU Shaders (WGSL) (0.4.0+ Phase 4, 0.5.0 重建)
  *
- * **架构**:
- * 1. **Compute shader** (`warmth.wgsl`): 每帧并行更新 cell.warmth
- *    - 8.4M cells × 60fps 跑 compute 不可能慢 (1-2ms)
+ * **架构** (0.5.0):
+ * 1. **Compute shader** (`COMPUTE_WARMTH_SHADER`): 每帧并行更新 cell.warmth
+ *    - 8.4M cells × 60fps 跑 compute 1-2ms
+ *    - WGSL: `var<storage, read_write> cells: array<f32>`(顶层 runtime-sized array)
  * 2. **Render pipeline** (vertex + fragment): instanced draw, 共享 atlas
+ *    - vertex shader 用 `@builtin(instance_index)` 读 `cells[iid]` 调色
  * 3. **Bind groups**:
- *    - Compute: @group(0) @binding(0) cells (storage, read_only)
- *                @group(0) @binding(1) params (uniform)
- *    - Render:  @group(0) @binding(0) uniforms (uniform, 16 bytes)
- *                @group(0) @binding(1) atlasTex (texture_2d)
- *                @group(0) @binding(2) atlasSampler (sampler)
- *    - Trail:   @group(0) @binding(0) trailColor (uniform, vec4)
+ *    - Compute:   @group(0) @binding(0) cells (storage, read_write)
+ *                 @group(0) @binding(1) params (uniform, 48 bytes)
+ *    - Render @0: @group(0) @binding(0) uniforms (uniform, 16 bytes)
+ *                 @group(0) @binding(1) atlasTex (texture_2d)
+ *                 @group(0) @binding(2) atlasSampler (sampler)
+ *    - Render @1: @group(1) @binding(0) cells (storage, read) ← 0.5.0 新增
+ *    - Trail:     @group(0) @binding(0) trailColor (uniform, vec4)
  *
  * **WGSL 规范要求**:
- * - runtime-sized array 不能嵌套在 struct 内，必须直接声明为顶层 var 类型
- * - uniform buffer 字段必须 16-byte 对齐
+ * - runtime-sized array 必须直接声明为顶层 var,**不能嵌套在 struct 内**
+ * - uniform buffer 字段必须 16-byte 对齐(48 bytes = 12 f32,刚好对齐)
  *
  * @since 0.4.0
  */
 
 /**
- * Compute shader · 并行更新 cell.warmth
+ * Compute shader · 并行更新每 cell 的 warmth (0.5.0 重写)
  *
- * @deprecated 0.4.1+: WebGPU 渲染器已移除 compute pass(原实现 cellsBuffer
- *   未写入、render bindgroup 未挂载 cells、layout `read-only-storage` 与
- *   WGSL `read_write` 不兼容,真 Chrome 113+ 会在 createComputePipeline()
- *   抛 ValidationError)。compute warmth 留到 0.5.0 重新设计。当前 export
- *   仅为向后兼容(避免 tsup tree-shake 警告与第三方反序列化失败)。
- *
- * 历史算法 (与 draw-helpers.ts 中的 CPU 路径保持 100% 一致):
- *   C = h - M, A = s - p
+ * **设计**:
+ * - `cells` 是 `array<f32>`,每元素一格的 warmth(0..1)。**顶层 runtime-sized array**(WGSL 规范),
+ *   `var<storage, read_write>`(可读可写,layout 必须 `type: 'storage'`,**不是** `read-only-storage`)。
+ * - `params` 是 uniform,装 lightCenter/driftSpeed/warmthRadius/warmthLerp/gridDims/wallTime。
+ *   uniform buffer 字段必须 16-byte 对齐,所以最后塞 _pad 凑 8 floats = 32 bytes。
+ * - 算法**完全镜像** CPU 路径 [draw-helpers.ts:72-78](src/engine/draw-helpers.ts#L72-L78):
+ *   ```
+ *   s = floor(idx / cols), h = idx - s*cols
+ *   lightX = lightCenterX*cols + cos(wallTime*driftSpeedX*60)*cols*0.2
+ *   lightY = lightCenterY*rows + sin(wallTime*driftSpeedY*60)*rows*0.2
+ *   C = h - lightX, A = s - lightY
  *   B = sqrt(C² + A²)
- *   H = max(0, 1 - B / (rows * warmthRadius))
- *   warmth += (H - warmth) * warmthLerp
+ *   H = max(0, 1 - B/(rows*warmthRadius))
+ *   cells[idx] += (H - cells[idx]) * warmthLerp
+ *   ```
  *
- * WGSL: @compute + @workgroup_size(64)  (GPU 一次处理 64 cells)
+ * **绑定**:
+ * - `@group(0) @binding(0)` cells (storage, read_write)
+ * - `@group(0) @binding(1)` params (uniform)
+ *
+ * **为什么不再用 nested struct 数组**: 0.4.0 的 `array<Cell>` 内嵌 8 f32 字段
+ * 浪费带宽(warmth 只 1 f32,实际我们要 1 f32/cell)。**改用 `array<f32>`**
+ * 直接表达 1 f32/cell,8.4M cells × 4 bytes = 32MB(原 256MB),降一个量级。
+ *
+ * @since 0.5.0
  */
 export const COMPUTE_WARMTH_SHADER = /* wgsl */ `
-struct Cell {
-  bright: f32,
-  phase: f32,
-  warmth: f32,
-  speed: f32,
-  yPos: f32,
-  headBright: f32,
-  ch: u32,
-  locked: u32,
-}
-
-// runtime-sized array 必须直接声明，不嵌套在 struct 内（WGSL 规范）
-@group(0) @binding(0) var<storage, read_write> cells: array<Cell>;
+@group(0) @binding(0) var<storage, read_write> cells: array<f32>;
 
 struct WarmthParams {
   lightCenterX: f32,
@@ -62,10 +65,9 @@ struct WarmthParams {
   gridRows: f32,
   gridCols: f32,
   wallTime: f32,
-  targetActive: u32,
-  _pad0: u32,  // 对齐填充
-  _pad1: u32,
-  _pad2: u32,
+  _pad0: f32,
+  _pad1: f32,
+  _pad2: f32,
 }
 
 @group(0) @binding(1) var<uniform> params: WarmthParams;
@@ -75,7 +77,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let idx = gid.x;
   if (idx >= arrayLength(&cells)) { return; }
 
-  let s = f32(idx) / params.gridCols;
+  let s = floor(f32(idx) / params.gridCols);
   let h = f32(idx) - s * params.gridCols;
   let lightX = params.lightCenterX * params.gridCols +
     cos(params.wallTime * params.driftSpeedX * 60.0) * params.gridCols * 0.2;
@@ -86,21 +88,27 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let B = sqrt(C * C + A * A);
   let H = max(0.0, 1.0 - B / (params.gridRows * params.warmthRadius));
 
-  // 读取当前值，计算新值，写回
-  let old = cells[idx].warmth;
-  cells[idx].warmth = old + (H - old) * params.warmthLerp;
+  // 读取当前值, 阻尼后写回
+  let old = cells[idx];
+  cells[idx] = old + (H - old) * params.warmthLerp;
 }
 `;
 
 /**
- * Vertex shader · instanced draw
+ * Vertex shader · instanced draw (0.5.0+: 读 cells storage 调色)
  *
- * 与 WebGL2 vertex shader 功能完全一致：
+ * 0.4.1 之前 compute 输出 cells[idx].warmth 但 vertex shader 不用,导致 P0-2。
+ * 0.5.0 把 cells 作为 group(1) binding(0) 传入,vertex shader 在
+ * `@builtin(instance_index)` 处读 `cells[idx]` 乘到 color.a,实现
+ * "GPU 并行计算 warmth + vertex 一次性应用" 的完整闭环。
+ *
  * - 4 顶点 triangle-strip quad (vertex_index 0-3)
  * - 每个实例有 12 个 float (48 bytes): [pos.xy, charIdx, pad, color.rgba, uv0.xy, uv1.xy]
- * - 输出 clip-space position + atlas UV + fragment color
+ * - 输出 clip-space position + atlas UV + fragment color (含 warmth 调制)
  */
 export const RENDER_VERTEX_SHADER = /* wgsl */ `
+@group(1) @binding(0) var<storage, read> cells: array<f32>;
+
 struct VertexOutput {
   @builtin(position) position: vec4<f32>,
   @location(0) uv: vec2<f32>,
@@ -124,14 +132,17 @@ struct InstanceInput {
 }
 
 @vertex
-fn main(input: InstanceInput, @builtin(vertex_index) vid: u32) -> VertexOutput {
+fn main(input: InstanceInput, @builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -> VertexOutput {
   // 4-vertex triangle-strip quad
   let quadU = select(0.0, 1.0, vid == 1u || vid == 3u);
   let quadV = select(0.0, 1.0, vid == 2u || vid == 3u);
 
   var output: VertexOutput;
   output.uv = mix(input.uv0, input.uv1, vec2<f32>(quadU, quadV));
-  output.color = input.color;
+
+  // 0.5.0+: 读 compute 写的 warmth,乘到 color.alpha 上(亮度受 warmth 调制)
+  let w = cells[iid];
+  output.color = vec4<f32>(input.color.rgb, input.color.a * w);
 
   // 计算角落坐标 (左上角为 origin, +x 右, +y 下)
   let corner = input.pos + vec2<f32>(

@@ -1,8 +1,9 @@
 /**
- * @xietuier/matrix-rain · WebGPU Renderer (0.4.0+ Phase 4)
+ * @xietuier/matrix-rain · WebGPU Renderer (0.4.0+ Phase 4, 0.5.0 重建 compute)
  *
  * **职责**: 8K+fontSize 2 等极端场景下,GPU 并行 warmth 阻尼 + instanced 渲染
  * - WebGPU compute shader 跑 warmth 阻尼(并行,1-2ms for 8M cells)
+ * - vertex shader 读 compute 写的 warmth 调色,完整闭环
  * - instanced render pipeline 共享 atlas 纹理(同 WebGL2 路径)
  * - 异步 init (`await navigator.gpu.requestAdapter()`)
  *
@@ -32,6 +33,7 @@ import {
   RENDER_FRAGMENT_SHADER,
   TRAIL_VERTEX_SHADER,
   TRAIL_FRAGMENT_SHADER,
+  COMPUTE_WARMTH_SHADER,
   INSTANCE_STRIDE_FLOATS,
   INSTANCE_STRIDE_BYTES,
 } from './webgpu-shaders';
@@ -45,6 +47,7 @@ import {
   type GPUTextureView,
   type GPUSampler,
   type GPURenderPipeline,
+  type GPUComputePipeline,
   type GPUBindGroup,
   type GPUBindGroupLayout,
   type GPUCommandBuffer,
@@ -60,6 +63,11 @@ import {
 const VERTEX_UNIFORMS_SIZE = 16; // 4 floats × 4 bytes
 /** Trail color: rgba (16 bytes) */
 const TRAIL_COLOR_SIZE = 16; // 4 floats × 4 bytes
+/**
+ * WarmthParams uniform: 12 floats = 48 bytes (16-byte 对齐要求)
+ * 字段顺序必须与 WGSL struct 一致。
+ */
+const WARMTH_PARAMS_SIZE = 48;
 
 export class WebGPURenderer implements MatrixRainRenderer {
   readonly type: RendererImpl = 'webgpu';
@@ -78,22 +86,29 @@ export class WebGPURenderer implements MatrixRainRenderer {
   private _atlasLookup: Map<number, AtlasUV> | null = null;
   private _charsetMap: Map<number, number> | null = null;
 
-  /** Pipelines (0.4.1+: 移除 fake compute pass, 只剩 render + trail) */
+  /** Pipelines (0.5.0+: 恢复 compute pass, render + trail + compute 三件套) */
   private _renderPipeline: GPURenderPipeline | null = null;
   private _trailPipeline: GPURenderPipeline | null = null;
+  private _computePipeline: GPUComputePipeline | null = null;
 
   /** Bind group layouts */
-  private _renderBindGroupLayout: GPUBindGroupLayout | null = null;
+  private _renderBindGroupLayout: GPUBindGroupLayout | null = null; // group(0) for render
   private _trailBindGroupLayout: GPUBindGroupLayout | null = null;
+  private _computeBindGroupLayout: GPUBindGroupLayout | null = null;
+  private _renderCellsBindGroupLayout: GPUBindGroupLayout | null = null; // group(1) for render
 
   /** Bind groups */
   private _renderBindGroup: GPUBindGroup | null = null;
   private _trailBindGroup: GPUBindGroup | null = null;
+  private _computeBindGroup: GPUBindGroup | null = null;
+  private _renderCellsBindGroup: GPUBindGroup | null = null;
 
   /** Buffers */
   private _instanceBuffer: GPUBuffer | null = null;
   private _vertexUniformsBuffer: GPUBuffer | null = null;
   private _trailColorBuffer: GPUBuffer | null = null;
+  private _cellsBuffer: GPUBuffer | null = null; // compute 写,vertex 读
+  private _warmthParamsBuffer: GPUBuffer | null = null;
 
   /** atlas texture + sampler */
   private _atlasTex: GPUTexture | null = null;
@@ -104,6 +119,7 @@ export class WebGPURenderer implements MatrixRainRenderer {
 
   /** Per-frame CPU data */
   private _instanceData: Float32Array | null = null;
+  private _instanceCount = 0; // cols * rows, 决定 cells buffer 长度
   private _cellSizePx = 32;
   private _charset = '';
   private _w = 0;
@@ -196,6 +212,12 @@ export class WebGPURenderer implements MatrixRainRenderer {
     // 8. Create bind groups
     this._createBindGroups(this._device);
 
+    // 9. 初始化 cellsBuffer 为 0(compute 第一次跑需要非 undefined 内存)
+    // 0.5.0 修复 P0-3 (原 0.4.0 compute buffer 创建后从未写入,首次 dispatch 读 undefined 内存)
+    if (this._cellsBuffer && this._queue) {
+      this._queue.writeBuffer(this._cellsBuffer, 0, new Float32Array(this._instanceCount));
+    }
+
     // 0.4.1+ 修复: engine 不 await init(), 用此标志告诉 render/beginFrame/drawChar 现在可以工作
     this._initialized = true;
   }
@@ -221,14 +243,14 @@ export class WebGPURenderer implements MatrixRainRenderer {
     if (!this._initialized) return; // init 还没完成
     if (this._drawCallIdx === 0) return;
     if (!this._ctx || !this._instanceData) return;
-    // state 暂未在 render 中用到(0.4.1+ 移除 compute warmth 之后),保留参数为接口一致
-    void state;
+    void _dt;
 
     const device = this._device;
     const queue = this._queue;
 
-    // 1. Update vertex uniform buffer (viewport + cellSize)
+    // 1. Update uniforms (vertex + warmth params)
     this._updateVertexUniforms();
+    this._updateWarmthParams(state);
 
     // 2. Upload instance buffer 的"用到的部分"
     queue.writeBuffer(
@@ -242,7 +264,18 @@ export class WebGPURenderer implements MatrixRainRenderer {
     // 3. Create command encoder
     const encoder = device.createCommandEncoder();
 
-    // 4. Render pass (0.4.1+: 移除 fake compute pass, 直接 render)
+    // 4. 0.5.0+ 恢复: Compute pass (warmth 阻尼并行计算)
+    //    dispatch 后 cells 写入新 warmth, render pass 紧接其后会读
+    if (this._computePipeline && this._computeBindGroup && this._instanceCount > 0) {
+      const computePass = encoder.beginComputePass();
+      computePass.setPipeline(this._computePipeline);
+      computePass.setBindGroup(0, this._computeBindGroup);
+      const workgroupCount = Math.ceil(this._instanceCount / 64);
+      computePass.dispatchWorkgroups(workgroupCount);
+      computePass.end();
+    }
+
+    // 5. Render pass
     const currentTexture = this._ctx.getCurrentTexture();
     const textureView = currentTexture.createView() as GPUTextureView;
 
@@ -257,20 +290,24 @@ export class WebGPURenderer implements MatrixRainRenderer {
       ],
     });
 
-    // 4a. Trail (full-screen fade quad)
+    // 5a. Trail (full-screen fade quad)
     renderPass.setPipeline(this._trailPipeline!);
     renderPass.setBindGroup(0, this._trailBindGroup!);
     renderPass.draw(4);
 
-    // 4b. Character instanced draw — 本帧实际写入的 cell 数
+    // 5b. Character instanced draw — 本帧实际写入的 cell 数
+    //     0.5.0+: 额外 setBindGroup(1, _renderCellsBindGroup) 让 vertex shader 读 cells warmth
     renderPass.setPipeline(this._renderPipeline!);
     renderPass.setVertexBuffer(0, this._instanceBuffer!);
     renderPass.setBindGroup(0, this._renderBindGroup!);
+    if (this._renderCellsBindGroup) {
+      renderPass.setBindGroup(1, this._renderCellsBindGroup);
+    }
     renderPass.draw(4, this._drawCallIdx);
 
     renderPass.end();
 
-    // 5. Submit
+    // 6. Submit
     queue.submit([encoder.finish() as GPUCommandBuffer]);
   }
 
@@ -397,10 +434,10 @@ export class WebGPURenderer implements MatrixRainRenderer {
     });
   }
 
-  // ============ Internal: Bind Group Layouts (0.4.1+: 移除 compute) ============
+  // ============ Internal: Bind Group Layouts (0.5.0+: compute + render group(1) cells) ============
 
   private _createBindGroupLayouts(device: GPUDevice): void {
-    // Render bind group layout: uniform viewport + atlas texture + sampler
+    // Render bind group layout @group(0): uniform viewport + atlas texture + sampler
     this._renderBindGroupLayout = device.createBindGroupLayout({
       entries: [
         {
@@ -421,6 +458,18 @@ export class WebGPURenderer implements MatrixRainRenderer {
       ],
     });
 
+    // Render bind group layout @group(1): cells storage buffer (vertex shader 读 warmth)
+    // 0.5.0+: 这是 P0-2 修复关键 —— compute 输出 cells, vertex shader 在这里读出来调色
+    this._renderCellsBindGroupLayout = device.createBindGroupLayout({
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.VERTEX,
+          buffer: { type: 'read-only-storage' },
+        },
+      ],
+    });
+
     // Trail bind group layout: uniform trail color
     this._trailBindGroupLayout = device.createBindGroupLayout({
       entries: [
@@ -431,15 +480,32 @@ export class WebGPURenderer implements MatrixRainRenderer {
         },
       ],
     });
+
+    // Compute bind group layout: cells storage(rw) + params uniform
+    // 0.5.0 修复 P0-4: cells 必须是 `type: 'storage'`(可读写),与 WGSL `read_write` 配对
+    this._computeBindGroupLayout = device.createBindGroupLayout({
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'uniform' },
+        },
+      ],
+    });
   }
 
-  // ============ Internal: Bind Groups (Task 1.3) ============
+  // ============ Internal: Bind Groups (0.5.0+: +compute +render@1 cells) ============
 
   private _createBindGroups(device: GPUDevice): void {
     if (!this._vertexUniformsBuffer || !this._atlasTex || !this._sampler) return;
-    if (!this._trailColorBuffer) return;
+    if (!this._trailColorBuffer || !this._cellsBuffer || !this._warmthParamsBuffer) return;
 
-    // Render bind group
+    // Render bind group @group(0)
     this._renderBindGroup = device.createBindGroup({
       layout: this._renderBindGroupLayout!,
       entries: [
@@ -449,21 +515,37 @@ export class WebGPURenderer implements MatrixRainRenderer {
       ],
     });
 
+    // Render bind group @group(1): cells storage (vertex shader 读 warmth)
+    this._renderCellsBindGroup = device.createBindGroup({
+      layout: this._renderCellsBindGroupLayout!,
+      entries: [{ binding: 0, resource: { buffer: this._cellsBuffer } }],
+    });
+
     // Trail bind group
     this._trailBindGroup = device.createBindGroup({
       layout: this._trailBindGroupLayout!,
       entries: [{ binding: 0, resource: { buffer: this._trailColorBuffer } }],
     });
+
+    // Compute bind group: cells(rw) + params
+    this._computeBindGroup = device.createBindGroup({
+      layout: this._computeBindGroupLayout!,
+      entries: [
+        { binding: 0, resource: { buffer: this._cellsBuffer } },
+        { binding: 1, resource: { buffer: this._warmthParamsBuffer } },
+      ],
+    });
   }
 
-  // ============ Internal: Pipelines (0.4.1+: 移除 compute pipeline) ============
+  // ============ Internal: Pipelines (0.5.0+: +compute pipeline) ============
 
   private _createPipelines(device: GPUDevice, format: string): void {
     // Render pipeline (instanced draw)
     const vsModule = device.createShaderModule({ code: RENDER_VERTEX_SHADER });
     const fsModule = device.createShaderModule({ code: RENDER_FRAGMENT_SHADER });
+    // 0.5.0+: render pipeline 用 2 个 bind group(@group(0) uniforms/atlas, @group(1) cells)
     const renderLayout = device.createPipelineLayout({
-      bindGroupLayouts: [this._renderBindGroupLayout!],
+      bindGroupLayouts: [this._renderBindGroupLayout!, this._renderCellsBindGroupLayout!],
     });
     this._renderPipeline = device.createRenderPipeline({
       layout: renderLayout,
@@ -524,12 +606,26 @@ export class WebGPURenderer implements MatrixRainRenderer {
       },
       primitive: { topology: 'triangle-strip' },
     });
+
+    // 0.5.0+ 恢复: compute pipeline (warmth 阻尼并行计算)
+    const computeModule = device.createShaderModule({ code: COMPUTE_WARMTH_SHADER });
+    const computeLayout = device.createPipelineLayout({
+      bindGroupLayouts: [this._computeBindGroupLayout!],
+    });
+    this._computePipeline = device.createComputePipeline({
+      layout: computeLayout,
+      compute: {
+        module: computeModule,
+        entryPoint: 'main',
+      },
+    });
   }
 
   // ============ Internal: Buffers ============
 
   private _allocateBuffers(device: GPUDevice, cols: number, rows: number): void {
     const count = cols * rows;
+    this._instanceCount = count;
     if (count === 0) return;
 
     // Instance buffer (per-frame, per-cell data for drawChar)
@@ -539,13 +635,24 @@ export class WebGPURenderer implements MatrixRainRenderer {
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
 
-    // Uniform buffers (0.4.1+: 移除 cellsBuffer + warmthParamsBuffer)
+    // Cells storage buffer (compute 写, vertex 读)
+    // 0.5.0+: 1 f32/cell, 8.4M cells × 4 bytes = 32MB(原 0.4.0 nested-struct 256MB)
+    this._cellsBuffer = device.createBuffer({
+      size: count * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+
+    // Uniform buffers
     this._vertexUniformsBuffer = device.createBuffer({
       size: VERTEX_UNIFORMS_SIZE,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this._trailColorBuffer = device.createBuffer({
       size: TRAIL_COLOR_SIZE,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    this._warmthParamsBuffer = device.createBuffer({
+      size: WARMTH_PARAMS_SIZE,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
   }
@@ -564,6 +671,36 @@ export class WebGPURenderer implements MatrixRainRenderer {
     this._queue.writeBuffer(this._vertexUniformsBuffer, 0, data);
   }
 
+  /**
+   * 0.5.0+ 修复 P0-6: warmth params 从 state.cfg 读取,不再硬编码
+   *
+   * 字段顺序必须与 WGSL `WarmthParams` struct 严格一致(12 floats = 48 bytes,16-byte 对齐):
+   *   lightCenterX, lightCenterY, driftSpeedX, driftSpeedY,
+   *   warmthRadius, warmthLerp, gridRows, gridCols,
+   *   wallTime, _pad0, _pad1, _pad2
+   */
+  private _updateWarmthParams(state: MatrixRainState): void {
+    if (!this._queue || !this._warmthParamsBuffer) return;
+    if (this._instanceCount === 0) return;
+
+    const data = new Float32Array([
+      state.lightCenter.x, // 0: lightCenterX
+      state.lightCenter.y, // 1: lightCenterY
+      state.driftSpeed.x, // 2: driftSpeedX
+      state.driftSpeed.y, // 3: driftSpeedY
+      state.cfg.warmthRadius, // 4: warmthRadius
+      state.cfg.warmthLerp, // 5: warmthLerp
+      state.i, // 6: gridRows (= state.i)
+      state.r, // 7: gridCols (= state.r)
+      state.wallTime, // 8: wallTime (驱动 light drift)
+      0, // 9: _pad0
+      0, // 10: _pad1
+      0, // 11: _pad2
+    ]);
+
+    this._queue.writeBuffer(this._warmthParamsBuffer, 0, data);
+  }
+
   /** Public hook: 引擎 resize grid 时重新分配 instance buffer */
   public resizeGrid(cols: number, rows: number): void {
     if (!this._device || this._destroyed) return;
@@ -571,6 +708,7 @@ export class WebGPURenderer implements MatrixRainRenderer {
 
     // 重新分配 instance buffer (CPU + GPU)
     const count = cols * rows;
+    this._instanceCount = count;
     if (count === 0) {
       this._instanceData = null;
       return;
@@ -584,5 +722,18 @@ export class WebGPURenderer implements MatrixRainRenderer {
     });
     // 注: render/trail bindgroup 只引用 vertexUniformsBuffer + atlas + sampler + trailColorBuffer
     //     都没换, 不必重建 bindgroup. instanceBuffer 通过 setVertexBuffer 直接挂入 render pass.
+
+    // 0.5.0+: cells storage buffer 也要重建 + 重新写 0(compute 需要非 undefined 内存)
+    //     bindgroup 也要重建(cells buffer 引用变了)
+    if (this._cellsBuffer) this._cellsBuffer.destroy();
+    this._cellsBuffer = this._device.createBuffer({
+      size: count * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    if (this._queue) {
+      this._queue.writeBuffer(this._cellsBuffer, 0, new Float32Array(count));
+    }
+    // 重绑 cells 到 render@group(1) + compute@group(0)
+    this._createBindGroups(this._device);
   }
 }
