@@ -19,7 +19,11 @@ export default [
     dts: true,
     sourcemap: false,
     clean: true,
-    minify: false,
+    // 0.5.0+: minify 主入口,canvas2d 默认路径 gzip 应 ≤ 32KB
+    // 注: webgl/webgpu 走 dynamic import 仍然保留在 main chunk(未做 splitting),
+    //     因 matrixRain() 是 sync API,工程上需要 sync 拿到 renderer 实例。
+    //     后续 0.6.0 可考虑 Promise 化 matrixRain() 让 webgl/webgpu 真拆出去。
+    minify: true,
     target: 'es2020',
     splitting: false,
     treeshake: true,

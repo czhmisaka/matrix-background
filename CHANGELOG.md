@@ -5,9 +5,11 @@ All notable changes to `@xietuier/matrix-rain` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - 2026-06-10 (WIP · Phase 1 done)
+## [0.5.0] - 2026-06-11
 
-### Added — 真像素测试基建 (P2-1)
+### Added — 真像素测试基建 (P2-1) + WebGPU compute 恢复 + 代码清理
+
+#### P2-1 真像素测试安全网
 
 - **`test/renderer-pixel.mjs`** + **`test/fixtures/pixel-demo.html`**: Playwright headed Chromium 像素对比测试,跨 3 个场景(1080p+fs14 / 1440p+fs8 / 4K+fs4)× 3 个 renderer(canvas2d / webgl / webgpu)共 6 个对比 case。`canvas2d` 作基准,`webgl` / `webgpu` 与基准 95% 像素灰度 |Δ| < 5/255 视为通过。
   - 浏览器端用 `toBlob('image/png')` 编码再 `FileReader.readAsDataURL` 回 Node,避开 4K 33MB RGBA JSON 序列化 OOM。
@@ -15,11 +17,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - WebGPU 在 headless 中常不可用,自动 `⏭` 跳过而非 fail。
   - 支持 `--only <renderer>` / `--scenario <name>` / `--threshold <0..1>` / `--waitMs <ms>` 过滤。
 - **`package.json`** 新增 `"test:pixel": "node test/renderer-pixel.mjs"`。
-- **已知失败 (0.4.1 baseline)**: 当前 0.4.1 webgl 仅 1-4% 匹配 canvas2d(P0-1 假实现),webgpu 1-81%(P0-2/3/4/6 假实现),test:pixel 退出码 1 阻塞 merge — **这正是 0.4.0 fake 灾难的安全网**。
+- 0.4.1 baseline: webgl 仅 1-4% 匹配 canvas2d(P0-1 假实现),webgpu 1-81%(P0-2/3/4/6 假实现),test:pixel 退出码 1 阻塞 merge — **这正是 0.4.0 fake 灾难的安全网**。
+
+#### WebGPU compute pass 重建 (P0-2/3/4/6 修复)
+
+- **P0-2** compute 输出从未被 render pipeline 读取
+  → vertex shader 加 `@group(1) @binding(0) var<storage, read> cells` 并通过
+  `@builtin(instance_index) iid` 读 `cells[iid]` 调色(乘到 color.a)
+- **P0-3** cellsBuffer 创建后从未写入
+  → `_allocateBuffers` 末 + `resizeGrid` 末 `queue.writeBuffer(cells, 0, Float32Array(count))`
+  显式初始化为 0,compute 首次 dispatch 读非 undefined 内存
+- **P0-4** BindGroupLayout `read-only-storage` 与 WGSL `read_write` 不兼容
+  → compute layout 改 `{ type: 'storage' }`(可读写);render@1 layout 用
+  `{ type: 'read-only-storage' }`(vertex 只读)
+- **P0-6** warmth params 硬编码忽略 state
+  → 新增 `_updateWarmthParams(state)` 从 `state.lightCenter/driftSpeed/cfg.warmthRadius/warmthLerp/wallTime` 读取
+- **数据结构简化**: cells 从 `array<Cell>(32 bytes/cell)` 简化为 `array<f32>(4 bytes/cell)`,
+  8.4M cells 内存从 256MB 降至 32MB
+
+#### P2-3 接口清理
+
+- `drawTrail(r, g, b, a, w, h)` → `drawTrail(r, g, b, a)`(所有 renderer 签名同步)
+- canvas2d 内部从 `resize()` 缓存的 `_w/_h` 取视口尺寸(不再依赖 `_ctx.canvas.width`,与 MockCanvas 兼容)
+- webgl/webgpu 形参去掉 `_w/_h` 占位
+
+#### 体积优化
+
+- `tsup.config.ts` 主入口开启 `minify: true`,`dist/index.js` 从 173KB raw / 40KB gzip 降至 **93.8KB raw / 28.8KB gzip**(在 32KB 门禁内)
+- 新增 `test/build-size.mjs` 体积门禁,纳入 `npm test` 主链路
+- 已知: webgl/webgpu 仍 inline 在主 chunk(因 `matrixRain()` 是 sync API,无法做 splitting);**0.6.0+** 可考虑 Promise 化 API 把 webgl/webgpu 真拆出去
 
 ### Notes
 
-- 0.5.0 Phase 1 落地;Phase 2-4 仍在规划(`task_plan_0.5.0.md`)。
+- WebGPU 真机(Chrome 113+)上 nonZeroRatio=100% 验证需用户手动: 启动 `site/dist-demo/index.html?renderer=webgpu` 跑 5 秒不抛 validation error
+- 0.5.0 完成全部 4 个 Phase(`task_plan_0.5.0.md`)
 
 ## [0.4.1] - 2026-06-10
 
