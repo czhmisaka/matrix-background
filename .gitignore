@@ -41,3 +41,6 @@ coverage/
 # Misc
 .cache/
 .tmp/
+
+# 临时诊断产物 (0.4.3 race bug 调查用,不入库)
+docs/diag/
