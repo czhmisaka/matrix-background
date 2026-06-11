@@ -105,13 +105,12 @@ export interface MatrixRainRenderer {
   /**
    * 残影拖尾: 全屏 alpha 矩形(把上一帧的 canvas 整体按 alpha 衰减)
    * - 代替 `ctx.fillStyle = rgba; ctx.fillRect(0, 0, w, h)`
-   * - canvas2d: 直接 fillRect
+   * - canvas2d: 直接 fillRect(0, 0, canvas.width, canvas.height)
    * - webgl:   全屏 quad + blend, blend 模式 src*alpha + dst*(1-alpha)
    *
    * @param r g b a  颜色分量 0-255 / 0-1
-   * @param w h      视口尺寸(CSS 像素)
    */
-  drawTrail(r: number, g: number, b: number, a: number, w: number, h: number): void;
+  drawTrail(r: number, g: number, b: number, a: number): void;
 
   /**
    * 设置当前 charset(下次 drawChar 用)

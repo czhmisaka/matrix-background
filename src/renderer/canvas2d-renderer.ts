@@ -102,10 +102,10 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
 
   // ============ Drawing surface (per-cell / per-frame) ============
 
-  drawTrail(r: number, g: number, b: number, a: number, w: number, h: number): void {
+  drawTrail(r: number, g: number, b: number, a: number): void {
     if (!this._ctx || this._paused) return;
     this._ctx.fillStyle = toRgba(r, g, b, a);
-    this._ctx.fillRect(0, 0, w, h);
+    this._ctx.fillRect(0, 0, this._ctx.canvas.width, this._ctx.canvas.height);
   }
 
   setFontSize(px: number): void {

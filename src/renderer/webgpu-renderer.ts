@@ -299,7 +299,7 @@ export class WebGPURenderer implements MatrixRainRenderer {
 
   // ============ Drawing surface (per-cell / per-frame) ============
 
-  drawTrail(r: number, g: number, b: number, a: number, _w: number, _h: number): void {
+  drawTrail(r: number, g: number, b: number, a: number): void {
     if (this._paused) return;
     // 直接更新 trail uniform buffer
     if (this._queue && this._trailColorBuffer) {

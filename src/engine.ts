@@ -702,7 +702,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       void totalHue; // 保留(若以后需要)
 
       // 残影拖尾(0.4.0+ 走 renderer)
-      state.renderer.drawTrail(8, 8, 18, state.cfg.trailAlpha, state.a, state.o);
+      state.renderer.drawTrail(8, 8, 18, state.cfg.trailAlpha);
       // 0.4.1+: webgl/webgpu 在 drawChar 循环开始前重置内部 cell 计数器
       // canvas2d 不实现此方法(no-op)
       state.renderer.beginFrame?.();
