@@ -704,12 +704,7 @@ export class WebGPURenderer implements MatrixRainRenderer {
   /** Public hook: 引擎 resize grid 时重新分配 instance buffer */
   public resizeGrid(cols: number, rows: number): void {
     if (!this._device || this._destroyed) return;
-    // 0.4.3 修复: 去掉 _initialized 守卫。init() 末尾在 state.r=0 / state.i=0 时分配
-    //   instance buffer,buildGrid() 调 resizeGrid 在 init 完成后(此时 _initialized=true)。
-    //   但旧守卫意图是"init 末尾按 0 分配后,buildGrid 再 alloc 一次"——这是 race,
-    //   实际:buildGrid 一定在 _initialized=true 之后跑,所以守卫是多余的且有害。
-    //   修法:无条件 alloc(若 _device 还没就绪,_allocateBuffers 内部早返回)。
-    //   (实际:resizeGrid 不会在 _device 为空时调,引擎时序保证)
+    if (!this._initialized) return; // init() 还没建好 GPU resources
 
     // 重新分配 instance buffer (CPU + GPU)
     const count = cols * rows;

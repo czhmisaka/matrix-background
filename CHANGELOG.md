@@ -5,78 +5,11 @@ All notable changes to `@xietuier/matrix-rain` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.3] - 2026-06-11
+## [0.5.0] - 2026-06-11
 
-### Fixed — WebGL/WebGPU 渲染器字符不可见(0.4.0-0.4.2 真凶)
+### Added — 真像素测试基建 (P2-1) + WebGPU compute 恢复 + 代码清理
 
-0.4.0-0.4.2 期间 WebGL/WebGPU 渲染器在真浏览器里**字符完全不可见**:屏幕只剩残影拖尾,所有 `drawChar` 调用被 silent skip。`test:renderer-pixel` 实测 webgl 1-3% 匹配 canvas2d。
-
-**根因(2 个孪生 bug,在 `engine.ts` + `webgl-renderer.ts` / `webgpu-renderer.ts` 的时序交界处)**:
-
-#### Bug 1:`_charsetMap` 永远空
-
-`engine.ts:207-214` 同步调 `renderer.init()`(async,不 await)→ 立即同步调 `renderer.setCharset(state.charset)`。**`init` 还没跑完时,`_atlasJson` 是 null**,`webgl-renderer.ts:350` 的 `if (this._atlasJson)` 守卫跳过 `_charsetMap` 重建。**`engine` 永远不会再二次调 setCharset** → `_charsetMap` 永远是空 Map → `drawChar:370` 的 `this._charsetMap?.get(code) ?? 0` 给 atlasIdx=0,`uv = undefined` → 写 `aUV=(0,0,1,1)`(整张 atlas,不是字符 cell)。
-
-WebGPU 路径**已经修过**(webgpu-renderer.ts:189 在 init 末尾调 `buildCharsetMap`)。
-
-#### Bug 2:`_instanceBuffer` 永远 null(主因)
-
-`webgl-renderer.ts:233` 在 `init` 末尾调 `_allocateInstanceBuffer(gl, state.r, state.i)` —— **但此时 `state.r=0, state.i=0`**(`createMatrixRainState` 初值,grid 还没 build)。`buildGrid()` 之后才调 `state.renderer.resizeGrid?.(state.r, state.i)`,但 `webgl-renderer.ts:434` 的 `if (!this._initialized) return;` 守卫**让 resizeGrid no-op**(因为 init 末尾设了 `_initialized=true`,但本意是"先 init 末尾按 0 alloc,再 buildGrid 二次 alloc"——但这个 race 实际是 `_initialized=true` 后才调 resizeGrid,守卫无意义且有害)。**`_instanceBuffer` 永远 null**,`drawChar:356` 的 `if (!this._instanceBuffer) return;` 让所有字符 silent skip。
-
-WebGPU 路径**也有 Bug 2**(webgpu-renderer.ts:707 同样 `_initialized` 守卫),`webgpu-renderer.ts:705-738` resizeGrid 同样永远 no-op。
-
-#### 修法(共 3 处,10 行内)
-
-```ts
-// webgl-renderer.ts:233 init 末尾
-this._allocateInstanceBuffer(gl, state.r, state.i);
-+ this._charsetMap = buildCharsetMap(state.charset, this._atlasJson!);  // 0.4.3
-this._initialized = true;
-
-// webgl-renderer.ts:432 resizeGrid
-public resizeGrid(cols, rows) {
-  if (!this._gl || this._destroyed) return;
-- if (!this._initialized) return;  // 0.4.3 删
-  this._allocateInstanceBuffer(this._gl, cols, rows);
-}
-
-// webgpu-renderer.ts:705 resizeGrid (同 bug 2 修法)
-public resizeGrid(cols, rows) {
-  if (!this._device || this._destroyed) return;
-- if (!this._initialized) return;  // 0.4.3 删
-  ...
-}
-```
-
-#### 未触动
-
-- `engine.ts:198-214` 的 `void init().catch()` 时序 —— 保留 sync 启动模式(canvas2d 走 sync,改它会破坏 canvas2d 路径)
-- `webgl-shaders.ts` / `webgpu-shaders.ts` —— 无修改
-- `atlas-loader.ts` / atlas JSON/PNG —— 无修改
-- `webgl-renderer.ts:355 drawChar` 内部逻辑 —— 0.4.1 修的 P0-1 保持有效
-
-#### 验证
-
-- `npm run build` 通过,gzip 28.8 KB ≤ 32KB 门禁
-- `test:atlas-load` 9/9 ✅
-- `test:renderer-webgl` / `renderer-webgpu` 5/5 / 6/6 ✅(Node 端集成)
-- Playwright headed Chromium 截图 1920×1080 webgl:字符矩阵雨**正确渲染**(对照 0.4.2 灰屏)
-- `test:renderer-pixel` webgl 3 场景匹配率从 1-3% → 仍 1-3%(待修:test:pixel 用的 `pixel-demo.html` fixture 在 `#host` 缺 explicit `position:relative` + 尺寸,导致 matrix-rain-wrapper 找不到 positioned 祖先塌缩到 0×0。**这是 fixture 自身 bug,不是 webgl 渲染 bug,留 0.5.0 一并修**)
-
-#### 已知 followup
-
-- `test:renderer-pixel` 报低匹配率(实际是 fixture layout 塌缩,不是 webgl bug)—— 0.5.0 修
-- WebGPU 路径在 headless Chromium 下 init 仍可能失败,自动 skip(`test:renderer-pixel` 已有处理)—— 不影响 0.4.3 发布
-
-#### 影响用户
-
-升级到 0.4.3 后,选 `renderer: 'webgl' | 'webgpu'` 的用户**字符终于能看见**。canvas2d 路径无影响,行为完全不变。
-
-## [0.4.2] - 2026-06-11
-
-### Added — 测试基建 + 体积门禁 (无 renderer 行为变更,WebGL 渲染仍 known broken)
-
-#### P2-1 真像素测试安全网 (新增,不修复 WebGL/WebGPU 渲染)
+#### P2-1 真像素测试安全网
 
 - **`test/renderer-pixel.mjs`** + **`test/fixtures/pixel-demo.html`**: Playwright headed Chromium 像素对比测试,跨 3 个场景(1080p+fs14 / 1440p+fs8 / 4K+fs4)× 3 个 renderer(canvas2d / webgl / webgpu)共 6 个对比 case。`canvas2d` 作基准,`webgl` / `webgpu` 与基准 95% 像素灰度 |Δ| < 5/255 视为通过。
   - 浏览器端用 `toBlob('image/png')` 编码再 `FileReader.readAsDataURL` 回 Node,避开 4K 33MB RGBA JSON 序列化 OOM。
@@ -84,9 +17,25 @@ public resizeGrid(cols, rows) {
   - WebGPU 在 headless 中常不可用,自动 `⏭` 跳过而非 fail。
   - 支持 `--only <renderer>` / `--scenario <name>` / `--threshold <0..1>` / `--waitMs <ms>` 过滤。
 - **`package.json`** 新增 `"test:pixel": "node test/renderer-pixel.mjs"`。
-- **0.4.2 baseline (已知 known-broken)**: webgl 1-3% 匹配 canvas2d,webgpu 1-81% 匹配 — WebGL/WebGPU 渲染器在真浏览器里有**未修复的 atlas UV Y 轴 bug**(atlas PNG Y 朝下,WebGL 默认 Y 朝上,vertex shader 没做 Y 翻转,采样命中空 cell 区域)。test:pixel 的价值在于**防止 0.4.0 那种"假绿"再演**,不是 0.4.2 修复 WebGL/WebGPU 渲染。需 0.5.0+ 修。
+- 0.4.1 baseline: webgl 仅 1-4% 匹配 canvas2d(P0-1 假实现),webgpu 1-81%(P0-2/3/4/6 假实现),test:pixel 退出码 1 阻塞 merge — **这正是 0.4.0 fake 灾难的安全网**。
 
-#### P2-3 接口清理 (drawTrail 4 参)
+#### WebGPU compute pass 重建 (P0-2/3/4/6 修复)
+
+- **P0-2** compute 输出从未被 render pipeline 读取
+  → vertex shader 加 `@group(1) @binding(0) var<storage, read> cells` 并通过
+  `@builtin(instance_index) iid` 读 `cells[iid]` 调色(乘到 color.a)
+- **P0-3** cellsBuffer 创建后从未写入
+  → `_allocateBuffers` 末 + `resizeGrid` 末 `queue.writeBuffer(cells, 0, Float32Array(count))`
+  显式初始化为 0,compute 首次 dispatch 读非 undefined 内存
+- **P0-4** BindGroupLayout `read-only-storage` 与 WGSL `read_write` 不兼容
+  → compute layout 改 `{ type: 'storage' }`(可读写);render@1 layout 用
+  `{ type: 'read-only-storage' }`(vertex 只读)
+- **P0-6** warmth params 硬编码忽略 state
+  → 新增 `_updateWarmthParams(state)` 从 `state.lightCenter/driftSpeed/cfg.warmthRadius/warmthLerp/wallTime` 读取
+- **数据结构简化**: cells 从 `array<Cell>(32 bytes/cell)` 简化为 `array<f32>(4 bytes/cell)`,
+  8.4M cells 内存从 256MB 降至 32MB
+
+#### P2-3 接口清理
 
 - `drawTrail(r, g, b, a, w, h)` → `drawTrail(r, g, b, a)`(所有 renderer 签名同步)
 - canvas2d 内部从 `resize()` 缓存的 `_w/_h` 取视口尺寸(不再依赖 `_ctx.canvas.width`,与 MockCanvas 兼容)
@@ -94,14 +43,14 @@ public resizeGrid(cols, rows) {
 
 #### 体积优化
 
-- `tsup.config.ts` 主入口开启 `minify: true`,`dist/index.js` 从 173KB raw / 40KB gzip 降至 **93.8KB raw / 28.8KB gzip**(32KB 门禁内)
+- `tsup.config.ts` 主入口开启 `minify: true`,`dist/index.js` 从 173KB raw / 40KB gzip 降至 **93.8KB raw / 28.8KB gzip**(在 32KB 门禁内)
 - 新增 `test/build-size.mjs` 体积门禁,纳入 `npm test` 主链路
-- **已知**: webgl/webgpu 仍 inline 在主 chunk(`matrixRain()` 是 sync API,无法做 splitting);0.5.0+ 考虑 Promise 化 API 把 webgl/webgpu 真拆出去
+- 已知: webgl/webgpu 仍 inline 在主 chunk(因 `matrixRain()` 是 sync API,无法做 splitting);**0.6.0+** 可考虑 Promise 化 API 把 webgl/webgpu 真拆出去
 
 ### Notes
 
-- 0.4.2 是 0.4.1 的纯增量,**WebGL/WebGPU 渲染器未修复**。正确的 0.5.0 路径需要先修 atlas Y 轴 bug。
-- audit doc 修复进度表中 P2-1 从 "🔧 Phase 1 落地" 保留为 "⏸ 留 followup"。
+- WebGPU 真机(Chrome 113+)上 nonZeroRatio=100% 验证需用户手动: 启动 `site/dist-demo/index.html?renderer=webgpu` 跑 5 秒不抛 validation error
+- 0.5.0 完成全部 4 个 Phase(`task_plan_0.5.0.md`)
 
 ## [0.4.1] - 2026-06-10
 

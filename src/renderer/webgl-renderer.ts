@@ -232,12 +232,6 @@ export class WebGLRenderer implements MatrixRainRenderer {
     // 7. Allocate instance buffer (lazy, expanded on resize)
     this._allocateInstanceBuffer(gl, state.r, state.i);
 
-    // 0.4.3 修复: engine 同步调 setCharset(state.charset) 在 init() 完成前,
-    //   此时 _atlasJson 还是 null → _charsetMap 永远空 → drawChar 写 instance buffer
-    //   时 atlasIdx=0, uv=undefined → aUV=(0,0,1,1) (整张 atlas),字符位置/形态错乱。
-    //   修法:init 末尾用已加载的 atlasJson 重新 buildCharsetMap(state.charset)。
-    this._charsetMap = buildCharsetMap(state.charset, this._atlasJson!);
-
     // 0.4.1+ 修复: engine 不 await init(), 用此标志告诉 render/beginFrame/drawChar 现在可以工作了
     this._initialized = true;
   }
@@ -437,11 +431,7 @@ export class WebGLRenderer implements MatrixRainRenderer {
   /** Public hook: engine.ts resize 时调, 重新分配 instance buffer */
   public resizeGrid(cols: number, rows: number): void {
     if (!this._gl || this._destroyed) return;
-    // 0.4.3 修复: 去掉 _initialized 守卫。init() 末尾在 state.r=0 / state.i=0 时分配
-    //   instance buffer(此时 _initialized 仍 false),然后 buildGrid() 在 init 完成后
-    //   调 resizeGrid —— 旧守卫会让这次 alloc 被跳过,导致 _instanceBuffer 永远 null,
-    //   drawChar 全部 silent skip,屏幕只剩 trail 残影。
-    //   新行为:无条件 alloc,init 末尾那次按 0×0 的浪费 alloc 也会被覆盖。
+    if (!this._initialized) return; // init() 还没创建 _vbo, 跳过(init 末尾会做首次 allocate)
     this._allocateInstanceBuffer(this._gl, cols, rows);
   }
 
