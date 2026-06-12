@@ -704,8 +704,9 @@ export class WebGPURenderer implements MatrixRainRenderer {
   /** Public hook: 引擎 resize grid 时重新分配 instance buffer */
   public resizeGrid(cols: number, rows: number): void {
     if (!this._device || this._destroyed) return;
-    if (!this._initialized) return; // init() 还没建好 GPU resources
-
+    // 0.4.3 修复: buildGrid 在 init() 返回前调 resizeGrid 重新分配 instance buffer.
+    //   之前的 _initialized 守卫把这次调用挡掉 → _instanceBuffer 保持 init 时按
+    //   0×0 分配的小 buffer → drawChar 全部 silent skip → 屏幕只剩残影拖尾.
     // 重新分配 instance buffer (CPU + GPU)
     const count = cols * rows;
     this._instanceCount = count;

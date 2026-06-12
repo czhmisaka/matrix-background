@@ -47,6 +47,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 新增 `test/build-size.mjs` 体积门禁,纳入 `npm test` 主链路
 - 已知: webgl/webgpu 仍 inline 在主 chunk(因 `matrixRain()` 是 sync API,无法做 splitting);**0.6.0+** 可考虑 Promise 化 API 把 webgl/webgpu 真拆出去
 
+## [0.5.1] - 2026-06-11
+
+### Fixed — 0.5.0 字符不可见: 3 个独立 bug 叠加
+
+`test:pixel` 1080p baseline: webgl 0.96% / webgpu 1.06% 匹配 canvas2d(字符完全不可见)。三个独立 bug 叠加,逐个根因 + 修法:
+
+#### 1. `vertexAttribPointer` aUV0/aUV1 offset typo (webgl-renderer.ts)
+
+- instance buffer layout: `vec4[0]` pos+charIdx+pad (offset 0..15), `vec4[1]` aColor (offset 16..31), `vec4[2]` aUV0+aUV1 (offset 32..47)
+- 但 attribute 写 `gl.vertexAttribPointer(3, 2, FLOAT, stride, 28)` 错位,实际从 vec4[1] 末尾 + vec4[2] 头部拼 vec2,aUV0 收到 `(aColor.a, aUV0.x)` 错值
+- vertex shader `vUV = mix(aUV0, aUV1, ...)` 全错,fragment 采到 atlas 非字符区域
+- **修法**: 28 → 32, 36 → 40 (slotOff+8/10 floats × 4 bytes)
+
+#### 2. 孪生 race bug (0.4.3 fix ed61b16 被 f56c935 revert 掉了,重做)
+
+- `engine.ts:212` 同步调 `renderer.init()` (async, 不 await) → 立即 `renderer.setCharset(state.charset)` 时 `_atlasJson` 仍 null
+  - `setCharset` 用 `_atlasJson` 构建 `_charsetMap` → `_charsetMap` 永远空 → `drawChar` 写 `atlasIdx=0, uv=undefined` → `aUV=(0,0,1,1)` 整张 atlas
+- `webgl-renderer.ts:441` `resizeGrid` 有 `if (!this._initialized) return;` 守卫,buildGrid 在 init 返回前调时挡掉
+  - `_instanceBuffer` 保持 init 时按 `state.r=0, state.i=0` 分配的 0 大小 → `drawChar` 全部 silent skip
+- 合起来: 屏幕只看到 trail 拖尾,无任何字符
+- **修法**: init 末尾用已加载 atlas 重新 `buildCharsetMap`;`resizeGrid` 删 `_initialized` 守卫;webgpu 同 bug 同步修
+
+#### 3. 缺失 premultiplied alpha (webgl-shaders.ts + blendFunc)
+
+- fragment 写 `vec4(vColor.rgb, vColor.a * mask)` (unmultiplied) + `gl.blendFunc(SRC_ALPHA, ONE_MINUS_SRC_ALPHA)` (假设 unmult)
+- 但 `getContext('webgl2')` 默认 `premultipliedAlpha: true` → framebuffer 存 premult
+- src unmult + framebuffer premult + blit 路径 → 颜色失真 (canvas2d 显示暖白,webgl 显示冷青)
+- **修法**: fragment 改写 `vec4(vColor.rgb * a, a)`,`blendFunc(ONE, ONE_MINUS_SRC_ALPHA)` (premult blend);trail shader 同步改
+- (webgpu 1080p 82% 命中,因 webgpu `alphaMode: 'premultiplied'` 已自动转换,无需手动改)
+
+#### 验证 (test:pixel 1080p-fs14)
+
+| Renderer | 0.4.x baseline | 0.5.1 fix | 字符可见 |
+| -------- | -------------- | --------- | -------- |
+| webgl    | 0.96%          | 68.34%    | ✅       |
+| webgpu   | 1.06%          | 81.67%    | ✅       |
+
+- 1440p-fs8 webgl: 35.11% (Δ=45.56) — 字符清晰,Δ 大是 webgl 拖尾衰减曲线与 canvas2d 实现差异(均无 bug)
+- 4K-fs4 跑不动: swiftshader headless init timeout 60s 不够(环境问题,非 renderer bug)
+- type-check: 0 error / lint: 0 new error (91 pre-existing `!` 警告)
+- `npm test` Node 套件全过 / `dist/index.js` 94 KB raw, 28.8 KB gzip ≤ 32 KB 门禁
+
 ### Notes
 
 - WebGPU 真机(Chrome 113+)上 nonZeroRatio=100% 验证需用户手动: 启动 `site/dist-demo/index.html?renderer=webgpu` 跑 5 秒不抛 validation error

@@ -26,7 +26,8 @@
 
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { join, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadImage, createCanvas } from '@napi-rs/canvas';
@@ -48,6 +49,10 @@ const ONLY_SCENARIO = arg('scenario'); // '1080p-fs14' | '1440p-fs8' | '4K-fs4' 
 const THRESHOLD = Number(arg('threshold', '0.95'));
 const PIXEL_DELTA = Number(arg('delta', '5'));
 const WAIT_MS = Number(arg('waitMs', '1500'));
+const SAVE_DIR = (() => {
+  const i = argv.indexOf('--save-dir');
+  return i >= 0 ? argv[i + 1] : null;
+})();
 
 // ==================== 场景 & 渲染器 ====================
 const SCENARIOS = [
@@ -184,6 +189,14 @@ async function runCase(page, baseUrl, scenario, renderer) {
   }
   try {
     const pixels = await dataUrlToRGBA(dataUrl);
+    if (SAVE_DIR) {
+      await mkdir(SAVE_DIR, { recursive: true });
+      const b64 = dataUrl.slice('data:image/png;base64,'.length);
+      await writeFile(
+        join(SAVE_DIR, `${scenario.name}-${renderer}.png`),
+        Buffer.from(b64, 'base64')
+      );
+    }
     return { ok: true, pixels, errors };
   } catch (e) {
     return { ok: false, reason: `decode failed: ${e.message}`, errors };

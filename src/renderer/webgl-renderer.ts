@@ -209,13 +209,13 @@ export class WebGLRenderer implements MatrixRainRenderer {
     gl.enableVertexAttribArray(2);
     gl.vertexAttribPointer(2, 4, gl.FLOAT, false, stride, 12);
     gl.vertexAttribDivisor(2, 1);
-    // location 3: aUV0 (vec2) - offset 28
+    // location 3: aUV0 (vec2) - offset 32 (slotOff+8 floats × 4 bytes = 32)
     gl.enableVertexAttribArray(3);
-    gl.vertexAttribPointer(3, 2, gl.FLOAT, false, stride, 28);
+    gl.vertexAttribPointer(3, 2, gl.FLOAT, false, stride, 32);
     gl.vertexAttribDivisor(3, 1);
-    // location 4: aUV1 (vec2) - offset 36
+    // location 4: aUV1 (vec2) - offset 40 (aUV0 后 8 bytes)
     gl.enableVertexAttribArray(4);
-    gl.vertexAttribPointer(4, 2, gl.FLOAT, false, stride, 36);
+    gl.vertexAttribPointer(4, 2, gl.FLOAT, false, stride, 40);
     gl.vertexAttribDivisor(4, 1);
 
     gl.bindVertexArray(null);
@@ -231,6 +231,12 @@ export class WebGLRenderer implements MatrixRainRenderer {
 
     // 7. Allocate instance buffer (lazy, expanded on resize)
     this._allocateInstanceBuffer(gl, state.r, state.i);
+
+    // 0.4.3 修复: engine 同步调 setCharset(state.charset) 在 init() 完成前,
+    //   此时 _atlasJson 还是 null → _charsetMap 永远空 → drawChar 写 instance buffer
+    //   时 atlasIdx=0, uv=undefined → aUV=(0,0,1,1) (整张 atlas),字符位置/形态错乱。
+    //   修法:init 末尾用已加载的 atlasJson 重新 buildCharsetMap(state.charset)。
+    this._charsetMap = buildCharsetMap(state.charset, this._atlasJson!);
 
     // 0.4.1+ 修复: engine 不 await init(), 用此标志告诉 render/beginFrame/drawChar 现在可以工作了
     this._initialized = true;
@@ -288,9 +294,9 @@ export class WebGLRenderer implements MatrixRainRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this._atlasTex);
     gl.uniform1i(this._uniforms!.uAtlas, 0);
 
-    // 4. Enable blending
+    // 4. Enable blending (premultiplied alpha + framebuffer is premultipliedAlpha=true)
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
     // 5. Draw: 4 vertices (TRIANGLE_STRIP quad) × 本帧实际写入的 cell 数
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this._drawCallIdx);
@@ -409,8 +415,9 @@ export class WebGLRenderer implements MatrixRainRenderer {
       this._trailB / 255,
       this._trailA
     );
+    // premultiplied alpha (framebuffer is premultipliedAlpha=true)
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
   }
@@ -431,7 +438,10 @@ export class WebGLRenderer implements MatrixRainRenderer {
   /** Public hook: engine.ts resize 时调, 重新分配 instance buffer */
   public resizeGrid(cols: number, rows: number): void {
     if (!this._gl || this._destroyed) return;
-    if (!this._initialized) return; // init() 还没创建 _vbo, 跳过(init 末尾会做首次 allocate)
+    // 0.4.3 修复: buildGrid 在 init() 返回前调 resizeGrid 重新分配 instance buffer.
+    //   之前的 _initialized 守卫把这次调用挡掉, _instanceBuffer 保持 init 时按
+    //   state.r=0, state.i=0 分配的 0 大小 buffer → drawChar 全部 silent skip
+    //   (因为 buffer 容量 = 0) → 屏幕只剩残影拖尾.
     this._allocateInstanceBuffer(this._gl, cols, rows);
   }
 
@@ -447,7 +457,8 @@ export class WebGLRenderer implements MatrixRainRenderer {
         }
         gl.bindTexture(gl.TEXTURE_2D, tex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-        // 字符 alpha 是硬边, 用 NEAREST 避免边缘模糊
+        // 字符 alpha 是硬边, NEAREST 避免边缘模糊 + LINEAR 边缘过滤混用
+        // (默认 LINEAR 跟 webgpu 一致, swiftshader 头无下字符仍可见)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);

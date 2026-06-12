@@ -78,8 +78,9 @@ out vec4 fragColor;
 void main() {
   // 采样 atlas (texture alpha = 字符 mask)
   float mask = texture(uAtlas, vUV).a;
-  // 字符颜色 × mask × alpha
-  fragColor = vec4(vColor.rgb, vColor.a * mask);
+  // 字符颜色 (unmultiplied) × mask × alpha → premultiplied for framebuffer (默认 premultipliedAlpha=true)
+  float a = vColor.a * mask;
+  fragColor = vec4(vColor.rgb * a, a);
 }
 `;
 
@@ -107,7 +108,8 @@ in vec2 vUV;
 uniform vec4 uTrailColor;
 out vec4 fragColor;
 void main() {
-  fragColor = uTrailColor;
+  // trail 颜色 (unmultiplied) 乘 alpha → premult for framebuffer (premultipliedAlpha=true)
+  fragColor = vec4(uTrailColor.rgb * uTrailColor.a, uTrailColor.a);
 }
 `;
 
