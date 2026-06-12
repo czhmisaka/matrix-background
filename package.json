@@ -69,6 +69,8 @@
   "scripts": {
     "build": "tsup && node scripts/build-atlas.mjs && cp src/matrix-rain.css dist/matrix-rain.css && mkdir -p dist/fonts && cp src/fonts/*.woff2 src/fonts/*.css dist/fonts/",
     "build:atlas": "node scripts/build-atlas.mjs",
+    "deploy:local": "npm run build && node scripts/copy-site-assets.mjs && cd site && pnpm install --prefer-offline && pnpm type-check && pnpm build",
+    "deploy:serve": "cd site && pnpm preview --port 4173 --host 127.0.0.1",
     "dev": "tsup --watch",
     "type-check": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"site/src/**/*.{ts,tsx,vue}\"",
