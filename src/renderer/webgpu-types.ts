@@ -70,7 +70,14 @@ export type GPUDevice = {
   createTexture(descriptor: GPUTextureDescriptor): GPUTexture;
   createSampler(descriptor: GPUSamplerDescriptor): GPUSampler;
   createCommandEncoder(descriptor?: GPUCommandEncoderDescriptor): GPUCommandEncoder;
+  // 0.6.0+: 错误 scope(用于真实调试)
+  pushErrorScope(filter: 'validation' | 'out-of-memory' | 'internal'): void;
+  popErrorScope(): Promise<GPUError | null>;
   destroy(): void;
+};
+
+export type GPUError = {
+  message: string;
 };
 
 // ============ Queue ============

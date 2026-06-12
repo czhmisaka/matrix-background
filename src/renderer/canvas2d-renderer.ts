@@ -18,6 +18,12 @@
 
 import type { MatrixRainRenderer, RendererImpl } from './types';
 import type { MatrixRainState } from '../engine/state';
+import {
+  createHealthTracker,
+  snapshotHealth,
+  tickDroppedFrames,
+  type RendererHealth,
+} from './health';
 
 /** 8 槽 rgba 字符串 buffer · 避免 per-cell `rgba(...)` 模板字符串 GC 压力 */
 const RGBA_BUF_SIZE = 8;
@@ -64,6 +70,9 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
   /** pause/resume 状态 */
   private _paused = false;
 
+  /** 0.6.0+ 渲染器健康跟踪(canvas2d trivial:无 GL 错误码) */
+  private _health = createHealthTracker('canvas2d');
+
   async init(canvas: HTMLCanvasElement, _state: MatrixRainState): Promise<void> {
     if (this._destroyed) throw new Error('[Canvas2DRenderer] init() called after destroy()');
     const ctx = canvas.getContext('2d', { alpha: true });
@@ -73,6 +82,7 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
     this._charset = ''; // engine.ts 会在 init 后调 setCharset(state.charset)
+    this._health.initialized = true;
   }
 
   resize(w: number, h: number, dpr: number): void {
@@ -86,9 +96,10 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
   }
 
   render(_state: MatrixRainState, _dt: number): void {
-    // canvas2d renderer 不在 render() 做任何事
-    // drawing 由 draw-helpers.ts 调 drawChar / drawTrail 完成
     if (this._paused) return;
+    // 0.6.0+: tick 帧计数 + droppedFrames(其它 renderer 在 render 末 tick,这里集中)
+    this._health.frameCount++;
+    tickDroppedFrames(this._health, _state.fps);
   }
 
   destroy(): void {
@@ -132,5 +143,10 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
     if (!chStr) return;
     this._ctx.fillStyle = toRgba(r, g, b, a);
     this._ctx.fillText(chStr, cx, cy);
+  }
+
+  // 0.6.0+: 渲染器健康快照
+  getHealth(): RendererHealth {
+    return snapshotHealth(this._health);
   }
 }

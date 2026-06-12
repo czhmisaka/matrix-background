@@ -29,6 +29,7 @@
  */
 
 import type { MatrixRainState } from '../engine/state';
+import type { RendererHealth } from './health';
 
 /** 用户可指定的渲染器类型 */
 export type RendererType = 'canvas2d' | 'webgl' | 'webgpu' | 'auto';
@@ -158,6 +159,16 @@ export interface MatrixRainRenderer {
    * @since 0.4.1
    */
   resizeGrid?(cols: number, rows: number): void;
+
+  /**
+   * 读取 renderer 健康快照(0.6.0+:用于真实调试)
+   * - 包含 GL 错误码 / WebGPU error scope / 帧数 / instance 计数 / 耗时
+   * - 默认常驻,无性能分支(数据填/不填零成本)
+   * - 返回 `Object.freeze` 副本,调用方无法篡改
+   *
+   * @since 0.6.0
+   */
+  getHealth(): RendererHealth;
 }
 
 /**

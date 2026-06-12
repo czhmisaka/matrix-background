@@ -42,6 +42,13 @@ import {
   INSTANCE_STRIDE_FLOATS,
   INSTANCE_STRIDE_BYTES,
 } from './webgl-shaders';
+import {
+  createHealthTracker,
+  recordHealthError,
+  snapshotHealth,
+  tickDroppedFrames,
+  type RendererHealth,
+} from './health';
 
 /**
  * WebGL2 context 抽象(便于测试 / SSR)
@@ -127,6 +134,9 @@ export class WebGLRenderer implements MatrixRainRenderer {
    */
   private _drawCallIdx = 0;
 
+  /** 0.6.0+ 渲染器健康跟踪(每帧 gl.getError() + drawCallIdx 断言) */
+  private _health = createHealthTracker('webgl');
+
   // ============ Lifecycle ============
 
   async init(canvas: HTMLCanvasElement, state: MatrixRainState): Promise<void> {
@@ -134,112 +144,127 @@ export class WebGLRenderer implements MatrixRainRenderer {
       throw new Error('[WebGLRenderer] init() called after destroy()');
     }
 
-    // 1. WebGL2 context (NOT 2d!)
-    // 0.4.1+: preserveDrawingBuffer:true 让 readPixels/drawImage(webglCanvas) 能拿到上一帧的内容
-    // (浏览器默认 false — composited 后 framebuffer 内容可能被丢弃, bench 像素读不出来)
-    const gl = canvas.getContext('webgl2', {
-      alpha: true,
-      antialias: true,
-      preserveDrawingBuffer: true,
-    });
-    if (!gl) {
-      throw new Error(
-        '[WebGLRenderer] WebGL2 not supported (this browser falls back to canvas2d renderer via auto-pick)'
-      );
+    // 0.6.0+: 记录 init 起止时间,失败时入 health.lastInitError
+    const initStart = performance.now();
+    try {
+      // 1. WebGL2 context (NOT 2d!)
+      // 0.4.1+: preserveDrawingBuffer:true 让 readPixels/drawImage(webglCanvas) 能拿到上一帧的内容
+      // (浏览器默认 false — composited 后 framebuffer 内容可能被丢弃, bench 像素读不出来)
+      const gl = canvas.getContext('webgl2', {
+        alpha: true,
+        antialias: true,
+        preserveDrawingBuffer: true,
+      });
+      if (!gl) {
+        throw new Error(
+          '[WebGLRenderer] WebGL2 not supported (this browser falls back to canvas2d renderer via auto-pick)'
+        );
+      }
+      this._gl = gl;
+
+      // 2. 加载 atlas
+      if (!__atlasJsonUrl || !__atlasPngUrl) {
+        throw new Error(
+          '[WebGLRenderer] atlas URLs not set (call setAtlasUrls() before matrixRain)'
+        );
+      }
+      const atlasJson = await loadAtlasJson(__atlasJsonUrl);
+      if (!isAtlasJson(atlasJson)) {
+        throw new Error('[WebGLRenderer] atlas JSON failed schema validation');
+      }
+      this._atlasJson = atlasJson;
+      this._atlasLookup = buildAtlasLookup(atlasJson);
+      this._charsetMap = buildCharsetMap(state.charset, atlasJson);
+
+      // 缺失字符 warn
+      const missing = findMissingChars(state.charset, atlasJson);
+      if (missing.length > 0 && !this._warnedMissing) {
+        console.warn(
+          `[WebGLRenderer] ${missing.length} chars not in atlas (showing blank):`,
+          missing.slice(0, 10).join('') + (missing.length > 10 ? '...' : '')
+        );
+        this._warnedMissing = true;
+      }
+
+      // 3. 加载 atlas PNG → texture
+      await this._uploadAtlasTexture(gl, __atlasPngUrl);
+
+      // 4. 编译 shader
+      this._program = this._compileProgram(gl, VERTEX_SHADER, FRAGMENT_SHADER);
+      this._trailProgram = this._compileProgram(gl, TRAIL_VERTEX_SHADER, TRAIL_FRAGMENT_SHADER);
+      this._uniforms = {
+        uViewport: gl.getUniformLocation(this._program, 'uViewport'),
+        uCellSize: gl.getUniformLocation(this._program, 'uCellSize'),
+        uAtlas: gl.getUniformLocation(this._program, 'uAtlas'),
+      };
+      this._trailUniforms = {
+        uTrailColor: gl.getUniformLocation(this._trailProgram, 'uTrailColor'),
+      };
+
+      // 5. 创建 VAO + VBO (instanced rendering 必备)
+      this._vao = gl.createVertexArray();
+      this._vbo = gl.createBuffer();
+      gl.bindVertexArray(this._vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._vbo);
+
+      // Instance attributes (per-cell 12 floats, stride 48 bytes)
+      // vec4[0]: (aPos.x, aPos.y, aCharIdx, _pad)
+      // vec4[1]: (aColor.r, aColor.g, aColor.b, aColor.a)
+      // vec4[2]: (aUV0.x, aUV0.y, aUV1.x, aUV1.y)
+      const stride = INSTANCE_STRIDE_BYTES;
+      // location 0: aPos (vec2) - offset 0
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, stride, 0);
+      gl.vertexAttribDivisor(0, 1); // 1 = per-instance
+      // location 1: aCharIdx (float) - offset 8
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(1, 1, gl.FLOAT, false, stride, 8);
+      gl.vertexAttribDivisor(1, 1);
+      // location 2: aColor (vec4) - offset 12
+      gl.enableVertexAttribArray(2);
+      gl.vertexAttribPointer(2, 4, gl.FLOAT, false, stride, 12);
+      gl.vertexAttribDivisor(2, 1);
+      // location 3: aUV0 (vec2) - offset 32 (slotOff+8 floats × 4 bytes = 32)
+      gl.enableVertexAttribArray(3);
+      gl.vertexAttribPointer(3, 2, gl.FLOAT, false, stride, 32);
+      gl.vertexAttribDivisor(3, 1);
+      // location 4: aUV1 (vec2) - offset 40 (aUV0 后 8 bytes)
+      gl.enableVertexAttribArray(4);
+      gl.vertexAttribPointer(4, 2, gl.FLOAT, false, stride, 40);
+      gl.vertexAttribDivisor(4, 1);
+
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+      // 6. Trail VAO (full-screen quad, no instance attribute)
+      this._trailVao = gl.createVertexArray();
+      this._trailVbo = gl.createBuffer(); // empty, no data needed
+      gl.bindVertexArray(this._trailVao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._trailVbo);
+      // 不需要 VBO 数据 - vertex shader 用 gl_VertexID 算全屏 quad
+      gl.bindVertexArray(null);
+
+      // 7. Allocate instance buffer (lazy, expanded on resize)
+      this._allocateInstanceBuffer(gl, state.r, state.i);
+
+      // 0.4.3 修复: engine 同步调 setCharset(state.charset) 在 init() 完成前,
+      //   此时 _atlasJson 还是 null → _charsetMap 永远空 → drawChar 写 instance buffer
+      //   时 atlasIdx=0, uv=undefined → aUV=(0,0,1,1) (整张 atlas),字符位置/形态错乱。
+      //   修法:init 末尾用已加载的 atlasJson 重新 buildCharsetMap(state.charset)。
+      this._charsetMap = buildCharsetMap(state.charset, this._atlasJson!);
+
+      // 0.4.1+ 修复: engine 不 await init(), 用此标志告诉 render/beginFrame/drawChar 现在可以工作了
+      this._initialized = true;
+    } catch (e) {
+      // 0.6.0+: 错误入 health,不 console.error(调用方矩阵雨仍能跑降级路径)
+      const msg = e instanceof Error ? e.message : String(e);
+      this._health.lastInitError = msg;
+      recordHealthError(this._health, 'INIT_FAILED');
+      throw e;
     }
-    this._gl = gl;
-
-    // 2. 加载 atlas
-    if (!__atlasJsonUrl || !__atlasPngUrl) {
-      throw new Error('[WebGLRenderer] atlas URLs not set (call setAtlasUrls() before matrixRain)');
-    }
-    const atlasJson = await loadAtlasJson(__atlasJsonUrl);
-    if (!isAtlasJson(atlasJson)) {
-      throw new Error('[WebGLRenderer] atlas JSON failed schema validation');
-    }
-    this._atlasJson = atlasJson;
-    this._atlasLookup = buildAtlasLookup(atlasJson);
-    this._charsetMap = buildCharsetMap(state.charset, atlasJson);
-
-    // 缺失字符 warn
-    const missing = findMissingChars(state.charset, atlasJson);
-    if (missing.length > 0 && !this._warnedMissing) {
-      console.warn(
-        `[WebGLRenderer] ${missing.length} chars not in atlas (showing blank):`,
-        missing.slice(0, 10).join('') + (missing.length > 10 ? '...' : '')
-      );
-      this._warnedMissing = true;
-    }
-
-    // 3. 加载 atlas PNG → texture
-    await this._uploadAtlasTexture(gl, __atlasPngUrl);
-
-    // 4. 编译 shader
-    this._program = this._compileProgram(gl, VERTEX_SHADER, FRAGMENT_SHADER);
-    this._trailProgram = this._compileProgram(gl, TRAIL_VERTEX_SHADER, TRAIL_FRAGMENT_SHADER);
-    this._uniforms = {
-      uViewport: gl.getUniformLocation(this._program, 'uViewport'),
-      uCellSize: gl.getUniformLocation(this._program, 'uCellSize'),
-      uAtlas: gl.getUniformLocation(this._program, 'uAtlas'),
-    };
-    this._trailUniforms = {
-      uTrailColor: gl.getUniformLocation(this._trailProgram, 'uTrailColor'),
-    };
-
-    // 5. 创建 VAO + VBO (instanced rendering 必备)
-    this._vao = gl.createVertexArray();
-    this._vbo = gl.createBuffer();
-    gl.bindVertexArray(this._vao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this._vbo);
-
-    // Instance attributes (per-cell 12 floats, stride 48 bytes)
-    // vec4[0]: (aPos.x, aPos.y, aCharIdx, _pad)
-    // vec4[1]: (aColor.r, aColor.g, aColor.b, aColor.a)
-    // vec4[2]: (aUV0.x, aUV0.y, aUV1.x, aUV1.y)
-    const stride = INSTANCE_STRIDE_BYTES;
-    // location 0: aPos (vec2) - offset 0
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, stride, 0);
-    gl.vertexAttribDivisor(0, 1); // 1 = per-instance
-    // location 1: aCharIdx (float) - offset 8
-    gl.enableVertexAttribArray(1);
-    gl.vertexAttribPointer(1, 1, gl.FLOAT, false, stride, 8);
-    gl.vertexAttribDivisor(1, 1);
-    // location 2: aColor (vec4) - offset 12
-    gl.enableVertexAttribArray(2);
-    gl.vertexAttribPointer(2, 4, gl.FLOAT, false, stride, 12);
-    gl.vertexAttribDivisor(2, 1);
-    // location 3: aUV0 (vec2) - offset 32 (slotOff+8 floats × 4 bytes = 32)
-    gl.enableVertexAttribArray(3);
-    gl.vertexAttribPointer(3, 2, gl.FLOAT, false, stride, 32);
-    gl.vertexAttribDivisor(3, 1);
-    // location 4: aUV1 (vec2) - offset 40 (aUV0 后 8 bytes)
-    gl.enableVertexAttribArray(4);
-    gl.vertexAttribPointer(4, 2, gl.FLOAT, false, stride, 40);
-    gl.vertexAttribDivisor(4, 1);
-
-    gl.bindVertexArray(null);
-    gl.bindBuffer(gl.ARRAY_BUFFER, null);
-
-    // 6. Trail VAO (full-screen quad, no instance attribute)
-    this._trailVao = gl.createVertexArray();
-    this._trailVbo = gl.createBuffer(); // empty, no data needed
-    gl.bindVertexArray(this._trailVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this._trailVbo);
-    // 不需要 VBO 数据 - vertex shader 用 gl_VertexID 算全屏 quad
-    gl.bindVertexArray(null);
-
-    // 7. Allocate instance buffer (lazy, expanded on resize)
-    this._allocateInstanceBuffer(gl, state.r, state.i);
-
-    // 0.4.3 修复: engine 同步调 setCharset(state.charset) 在 init() 完成前,
-    //   此时 _atlasJson 还是 null → _charsetMap 永远空 → drawChar 写 instance buffer
-    //   时 atlasIdx=0, uv=undefined → aUV=(0,0,1,1) (整张 atlas),字符位置/形态错乱。
-    //   修法:init 末尾用已加载的 atlasJson 重新 buildCharsetMap(state.charset)。
-    this._charsetMap = buildCharsetMap(state.charset, this._atlasJson!);
-
-    // 0.4.1+ 修复: engine 不 await init(), 用此标志告诉 render/beginFrame/drawChar 现在可以工作了
-    this._initialized = true;
+    // 0.6.0+: init 成功,记耗时
+    this._health.initialized = true;
+    this._health.initDurationMs = performance.now() - initStart;
   }
 
   resize(w: number, h: number, dpr: number): void {
@@ -267,6 +292,20 @@ export class WebGLRenderer implements MatrixRainRenderer {
     const gl = this._gl;
     if (this._drawCallIdx === 0) return;
     if (!this._instanceBuffer) return;
+
+    // 0.6.0+: 帧起点测耗时 + 帧数 + 同步 grid dims 进 health
+    const frameStart = performance.now();
+    this._health.frameCount++;
+    this._health.drawCallIdx = this._drawCallIdx;
+    this._health.gridCols = state.r;
+    this._health.gridRows = state.i;
+    this._health.instanceCount = this._drawCallIdx;
+
+    // 0.6.0+: drawArraysInstanced instance 数断言(0.5.1 P0-1 旧 bug 复发检测)
+    const expectedInstances = state.r * state.i;
+    if (this._drawCallIdx !== expectedInstances) {
+      recordHealthError(this._health, 'INSTANCE_COUNT_MISMATCH');
+    }
 
     // 1. 残影拖尾(每帧全屏 alpha fade)
     this._renderTrail(gl, state);
@@ -302,6 +341,14 @@ export class WebGLRenderer implements MatrixRainRenderer {
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this._drawCallIdx);
 
     gl.bindVertexArray(null);
+
+    // 0.6.0+: 帧末 gl.getError() 轮询(一次性,本帧所有 GL 调用后的残留错误)
+    const err = gl.getError();
+    if (err !== 0) {
+      recordHealthError(this._health, err);
+    }
+    this._health.lastFrameDurationMs = performance.now() - frameStart;
+    tickDroppedFrames(this._health, state.fps);
   }
 
   destroy(): void {
@@ -330,6 +377,11 @@ export class WebGLRenderer implements MatrixRainRenderer {
 
   resume(): void {
     this._paused = false;
+  }
+
+  // 0.6.0+: 渲染器健康快照
+  getHealth(): RendererHealth {
+    return snapshotHealth(this._health);
   }
 
   // ============ Drawing surface (per-cell / per-frame) ============

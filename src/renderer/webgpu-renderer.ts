@@ -20,6 +20,13 @@
 import type { MatrixRainRenderer, RendererImpl } from './types';
 import type { MatrixRainState } from '../engine/state';
 import {
+  createHealthTracker,
+  recordHealthError,
+  snapshotHealth,
+  tickDroppedFrames,
+  type RendererHealth,
+} from './health';
+import {
   type AtlasJson,
   type AtlasUV,
   buildAtlasLookup,
@@ -137,6 +144,9 @@ export class WebGPURenderer implements MatrixRainRenderer {
 
   private _warnedMissing = false;
 
+  /** 0.6.0+ 渲染器健康跟踪(每帧 popErrorScope + drawCallIdx 断言) */
+  private _health = createHealthTracker('webgpu');
+
   // ============ Lifecycle ============
 
   async init(canvas: HTMLCanvasElement, state: MatrixRainState): Promise<void> {
@@ -144,82 +154,95 @@ export class WebGPURenderer implements MatrixRainRenderer {
       throw new Error('[WebGPURenderer] init() called after destroy()');
     }
 
-    // 1. Request adapter (async!)
-    const gpu = (navigator as unknown as GpuNavigator).gpu;
-    if (!gpu) {
-      throw new Error('[WebGPURenderer] WebGPU not supported (navigator.gpu undefined)');
+    // 0.6.0+: 记录 init 起止时间,失败时入 health.lastInitError
+    const initStart = performance.now();
+    try {
+      // 1. Request adapter (async!)
+      const gpu = (navigator as unknown as GpuNavigator).gpu;
+      if (!gpu) {
+        throw new Error('[WebGPURenderer] WebGPU not supported (navigator.gpu undefined)');
+      }
+      const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
+      if (!adapter) {
+        throw new Error('[WebGPURenderer] Failed to get GPUAdapter');
+      }
+      this._device = await adapter.requestDevice({
+        requiredLimits: {
+          maxStorageBufferBindingSize: 256 * 1024 * 1024, // 256MB for 8M cells
+        },
+      });
+      this._queue = this._device.queue;
+
+      // 2. Configure GPUCanvasContext (connects canvas to device)
+      const ctx = canvas.getContext('webgpu') as unknown as GPUCanvasContext;
+      if (!ctx) {
+        throw new Error('[WebGPURenderer] canvas.getContext("webgpu") failed');
+      }
+      this._ctx = ctx;
+      const format = gpu.getPreferredCanvasFormat();
+      ctx.configure({
+        device: this._device,
+        format,
+        alphaMode: 'premultiplied',
+      });
+
+      // 3. Load atlas
+      const atlasJsonUrl =
+        (state as unknown as { __atlasJsonUrl?: string }).__atlasJsonUrl ??
+        '/atlas/jetbrains-mono-32.json';
+      const atlasPngUrl =
+        (state as unknown as { __atlasPngUrl?: string }).__atlasPngUrl ??
+        '/atlas/jetbrains-mono-32.png';
+      const atlasJson = await loadAtlasJson(atlasJsonUrl);
+      if (!isAtlasJson(atlasJson)) {
+        throw new Error('[WebGPURenderer] atlas JSON failed schema validation');
+      }
+      this._atlasJson = atlasJson;
+      this._atlasLookup = buildAtlasLookup(atlasJson);
+      this._charsetMap = buildCharsetMap(state.charset, atlasJson);
+
+      const missing = findMissingChars(state.charset, atlasJson);
+      if (missing.length > 0 && !this._warnedMissing) {
+        console.warn(
+          `[WebGPURenderer] ${missing.length} chars not in atlas (showing blank):`,
+          missing.slice(0, 10).join('') + (missing.length > 10 ? '...' : '')
+        );
+        this._warnedMissing = true;
+      }
+
+      // 4. Upload atlas texture
+      await this._uploadAtlasTexture(this._device, this._queue, atlasPngUrl);
+
+      // 5. Create bind group layouts
+      this._createBindGroupLayouts(this._device);
+
+      // 6. Allocate buffers
+      this._allocateBuffers(this._device, state.r, state.i);
+
+      // 7. Create pipelines
+      this._createPipelines(this._device, format);
+
+      // 8. Create bind groups
+      this._createBindGroups(this._device);
+
+      // 9. 初始化 cellsBuffer 为 0(compute 第一次跑需要非 undefined 内存)
+      // 0.5.0 修复 P0-3 (原 0.4.0 compute buffer 创建后从未写入,首次 dispatch 读 undefined 内存)
+      if (this._cellsBuffer && this._queue) {
+        this._queue.writeBuffer(this._cellsBuffer, 0, new Float32Array(this._instanceCount));
+      }
+
+      // 0.4.1+ 修复: engine 不 await init(), 用此标志告诉 render/beginFrame/drawChar 现在可以工作
+      this._initialized = true;
+    } catch (e) {
+      // 0.6.0+: 错误入 health,不 console.error(调用方矩阵雨仍能跑降级路径)
+      const msg = e instanceof Error ? e.message : String(e);
+      this._health.lastInitError = msg;
+      recordHealthError(this._health, 'INIT_FAILED');
+      throw e;
     }
-    const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
-    if (!adapter) {
-      throw new Error('[WebGPURenderer] Failed to get GPUAdapter');
-    }
-    this._device = await adapter.requestDevice({
-      requiredLimits: {
-        maxStorageBufferBindingSize: 256 * 1024 * 1024, // 256MB for 8M cells
-      },
-    });
-    this._queue = this._device.queue;
-
-    // 2. Configure GPUCanvasContext (connects canvas to device)
-    const ctx = canvas.getContext('webgpu') as unknown as GPUCanvasContext;
-    if (!ctx) {
-      throw new Error('[WebGPURenderer] canvas.getContext("webgpu") failed');
-    }
-    this._ctx = ctx;
-    const format = gpu.getPreferredCanvasFormat();
-    ctx.configure({
-      device: this._device,
-      format,
-      alphaMode: 'premultiplied',
-    });
-
-    // 3. Load atlas
-    const atlasJsonUrl =
-      (state as unknown as { __atlasJsonUrl?: string }).__atlasJsonUrl ??
-      '/atlas/jetbrains-mono-32.json';
-    const atlasPngUrl =
-      (state as unknown as { __atlasPngUrl?: string }).__atlasPngUrl ??
-      '/atlas/jetbrains-mono-32.png';
-    const atlasJson = await loadAtlasJson(atlasJsonUrl);
-    if (!isAtlasJson(atlasJson)) {
-      throw new Error('[WebGPURenderer] atlas JSON failed schema validation');
-    }
-    this._atlasJson = atlasJson;
-    this._atlasLookup = buildAtlasLookup(atlasJson);
-    this._charsetMap = buildCharsetMap(state.charset, atlasJson);
-
-    const missing = findMissingChars(state.charset, atlasJson);
-    if (missing.length > 0 && !this._warnedMissing) {
-      console.warn(
-        `[WebGPURenderer] ${missing.length} chars not in atlas (showing blank):`,
-        missing.slice(0, 10).join('') + (missing.length > 10 ? '...' : '')
-      );
-      this._warnedMissing = true;
-    }
-
-    // 4. Upload atlas texture
-    await this._uploadAtlasTexture(this._device, this._queue, atlasPngUrl);
-
-    // 5. Create bind group layouts
-    this._createBindGroupLayouts(this._device);
-
-    // 6. Allocate buffers
-    this._allocateBuffers(this._device, state.r, state.i);
-
-    // 7. Create pipelines
-    this._createPipelines(this._device, format);
-
-    // 8. Create bind groups
-    this._createBindGroups(this._device);
-
-    // 9. 初始化 cellsBuffer 为 0(compute 第一次跑需要非 undefined 内存)
-    // 0.5.0 修复 P0-3 (原 0.4.0 compute buffer 创建后从未写入,首次 dispatch 读 undefined 内存)
-    if (this._cellsBuffer && this._queue) {
-      this._queue.writeBuffer(this._cellsBuffer, 0, new Float32Array(this._instanceCount));
-    }
-
-    // 0.4.1+ 修复: engine 不 await init(), 用此标志告诉 render/beginFrame/drawChar 现在可以工作
-    this._initialized = true;
+    // 0.6.0+: init 成功,记耗时
+    this._health.initialized = true;
+    this._health.initDurationMs = performance.now() - initStart;
   }
 
   resize(w: number, h: number, dpr: number): void {
@@ -247,6 +270,21 @@ export class WebGPURenderer implements MatrixRainRenderer {
 
     const device = this._device;
     const queue = this._queue;
+
+    // 0.6.0+: 帧起点测耗时 + 帧数 + 同步 grid dims + drawCallIdx 断言
+    const frameStart = performance.now();
+    this._health.frameCount++;
+    this._health.drawCallIdx = this._drawCallIdx;
+    this._health.gridCols = state.r;
+    this._health.gridRows = state.i;
+    this._health.instanceCount = this._drawCallIdx;
+    const expectedInstances = state.r * state.i;
+    if (this._drawCallIdx !== expectedInstances) {
+      recordHealthError(this._health, 'INSTANCE_COUNT_MISMATCH');
+    }
+
+    // 0.6.0+: 在 device 上开 validation error scope,捕获 submit 期间的 validation error
+    device.pushErrorScope('validation');
 
     // 1. Update uniforms (vertex + warmth params)
     this._updateVertexUniforms();
@@ -309,6 +347,26 @@ export class WebGPURenderer implements MatrixRainRenderer {
 
     // 6. Submit
     queue.submit([encoder.finish() as GPUCommandBuffer]);
+
+    // 0.6.0+: popErrorScope() 异步返回 GPUError|null
+    //   - 不 await,不阻塞 rAF(微任务排队)
+    //   - 在 next microtask 完成时把错误写回 health.lastErrorScope
+    //   - 0.6.0 修 race: 跨帧 push/pop 不匹配时,popErrorScope 抛
+    //     "tried to pop error scope that was never pushed",catch 后记到 lastInitError
+    device.popErrorScope().then(
+      (err) => {
+        if (err) {
+          recordHealthError(this._health, err.message);
+        }
+      },
+      (popErr: unknown) => {
+        // 跨帧 race / device destroyed
+        const msg = popErr instanceof Error ? popErr.message : String(popErr);
+        this._health.lastErrorScope = `popErrorScope rejected: ${msg}`;
+      }
+    );
+    this._health.lastFrameDurationMs = performance.now() - frameStart;
+    tickDroppedFrames(this._health, state.fps);
   }
 
   destroy(): void {
@@ -332,6 +390,11 @@ export class WebGPURenderer implements MatrixRainRenderer {
 
   resume(): void {
     this._paused = false;
+  }
+
+  // 0.6.0+: 渲染器健康快照
+  getHealth(): RendererHealth {
+    return snapshotHealth(this._health);
   }
 
   // ============ Drawing surface (per-cell / per-frame) ============

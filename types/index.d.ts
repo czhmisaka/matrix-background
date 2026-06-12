@@ -688,6 +688,51 @@ export interface MatrixRainInstance {
 
   /** 读取 clickBurst 当前状态(测试用) */
   getClickBurstState?(): { active: boolean; x: number; y: number; t: number };
+
+  /**
+   * 读取 renderer 健康快照(0.6.0+:用于真实调试 / 自动化测试)
+   * - WebGL: `lastGlError` = gl.getError() 最近一次值(0 = NO_ERROR)
+   * - WebGPU: `lastErrorScope` = popErrorScope() 最近一次错误 message,null = 无错误
+   * - canvas2d: 上述两字段恒为 0 / null(无 GL 错误源)
+   * - 其他字段:frameCount / drawCallIdx / instanceCount / gridCols / gridRows /
+   *   initDurationMs / lastFrameDurationMs / droppedFrames / lastInitError
+   *
+   * @since 0.6.0
+   */
+  getRendererHealth(): RendererHealth;
+}
+
+/**
+ * Renderer 健康快照(0.6.0+:返回 `Object.freeze` 副本)
+ * @since 0.6.0
+ */
+export interface RendererHealth {
+  /** 实际渲染器类型 */
+  renderer: 'canvas2d' | 'webgl' | 'webgpu';
+  /** init() 是否完成(未完成时 draw* / render 会 no-op) */
+  initialized: boolean;
+  /** 从 init() 完成后累计的帧数 */
+  frameCount: number;
+  /** 当前帧调 drawChar 写入 instance buffer 的次数(0.4.1+ P0-1 修复后用 _drawCallIdx) */
+  drawCallIdx: number;
+  /** instance buffer 总容量(通常 = gridCols × gridRows) */
+  instanceCount: number;
+  /** 当前 grid 列数(state.r) */
+  gridCols: number;
+  /** 当前 grid 行数(state.i) */
+  gridRows: number;
+  /** init() 耗时(毫秒),init 未完成 = 0 */
+  initDurationMs: number;
+  /** 上一帧 render() 耗时(毫秒) */
+  lastFrameDurationMs: number;
+  /** 自启动以来 fps < 30 的帧数 */
+  droppedFrames: number;
+  /** WebGL: gl.getError() 最近一次返回值(0 = NO_ERROR),WebGPU/canvas2d = 0 */
+  lastGlError: number;
+  /** WebGPU: popErrorScope() 最近一次错误 message,null = 无错误,canvas2d/webgl = null */
+  lastErrorScope: string | null;
+  /** init() 失败时的 Error.message(可空) */
+  lastInitError: string | null;
 }
 
 /** 视口宽度分档(<768 / 768-1024 / 1024-1440 / ≥1440) */

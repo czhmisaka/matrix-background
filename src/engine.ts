@@ -807,6 +807,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     getTargetState: methods.getTargetState,
     getOptions: methods.getOptions,
     serialize: methods.serialize,
+    // 0.6.0+: 透传 renderer 健康快照(给外部调试 + 测试用)
+    getRendererHealth: () => renderer.getHealth(),
   };
 
   // ============ 10. Boot ============

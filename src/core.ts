@@ -50,6 +50,7 @@ export type {
   ThemeResult,
   ThemeParams,
   VariantParams,
+  RendererHealth,
 } from '../types';
 
 export type { Preset, WaveType, CombineMode, WaveChannel, SandboxContext } from './curves/presets';
