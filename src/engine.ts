@@ -796,6 +796,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     setFlickerSpeed: methods.setFlickerSpeed,
     setTargetFPS: methods.setTargetFPS,
     setDensity: methods.setDensity,
+    setCharGap: methods.setCharGap,
     setRenderScale: methods.setRenderScale,
     getRenderScale: methods.getRenderScale,
     setEasing: methods.setEasing,

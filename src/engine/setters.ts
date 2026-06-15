@@ -72,6 +72,7 @@ export const createSetters = (
   | 'setFlickerSpeed'
   | 'setTargetFPS'
   | 'setDensity'
+  | 'setCharGap'
   | 'setRenderScale'
   | 'getRenderScale'
   | 'setEasing'
@@ -553,6 +554,17 @@ export const createSetters = (
   };
 
   /**
+   * 0.x.x+: 动态调整字符间距(对称应用 x/y)· 不触发 buildGrid
+   * - 列数/行数不变,仅每个 cell 内字符的 (cx, cy) 偏移
+   * - 钳到 [-10, 20];非有限数 → 0
+   */
+  const setCharGap = (charGap: number): void => {
+    const v = Number.isFinite(charGap) ? Math.max(-10, Math.min(20, charGap)) : 0;
+    state.cfg = { ...state.cfg, charGap: v };
+    state.options = { ...state.options, charGap: v };
+  };
+
+  /**
    * 动态更新局部子格渲染倍率(0.3.0+)· 不触发 buildGrid
    * - 同步写 4 处:cfg / options / renderScaleUser / renderScaleEffective
    * - 'auto' 透传;number 钳到 [1, 16] 整数(向下取整)
@@ -735,6 +747,7 @@ export const createSetters = (
    */
   const getOptions = () => ({
     fontSize: state.cfg.fontSize,
+    charGap: state.cfg.charGap,
     trailAlpha: state.cfg.trailAlpha,
     maxDPR: state.cfg.maxDPR,
     charset: state.charset,
@@ -815,6 +828,7 @@ export const createSetters = (
     setFlickerSpeed,
     setTargetFPS,
     setDensity,
+    setCharGap,
     setRenderScale,
     getRenderScale,
     setEasing,

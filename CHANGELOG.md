@@ -5,6 +5,19 @@ All notable changes to `@xietuier/matrix-rain` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — `charGap` 字符间距配置
+
+- **`charGap` 选项**(默认 `0`,范围 `[-10, +20]` CSS px):控制相邻字符字形之间的视觉间距,对称应用到 x 和 y 轴。
+  - `charGap: 1` 或 `2` 让字到字更紧(收紧字体 side bearing 留白)
+  - 负值(如 `-3`)让字符重叠
+  - 越界自动 clamp;`NaN` / `Infinity` / `undefined` 退到 `0`
+- **`inst.setCharGap(n)`** 运行时热更新,不触发 `buildGrid`(列数/行数不变)
+- **跨 3 个 renderer 行为一致**(canvas2d / WebGL2 / WebGPU):仅在 `draw-helpers.ts` 的 12 个 `(cx, cy)` 算式末尾加 `state.cfg.charGap`,**不动** atlas、shader、`setFontSize`
+- **默认 `0` 完全向后兼容**:`test/char-gap.mjs` 验证 `charGap=0` 时 fillText 的 `(x, y)` 与原公式 byte-for-byte 等价
+- 不破字号 4px 硬下限(`memory:feedback_min_font_size.md`),与 fontSize 独立
+
 ## [0.5.0] - 2026-06-11
 
 ### Added — 真像素测试基建 (P2-1) + WebGPU compute 恢复 + 代码清理

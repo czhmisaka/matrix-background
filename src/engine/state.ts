@@ -127,6 +127,7 @@ export type LockOrder =
 
 const DEFAULTS = {
   fontSize: 6,
+  charGap: 0,
   trailAlpha: 0.18,
   maxDPR: 2,
   warmthRadius: 0.6,
@@ -141,6 +142,12 @@ const DEFAULTS = {
   renderScale: 1 as number | 'auto',
   easing: 'smooth' as EasingMode,
 } as const;
+
+const clampCharGap = (n: unknown): number => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(-10, Math.min(20, v));
+};
 
 const FLICKER_SPEED_DEFAULT = 1;
 const FIXED_DT = 1 / 60;
@@ -224,6 +231,7 @@ export interface MatrixRainState {
   /** 数字字段 + 运行时可改的字段(子集)。所有 setter 都通过这个 cfg 更新 */
   cfg: {
     fontSize: number;
+    charGap: number;
     trailAlpha: number;
     maxDPR: number;
     warmthRadius: number;
@@ -357,6 +365,14 @@ export interface MatrixRainState {
     /** 0.4.0+ per-call easing 覆盖 */
     easing?: EasingMode;
   } | null;
+  /**
+   * 0.6.1+ 主题切换瞬间跳过 N 帧 trail fade
+   * - setTheme 时置 N(默认 2),rAF 每帧 -1 直到 0
+   * - 防止 trail 复合 (0.85^N) + LUT 冷启动叠加造成瞬时黑帧
+   * - 旧主题的 canvas 直接被新主题 cell 覆盖,产生"自然叠加"过渡
+   * - 跳过 2 帧 ≈ 32ms,让 LUT 完整重建 1 轮(32 桶 × 256 项 / 帧)
+   */
+  skipTrailFrames: number;
   /** C2:主题参数切换插值 */
   themeParamsTransition: {
     fromTp: ThemeParams;
@@ -516,6 +532,7 @@ export const createMatrixRainState = (
   // ============ cfg 合并 ============
   const cfg = {
     fontSize: options.fontSize ?? DEFAULTS.fontSize,
+    charGap: clampCharGap(options.charGap ?? DEFAULTS.charGap),
     trailAlpha: options.trailAlpha ?? DEFAULTS.trailAlpha,
     maxDPR: options.maxDPR ?? DEFAULTS.maxDPR,
     warmthRadius: options.warmthRadius ?? DEFAULTS.warmthRadius,
@@ -789,6 +806,7 @@ export const createMatrixRainState = (
     transitionAlpha: 1.0,
     transitionAlphaAnim: null,
     themeTransition: null,
+    skipTrailFrames: 0,
     themeParamsTransition: null,
     variantTransition: null,
     phaseTransition: null,

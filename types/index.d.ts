@@ -92,10 +92,54 @@ export interface VariantParams {
 
 /** 变体默认参数表 */
 export const VARIANT_DEFAULTS: Record<VariantName, VariantParams> = {
-  classic:   { phaseStep: 0.04, phaseJitter: 0.06, sinWeightA: 0.4, sinWeightB: 0.3, sinWeightC: 0.3, brightCurve: 3.5, chUpdateProb: 0,   headBright: 8, headFalloff: 1, avalancheSpeed: 0.5 },
-  ascii:     { phaseStep: 0.04, phaseJitter: 0.06, sinWeightA: 0.4, sinWeightB: 0.3, sinWeightC: 0.3, brightCurve: 3.5, chUpdateProb: 0,   headBright: 8, headFalloff: 1, avalancheSpeed: 0.5 },
-  avalanche: { phaseStep: 0.04, phaseJitter: 0.06, sinWeightA: 0.4, sinWeightB: 0.3, sinWeightC: 0.3, brightCurve: 3.5, chUpdateProb: 0.3, headBright: 8, headFalloff: 1, avalancheSpeed: 0.5 },
-  ripple:    { phaseStep: 0.05, phaseJitter: 0,    sinWeightA: 0.5, sinWeightB: 0,   sinWeightC: 0,   brightCurve: 8,   chUpdateProb: 0.2, headBright: 8, headFalloff: 1, avalancheSpeed: 0.5 }
+  classic: {
+    phaseStep: 0.04,
+    phaseJitter: 0.06,
+    sinWeightA: 0.4,
+    sinWeightB: 0.3,
+    sinWeightC: 0.3,
+    brightCurve: 3.5,
+    chUpdateProb: 0,
+    headBright: 8,
+    headFalloff: 1,
+    avalancheSpeed: 0.5,
+  },
+  ascii: {
+    phaseStep: 0.04,
+    phaseJitter: 0.06,
+    sinWeightA: 0.4,
+    sinWeightB: 0.3,
+    sinWeightC: 0.3,
+    brightCurve: 3.5,
+    chUpdateProb: 0,
+    headBright: 8,
+    headFalloff: 1,
+    avalancheSpeed: 0.5,
+  },
+  avalanche: {
+    phaseStep: 0.04,
+    phaseJitter: 0.06,
+    sinWeightA: 0.4,
+    sinWeightB: 0.3,
+    sinWeightC: 0.3,
+    brightCurve: 3.5,
+    chUpdateProb: 0.3,
+    headBright: 8,
+    headFalloff: 1,
+    avalancheSpeed: 0.5,
+  },
+  ripple: {
+    phaseStep: 0.05,
+    phaseJitter: 0,
+    sinWeightA: 0.5,
+    sinWeightB: 0,
+    sinWeightC: 0,
+    brightCurve: 8,
+    chUpdateProb: 0.2,
+    headBright: 8,
+    headFalloff: 1,
+    avalancheSpeed: 0.5,
+  },
 };
 
 /** 主题字典返回值 */
@@ -166,6 +210,14 @@ export interface SizeInfo {
 export interface MatrixRainOptions {
   /** 字符网格宽度(像素),默认 14。越大越疏 */
   fontSize?: number;
+
+  /**
+   * 字符间距(CSS px)· 对称应用到 x 和 y · 默认 0
+   * - 正值:字符间留空(如 1-2 让字到字更紧或更松)
+   * - 负值:字符重叠(最多 -10)
+   * 范围 [-10, +20] · 越界自动 clamp
+   */
+  charGap?: number;
 
   /** 残影 alpha(0-1),默认 0.18。越小拖尾越长 */
   trailAlpha?: number;
@@ -377,7 +429,14 @@ export interface MatrixRainOptions {
    * - 'leftright': 从左到右扫
    * - 'rightleft': 从右到左扫
    */
-  targetLockOrder?: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft';
+  targetLockOrder?:
+    | 'random'
+    | 'topdown'
+    | 'bottomup'
+    | 'center'
+    | 'edge'
+    | 'leftright'
+    | 'rightleft';
   /** 噪声→收敛:目标区 cell 锁定后字符稳定性 (0-1,默认 0.7)
    * 1 = 字符完全不变(纯图像);0 = 字符每帧可换(类似 normal rain)
    */
@@ -492,6 +551,13 @@ export interface MatrixRainInstance {
   setDensity(fontSize: number): void;
 
   /**
+   * 动态调整字符间距(对称应用 x/y)· 不触发 buildGrid
+   * - 列数/行数不变,仅每个 cell 内字符的 (cx, cy) 偏移
+   * - 钳到 [-10, 20];非有限数 → 0
+   */
+  setCharGap(charGap: number): void;
+
+  /**
    * 动态更新局部子格渲染倍率。
    * - 不触发 buildGrid(基础网格 r/i 不变);只影响后续帧的子格路径
    * - `setRenderScale('auto')` 立即生效,但 effective 数值在每帧重算
@@ -580,28 +646,31 @@ export interface MatrixRainInstance {
    * @throws {RangeError} 当 Float32Array 长度 > 10000 cells(防内存炸弹)或与 targetCols × targetRows 不一致
    * @since 0.2.0 输入校验(0.1.0 仅接受 Float32Array,0.2.0 起支持 `{ cols, rows, data }` 包装对象)
    */
-  setTargetBitmap(bitmap: Float32Array | { cols: number; rows: number; data: Float32Array } | null, opts?: {
-    fadeIn?: number;
-    hold?: number;
-    fadeOut?: number;
-    chaos?: number;
-    anchor?: 'topLeft'|'center'|'topRight'|'bottomLeft'|'bottomRight';
-    motion?: 'static'|'drift'|'bounce'|'float';
-    motionSpeed?: number;
-    phase?: 'fade' | 'noise-converge';
-    noiseDuration?: number;
-    convergeDuration?: number;
-    lockOrder?: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft';
-    lockStability?: number;
-    /**
-     * 临时覆盖 instance.targetFitMode(单次生效)
-     * - 'contain' / 'cover' / 'actual' / 'auto'
-     * - 不传 → 走实例 targetFitMode(默认 'contain')
-     */
-    fitMode?: 'contain' | 'cover' | 'actual' | 'auto';
-    /** 可选:切换 phase 时,跨阶段过渡时长(秒)。不传则走实例默认 phaseTransitionDuration */
-    phaseTransitionDuration?: number;
-  }): void;
+  setTargetBitmap(
+    bitmap: Float32Array | { cols: number; rows: number; data: Float32Array } | null,
+    opts?: {
+      fadeIn?: number;
+      hold?: number;
+      fadeOut?: number;
+      chaos?: number;
+      anchor?: 'topLeft' | 'center' | 'topRight' | 'bottomLeft' | 'bottomRight';
+      motion?: 'static' | 'drift' | 'bounce' | 'float';
+      motionSpeed?: number;
+      phase?: 'fade' | 'noise-converge';
+      noiseDuration?: number;
+      convergeDuration?: number;
+      lockOrder?: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft';
+      lockStability?: number;
+      /**
+       * 临时覆盖 instance.targetFitMode(单次生效)
+       * - 'contain' / 'cover' / 'actual' / 'auto'
+       * - 不传 → 走实例 targetFitMode(默认 'contain')
+       */
+      fitMode?: 'contain' | 'cover' | 'actual' | 'auto';
+      /** 可选:切换 phase 时,跨阶段过渡时长(秒)。不传则走实例默认 phaseTransitionDuration */
+      phaseTransitionDuration?: number;
+    }
+  ): void;
   /** 立即淑出(提前结束显示) */
   clearTargetBitmap(): void;
 
@@ -619,10 +688,7 @@ export interface MatrixRainInstance {
    * @since 0.2.0
    * @since 0.4.0 options 对象支持 dur + easing
    */
-  setTransitionAlpha(
-    alpha: number,
-    opts?: number | { dur?: number; easing?: EasingMode }
-  ): void;
+  setTransitionAlpha(alpha: number, opts?: number | { dur?: number; easing?: EasingMode }): void;
   /** 读取当前 transition alpha(测试用) @since 0.2.0 */
   getTransitionAlpha?(): number;
 
@@ -786,7 +852,10 @@ export const MatrixRain: {
   /** 当前活跃实例数 */
   readonly activeCount: number;
   /** 从 snapshot 还原一个实例(SSR hydration) */
-  fromSnapshot(json: string | MatrixRainSnapshot, options?: { canvas?: HTMLCanvasElement; container?: HTMLElement }): MatrixRainInstance;
+  fromSnapshot(
+    json: string | MatrixRainSnapshot,
+    options?: { canvas?: HTMLCanvasElement; container?: HTMLElement }
+  ): MatrixRainInstance;
   /**
    * 环境检测(读 navigator.userAgent + matchMedia + 视口宽)
    * - SSR / Node 环境安全调用:返回 `browser: 'Unknown'` / `viewportWidth: 0` / `devicePixelRatio: 1`

@@ -47,7 +47,15 @@ const drawFillBlended = (
   const k = blendedLUT.a[lIdx] / 255;
   const finalA = k * state.transitionAlpha;
   // 0.4.0+ 走 renderer(由 renderer 内部 cache fillStyle + 调 fillText)
-  state.renderer.drawChar(c.ch, h * state.ef + state.ef / 2, y, R2, G2, B2, finalA);
+  state.renderer.drawChar(
+    c.ch,
+    h * state.ef + state.ef / 2 + state.cfg.charGap,
+    y,
+    R2,
+    G2,
+    B2,
+    finalA
+  );
 };
 
 // ==================== drawInner · canonical cell 绘制 ====================
@@ -91,14 +99,30 @@ export const drawInner = (
     });
     if (out) {
       // 0.4.0+ 走 renderer
-      state.renderer.drawChar(c.ch, h * state.ef + state.ef / 2, y, out[0], out[1], out[2], 0.9);
+      state.renderer.drawChar(
+        c.ch,
+        h * state.ef + state.ef / 2 + state.cfg.charGap,
+        y,
+        out[0],
+        out[1],
+        out[2],
+        0.9
+      );
       return;
     }
   } else if (state.colorOverrides && typeof state.colorOverrides === 'object') {
     const ov = (state.colorOverrides as Record<number, [number, number, number]>)[__lIdx];
     if (ov) {
       // 0.4.0+ 走 renderer
-      state.renderer.drawChar(c.ch, h * state.ef + state.ef / 2, y, ov[0], ov[1], ov[2], 0.9);
+      state.renderer.drawChar(
+        c.ch,
+        h * state.ef + state.ef / 2 + state.cfg.charGap,
+        y,
+        ov[0],
+        ov[1],
+        ov[2],
+        0.9
+      );
       return;
     }
   }
@@ -453,7 +477,7 @@ export const drawClassic = (state: MatrixRainState): void => {
   const { ox, oy } = computeTargetOrigin(state);
 
   for (let s = 0; s < state.i; s++) {
-    const y = s * state.ef * 1.1 + state.ef * 0.55;
+    const y = s * state.ef * 1.1 + state.ef * 0.55 + state.cfg.charGap;
     for (let h = 0; h < state.r; h++) {
       if (localBoost && isParentInBitmapRegion(state, h, s, ox, oy)) {
         // === 子格路径 ===
@@ -691,7 +715,7 @@ const drawSubCellClassic = (
           hh,
           ss,
           subEf,
-          ss * subEf * 1.1 + subEf * 0.55,
+          ss * subEf * 1.1 + subEf * 0.55 + state.cfg.charGap,
           l,
           totalHue,
           result.ch
@@ -721,14 +745,24 @@ const drawSubCellClassic = (
     }
   }
   // 默认:用父 c.ch
-  drawInnerSub(state, c, hh, ss, subEf, ss * subEf * 1.1 + subEf * 0.55, l, totalHue, c.ch);
+  drawInnerSub(
+    state,
+    c,
+    hh,
+    ss,
+    subEf,
+    ss * subEf * 1.1 + subEf * 0.55 + state.cfg.charGap,
+    l,
+    totalHue,
+    c.ch
+  );
 };
 
 /**
  * 子格版 drawInner(0.3.0+)
  * - 不写 c.warmth(warmth 阻尼用父粒度,子格继承)
  * - 不写 c.bright / c.ch(父已算好,子格只读)
- * - fillText 坐标: (hh * subEf + subEf/2, ss * subEf * 1.1 + subEf * 0.55)
+ * - fillText 坐标: (hh * subEf + subEf/2, ss * subEf * 1.1 + subEf * 0.55 + state.cfg.charGap)
  *   → 沿用 classic 的 1.1 行高 + 0.55 中心偏置公式
  * - 颜色/blend:走第三层 LUT 路径(同 drawFillBlended)
  * - colorOverride:子格用子格坐标 (hh, ss) + 父 cell 状态
@@ -759,14 +793,30 @@ const drawInnerSub = (
     });
     if (out) {
       // 0.4.0+ 走 renderer
-      state.renderer.drawChar(ch, hh * subEf + subEf / 2, y, out[0], out[1], out[2], 0.9);
+      state.renderer.drawChar(
+        ch,
+        hh * subEf + subEf / 2 + state.cfg.charGap,
+        y,
+        out[0],
+        out[1],
+        out[2],
+        0.9
+      );
       return;
     }
   } else if (state.colorOverrides && typeof state.colorOverrides === 'object') {
     const ov = (state.colorOverrides as Record<number, [number, number, number]>)[__lIdx];
     if (ov) {
       // 0.4.0+ 走 renderer
-      state.renderer.drawChar(ch, hh * subEf + subEf / 2, y, ov[0], ov[1], ov[2], 0.9);
+      state.renderer.drawChar(
+        ch,
+        hh * subEf + subEf / 2 + state.cfg.charGap,
+        y,
+        ov[0],
+        ov[1],
+        ov[2],
+        0.9
+      );
       return;
     }
   }
@@ -780,7 +830,7 @@ const drawInnerSub = (
   const k = blendedLUT.a[lIdx] / 255;
   const finalA = k * state.transitionAlpha;
   // 0.4.0+ 走 renderer
-  state.renderer.drawChar(ch, hh * subEf + subEf / 2, y, R2, G2, B2, finalA);
+  state.renderer.drawChar(ch, hh * subEf + subEf / 2 + state.cfg.charGap, y, R2, G2, B2, finalA);
 };
 
 /**
@@ -789,7 +839,7 @@ const drawInnerSub = (
  *
  * 0.3.0+ renderScale:
  * - 头亮 trail 按行对齐 · 子格只在列方向生效(横向更锐,纵向密度不变)
- * - 子格 y 用 c.yPos! * subEf * 1.1(共享父 y,整行子格在同一水平线)
+ * - 子格 y 用 c.yPos! * subEf * 1.1 + state.cfg.charGap(共享父 y,整行子格在同一水平线)
  */
 export const drawAvalanche = (state: MatrixRainState): void => {
   const totalHue = state.dynamicHue + state.dynamicColorHue;
@@ -884,14 +934,14 @@ const drawParentCellAvalanche = (
     c.ch = Math.floor(Math.random() * state.charset.length);
   if (l < 0.02) return;
 
-  const y = c.yPos! * state.ef * 1.1;
+  const y = c.yPos! * state.ef * 1.1 + state.cfg.charGap;
   drawInner(state, c, h, s, y, l, M, p, totalHue);
 };
 
 /**
  * Avalanche 子格绘制(0.3.0+)
  * - 父 cell 状态已由 computeParentCellStateAvalanche 算好
- * - 子格 y = c.yPos! * subEf * 1.1(共享父 y,整行子格同水平线)
+ * - 子格 y = c.yPos! * subEf * 1.1 + state.cfg.charGap(共享父 y,整行子格同水平线)
  */
 const drawSubCellAvalanche = (
   state: MatrixRainState,
@@ -907,12 +957,12 @@ const drawSubCellAvalanche = (
     const result = state.hooks.applyTargetBitmapPhase(c, hh, _ss, l, undefined, true);
     if (result) {
       l = result.l;
-      const y = c.yPos! * subEf * 1.1;
+      const y = c.yPos! * subEf * 1.1 + state.cfg.charGap;
       drawInnerSub(state, c, hh, _ss, subEf, y, l, totalHue, result.ch);
       return;
     }
   }
-  const y = c.yPos! * subEf * 1.1;
+  const y = c.yPos! * subEf * 1.1 + state.cfg.charGap;
   drawInnerSub(state, c, hh, _ss, subEf, y, l, totalHue, c.ch);
 };
 
@@ -945,7 +995,7 @@ export const drawRipple = (state: MatrixRainState): void => {
   const { ox, oy } = computeTargetOrigin(state);
 
   for (let s = 0; s < state.i; s++) {
-    const y = s * state.ef * 1.1 + state.ef * 0.55;
+    const y = s * state.ef * 1.1 + state.ef * 0.55 + state.cfg.charGap;
     for (let h = 0; h < state.r; h++) {
       if (localBoost && isParentInBitmapRegion(state, h, s, ox, oy)) {
         // === 子格路径 · 复用 classic 子格 helper(同 y 公式)===

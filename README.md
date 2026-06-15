@@ -74,6 +74,7 @@ const rain = matrixRain({
 
   // 字符网格
   fontSize: 14, // 字符宽(px),越大越疏
+  charGap: 1, // 字符间距(px)· 对称应用 x/y · 1-2 让字到字更紧
   charset: '0123456789', // 字符集
 
   // 残影拖尾
@@ -378,6 +379,7 @@ export default function MatrixBg() {
 | `theme`        | `ThemeName`                                   | `'silicon-valley'` | 主题预设 · `silicon-valley` / `matrix-green` / `lava-red` / `cyber-blue` / `pure-mono` |
 | `variant`      | `VariantName`                                 | `'classic'`        | 变体 · `classic` / `avalanche` / `ripple` / `ascii`                                    |
 | `fontSize`     | `number`                                      | `14`               | 字符宽(px)                                                                             |
+| `charGap`      | `number`                                      | `0`                | 字符间距(CSS px)· 对称应用 x/y · `1`/`2` 让字到字更紧,负值重叠 · 范围 `[-10, 20]`      |
 | `charset`      | `string`                                      | `'0123456789'`     | 字符集                                                                                 |
 | `trailAlpha`   | `number`                                      | `0.18`             | 残影 alpha,0.05=长拖尾 / 0.5=无拖尾                                                    |
 | `maxDPR`       | `number`                                      | `2`                | DPR 上限,性能优先设 1                                                                  |
