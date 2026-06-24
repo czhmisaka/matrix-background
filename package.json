@@ -103,12 +103,15 @@
     "test:usability": "node test/usability.mjs",
     "test:e2e:demos": "/Users/chenzhihan/anaconda3/bin/python3 scripts/e2e-demos.py",
     "bench:renderer": "node scripts/bench-renderer.mjs",
+    "size": "size-limit",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.0.0",
     "@commitlint/config-conventional": "^19.0.0",
     "@napi-rs/canvas": "^1.0.0",
+    "@size-limit/file": "^12.1.0",
+    "@size-limit/preset-small-lib": "^12.1.0",
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
@@ -119,6 +122,7 @@
     "lint-staged": "^15.0.0",
     "playwright": "^1.60.0",
     "prettier": "^3.0.0",
+    "size-limit": "^12.1.0",
     "tsup": "^8.5.1",
     "typescript": "^5.4.0",
     "vue-eslint-parser": "^9.4.0"

@@ -1,0 +1,32 @@
+[
+  {
+    "name": "index (ESM)",
+    "path": "dist/index.js",
+    "limit": "32 KB",
+    "gzip": true
+  },
+  {
+    "name": "index (CJS)",
+    "path": "dist/index.cjs",
+    "limit": "32 KB",
+    "gzip": true
+  },
+  {
+    "name": "themes (ESM)",
+    "path": "dist/themes.js",
+    "limit": "8 KB",
+    "gzip": true
+  },
+  {
+    "name": "index (UMD)",
+    "path": "dist/index.umd.js",
+    "limit": "35 KB",
+    "gzip": true
+  },
+  {
+    "name": "matrix-rain.css",
+    "path": "dist/matrix-rain.css",
+    "limit": "5 KB",
+    "gzip": true
+  }
+]
