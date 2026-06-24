@@ -199,6 +199,96 @@ export const MatrixRain = {
       recommendedRenderer,
     };
   },
+
+  /**
+   * 安装全局错误兜底(0.5.2+)
+   *
+   * 默认不开启(opt-in),避免与用户自带的 Sentry / Bugsnag 冲突。
+   * 只在用户主动调用时加 2 个 event listener,无性能开销。
+   *
+   * 监听两类事件:
+   * - `window.error` → 同步 throw / 资源加载失败等
+   * - `window.unhandledrejection` → async Promise reject
+   *
+   * 用法:
+   *   const remove = MatrixRain.installGlobalErrorHandler({
+   *     onError: (e) => {
+   *       // e.type: 'error' | 'unhandledrejection'
+   *       // e.message: 错误信息
+   *       // e.filename/line/col: 仅 'error' 类型有
+   *       myLogger.report(e);
+   *     }
+   *   });
+   *
+   *   // 测试 / 卸载:
+   *   remove();
+   *
+   * SSR 安全:`typeof window === 'undefined'` 时直接返回 noop。
+   *
+   * @param opts.onError 必填 · 错误回调
+   * @returns 卸载函数(调用后移除两个 listener)
+   */
+  installGlobalErrorHandler(opts: {
+    onError: (e: {
+      type: 'error' | 'unhandledrejection';
+      message: string;
+      filename?: string;
+      line?: number;
+      col?: number;
+    }) => void;
+  }): () => void {
+    if (typeof window === 'undefined') {
+      return () => {};
+    }
+    if (typeof opts?.onError !== 'function') {
+      throw new TypeError('MatrixRain.installGlobalErrorHandler: opts.onError must be a function');
+    }
+
+    const onErrorEvent = (e: Event) => {
+      const err = e as ErrorEvent;
+      try {
+        opts.onError({
+          type: 'error',
+          message: err.message ?? '',
+          filename: err.filename,
+          line: err.lineno,
+          col: err.colno,
+        });
+      } catch (_) {
+        // 兜底:用户回调自身 throw 不能影响其他 listener
+      }
+    };
+
+    const onRejection = (e: Event) => {
+      const pe = e as PromiseRejectionEvent;
+      const reason = pe.reason;
+      const message =
+        reason instanceof Error
+          ? reason.message
+          : typeof reason === 'string'
+            ? reason
+            : (() => {
+                try {
+                  return String(reason);
+                } catch {
+                  return 'Unknown rejection';
+                }
+              })();
+      try {
+        opts.onError({ type: 'unhandledrejection', message });
+      } catch (_) {
+        // 兜底同上
+      }
+    };
+
+    window.addEventListener('error', onErrorEvent);
+    window.addEventListener('unhandledrejection', onRejection);
+
+    return () => {
+      window.removeEventListener('error', onErrorEvent);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
+  },
 };
 
 // ==================== 默认导出 ====================

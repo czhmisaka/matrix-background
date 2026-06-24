@@ -868,4 +868,40 @@ export const MatrixRain: {
    * @since 0.2.0
    */
   detect(): EnvironmentInfo;
+  /**
+   * 安装全局错误兜底(0.5.2+)
+   *
+   * 默认不开启(opt-in),避免与用户自带的 Sentry / Bugsnag 冲突。
+   * 监听 `window.error` 与 `window.unhandledrejection` 两种事件,统一回调给用户。
+   *
+   * 用法:
+   * ```ts
+   * const remove = MatrixRain.installGlobalErrorHandler({
+   *   onError: (e) => {
+   *     // e.type: 'error' | 'unhandledrejection'
+   *     // e.message: 错误信息
+   *     // e.filename / e.line / e.col: 仅 'error' 类型有
+   *     myLogger.report(e);
+   *   }
+   * });
+   *
+   * // 测试 / 卸载:
+   * remove();
+   * ```
+   *
+   * SSR 安全:`typeof window === 'undefined'` 时返回 noop。
+   *
+   * @param opts.onError 必填 · 错误回调
+   * @returns 卸载函数(调用后移除两个 listener)
+   * @since 0.5.2
+   */
+  installGlobalErrorHandler(opts: {
+    onError: (e: {
+      type: 'error' | 'unhandledrejection';
+      message: string;
+      filename?: string;
+      line?: number;
+      col?: number;
+    }) => void;
+  }): () => void;
 };
