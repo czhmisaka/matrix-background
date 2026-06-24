@@ -1,0 +1,304 @@
+# 本 workflow 由 docs/test-strategy.md §6 + §8.4 派生
+# 治理条款(§8.4): P0 perf 回归自动开 issue,带 dedup(查近 24h 同 title)。
+# 此文件不修改 Stage 0(unit / size)既有结构,仅按 §6 增量补齐 pixel / e2e / perf / audit-baseline-drift job。
+
+name: test
+
+# 注意:'on' 在 YAML 1.1 里是 boolean。这里加引号防 PyYAML / 严格 actionlint 误判。
+# GitHub Actions 接受 quoted 形式,语义不变。
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # 允许手动 dispatch,带 dry-run / force-issue 开关,见 audit-baseline-drift job 末尾
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "dry-run 模式:检测到 P0 也不真开 issue,只 echo + setFailed"
+        required: false
+        default: "false"
+      force_issue:
+        description: "强制开 issue(跳过 needs 检测,用于本地复测 issue 流程)"
+        required: false
+        default: "false"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # === Stage 0(从既有 test.yml 继承,不修改) ===
+  unit:
+    name: unit (vitest + happy-dom)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run test:unit
+      - run: npm run test:unit:coverage
+
+  size:
+    name: size (size-limit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npm run size
+
+  # === Stage 2/3/4(按 §6 增量补齐,与 Stage 0 任务正交) ===
+
+  # 像素回归: §3.3 + §6 pixel job
+  # 失败时上传 test/pixel/diff/ 供人工 review
+  pixel:
+    name: pixel regression (playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [unit]
+    steps:
+      - uses: actions/checkout@v4
+        with: { lfs: true }
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: 'npm' }
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:pixel
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pixel-diff
+          path: test/pixel/diff/
+
+  # E2E: §3.2 + §6 e2e job
+  e2e:
+    name: e2e (playwright site)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    needs: [unit, size]
+    steps:
+      - uses: actions/checkout@v4
+        with: { lfs: true }
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: 'npm' }
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-trace
+          path: test/e2e/test-results/
+
+  # 性能 / 体积: §3.4 + §6 perf job
+  perf:
+    name: perf (vitest bench)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [unit, size]
+    steps:
+      - uses: actions/checkout@v4
+        with: { lfs: true }
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: 'npm' }
+      - run: npm ci
+      - run: npm run build
+      - run: npm run perf:bench
+      - run: npm run perf:report
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: perf-report
+          path: docs/perf-audit-*.md
+
+  # === §6 audit-baseline-drift(聚合 job) ===
+  # 任一上游失败 → 自动开 P0 issue(带 24h dedup),遵循 §8.4 治理条款。
+  # workflow_dispatch 额外支持 dry_run / force_issue 调试参数。
+  audit-baseline-drift:
+    name: audit baseline drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [unit, size, pixel, e2e, perf]
+    if: always()
+    permissions:
+      # 仅此 job 拿 issues:write,最小权限原则
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect upstream P0 failures and open (deduped) issue
+        uses: actions/github-script@v7
+        env:
+          # 调试入口参数,workflow_dispatch 时由用户输入;普通 push/PR 默认为 "false"
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          FORCE_ISSUE: ${{ github.event.inputs.force_issue || 'false' }}
+          # needs context 必须通过 ${{ }} 模板注入到 env/github-script inputs,
+          # 因为 github-script 脚本体内没有 needs 上下文(只有 context.payload / event)
+          NEEDS_UNIT_RESULT:  ${{ needs.unit.result }}
+          NEEDS_SIZE_RESULT:  ${{ needs.size.result }}
+          NEEDS_PIXEL_RESULT: ${{ needs.pixel.result }}
+          NEEDS_E2E_RESULT:   ${{ needs.e2e.result }}
+          NEEDS_PERF_RESULT:  ${{ needs.perf.result }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+        with:
+          script: |
+            // ---- 参数读取与默认值 ----
+            const dryRun = (process.env.DRY_RUN || 'false').toLowerCase() === 'true';
+            const forceIssue = (process.env.FORCE_ISSUE || 'false').toLowerCase() === 'true';
+
+            // ---- 解析上游 job 结果(needs context 通过 env 注入) ----
+            // .result 取值: 'success' | 'failure' | 'cancelled' | 'skipped'
+            // 只把 'failure' 视为 P0 信号;'skipped' 视为上游主动跳过,不报警
+            const jobsToAudit = [
+              { key: 'unit',  envKey: 'NEEDS_UNIT_RESULT',  short: 'unit test suite has failed case(s)' },
+              { key: 'size',  envKey: 'NEEDS_SIZE_RESULT',  short: 'bundle size exceeds §3.4.3 P0 limit (>35 KB)' },
+              { key: 'pixel', envKey: 'NEEDS_PIXEL_RESULT', short: 'pixel regression below §3.3.3 threshold' },
+              { key: 'e2e',   envKey: 'NEEDS_E2E_RESULT',   short: 'e2e suite has failed spec(s)' },
+              { key: 'perf',  envKey: 'NEEDS_PERF_RESULT',  short: 'perf regression exceeds §3.4.7 P0 threshold' },
+            ];
+
+            const realFailed = [];
+            for (const j of jobsToAudit) {
+              const result = process.env[j.envKey];
+              if (result === 'failure') {
+                realFailed.push({ key: j.key, short: j.short, result });
+              }
+            }
+
+            const failed = forceIssue
+              ? jobsToAudit.map(j => ({ key: j.key, short: j.short, result: 'forced' }))
+              : realFailed;
+
+            if (failed.length === 0) {
+              core.info('audit-baseline-drift: all upstream jobs green, no issue to open.');
+              return;
+            }
+
+            // ---- 主体:每个失败 job 开一条 issue(dedup by title in last 24h) ----
+            const titlePrefix = '[test-regression]';
+            const labels = ['test-regression', 'P0'];
+            const opened = [];
+            const skipped = [];
+
+            for (const j of failed) {
+              const title = `${titlePrefix} ${j.key}: ${j.short}`;
+
+              // ---- 24h dedup:查同 title issue 是否已开(github search API) ----
+              let existing = null;
+              try {
+                const q = await github.rest.search.issuesAndPullRequests({
+                  q: `repo:${context.repo.owner}/${context.repo.repo} is:issue in:title "${title.replace(/"/g, '\\"')}" created:>${new Date(Date.now() - 24*3600*1000).toISOString().slice(0,10)}`,
+                  per_page: 1,
+                });
+                existing = q.data.items?.[0] || null;
+              } catch (e) {
+                core.warning(`dedup search failed for "${title}": ${e.message} — proceeding to open`);
+              }
+
+              if (existing) {
+                skipped.push({ title, existingNumber: existing.number, existingUrl: existing.html_url });
+                core.info(`dedup hit: "${title}" already opened as #${existing.number} within 24h, skip.`);
+                continue;
+              }
+
+              // ---- 构造 body:commit SHA / triggered by / artifact 链接 / 相关 threshold ----
+              const sha = context.sha;
+              const shortSha = sha.slice(0, 7);
+              const triggeredBy = context.actor;
+              const runUrl = `${process.env.SERVER_URL}/${process.env.REPO}/actions/runs/${process.env.RUN_ID}/attempts/${process.env.RUN_ATTEMPT}`;
+              const artifactUrl = `${runUrl}#artifacts`;
+
+              const thresholdRef = {
+                pixel: '§3.3.3 匹配率阈值(按 renderer 分档) / gl.getError === 0',
+                perf:  '§3.4.7 P0: 任一指标 >50% 回归 · 体积 >35 KB · FPS p50 < 50',
+                size:  '§3.4.3 ESM/CJS/UMD gzipped 体积 P0 阈值',
+                e2e:   '§3.2.5 e2e suite 通过标准',
+                unit:  '§3.1.5 单测通过标准',
+              }[j.key] || '(see test-strategy.md)';
+
+              const body = [
+                `## 上游 P0 失败自动上报`,
+                ``,
+                `| 项 | 值 |`,
+                `| --- | --- |`,
+                `| Job | \`${j.key}\` (result: \`${j.result}\`) |`,
+                `| Commit | \`${shortSha}\` (${sha}) |`,
+                `| Triggered by | @${triggeredBy} |`,
+                `| Run | [#${process.env.RUN_ID} attempt ${process.env.RUN_ATTEMPT}](${runUrl}) |`,
+                `| Artifacts | [下载](${artifactUrl}) |`,
+                `| Threshold | ${thresholdRef} |`,
+                ``,
+                `### 失败描述`,
+                `> ${j.short}`,
+                ``,
+                `### 建议处置`,
+                `1. 查看上述 Run 的 artifact(\`${j.key}\` 相关)。`,
+                `2. 对照 §${j.key === 'pixel' ? '3.3' : j.key === 'perf' ? '3.4' : j.key === 'size' ? '3.4.3' : j.key === 'e2e' ? '3.2' : '3.1'} 阈值确认是否真回归。`,
+                `3. 真回归 → revert / fix;假阳 → 调阈值或加白名单,并在此 issue 评论。`,
+                ``,
+                `> Auto-generated by \`audit-baseline-drift\` job · 24h 内同 title 仅开一次。`,
+              ].join('\n');
+
+              if (dryRun) {
+                core.notice(`[dry-run] would open issue: ${title}`);
+                core.notice(`[dry-run] body preview:\n${body.slice(0, 400)}...`);
+                continue;
+              }
+
+              // ---- 真开 issue ----
+              try {
+                const res = await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title,
+                  body,
+                  labels,
+                });
+                opened.push({ title, number: res.data.number, url: res.data.html_url });
+                core.notice(`opened issue #${res.data.number}: ${title}`);
+              } catch (e) {
+                core.error(`failed to open issue for "${j.key}": ${e.message}`);
+                // 任一开失败 → 整个 job fail,让 maintainer 看到
+                throw e;
+              }
+            }
+
+            // ---- 总结输出 ----
+            await core.summary
+              .addHeading('audit-baseline-drift summary', 1)
+              .addTable([
+                [{ data: 'Job', header: true }, { data: 'Result', header: true }, { data: 'Action', header: true }],
+                ...failed.map(j => [`\`${j.key}\``, `\`${j.result}\``, opened.find(o => o.title.includes(j.key)) ? `opened` : (skipped.find(s => s.title.includes(j.key)) ? `deduped (#${skipped.find(s => s.title.includes(j.key)).existingNumber})` : 'dry-run')]),
+              ])
+              .write();
+
+            if (opened.length === 0 && !dryRun) {
+              // 所有失败都因 dedup 跳过,不算回归新增
+              core.info(`audit-baseline-drift: ${skipped.length} issue(s) deduplicated, 0 newly opened.`);
+            }
+
+            // 仍然 fail-fast:任一上游 P0 → 整个 workflow 红(§6 决策)
+            if (failed.length > 0) {
+              core.setFailed(`audit-baseline-drift: ${failed.length} upstream P0 failure(s) detected. See summary for issue links.`);
+            }
+
+      - name: Force-fail when dry-run
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "::error::dry-run mode: workflow_dispatch 故意 fail,仅验证 issue 流程。"
+          exit 1

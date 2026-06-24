@@ -13,6 +13,8 @@
 
 [在线演示](https://matrix-rain.xietuier.ai) · [GitHub](https://github.com/xietuier/matrix-rain) · [报告 Bug](https://github.com/xietuier/matrix-rain/issues)
 
+> **要求 Node ≥ 20**(`engines.node: ^20.0.0 || >=22.0.0`,锁 Node 20 LTS)。本地推荐 `nvm use`(项目自带 `.nvmrc`)。
+
 ---
 
 ## ✨ 特性
