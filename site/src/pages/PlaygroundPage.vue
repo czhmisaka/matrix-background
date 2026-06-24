@@ -223,12 +223,25 @@
                 >{{ phase }}</span
               >
               <span class="info-pill mono" aria-hidden="true">{{ elapsed.toFixed(2) }}s</span>
-              <span class="info-pill coords-readout" aria-hidden="true"
+              <span
+                class="info-pill coords-readout"
+                tabindex="0"
+                role="status"
+                aria-label="画布坐标 · 使用方向键调整 x/y"
+                @keydown="onReadoutKeydown"
                 >x:{{ String(coords.x).padStart(3, '0') }} y:{{
                   String(coords.y).padStart(3, '0')
                 }}
                 · cell R{{ coords.row }}:C{{ coords.col }}</span
               >
+              <button
+                type="button"
+                class="info-pill coords-reset"
+                aria-label="重置坐标到原点 (0, 0)"
+                @click="resetCoords"
+              >
+                reset
+              </button>
             </div>
           </div>
         </div>
@@ -528,6 +541,57 @@ function onCanvasMove(ev: PointerEvent) {
 }
 
 /**
+ * 键盘调整坐标 readout(无障碍)
+ * - ArrowLeft/Right 改 x, ArrowUp/Down 改 y
+ * - Shift + Arrow = 一个 cell(等于 fontSize 像素),无 Shift = 1px
+ * - 复用 onCanvasMove 的 clamp + 派生 col/row 逻辑(DRY)
+ * - preventDefault 阻止方向键滚屏
+ */
+function onReadoutKeydown(ev: KeyboardEvent) {
+  const step = ev.shiftKey ? Math.max(1, params.fontSize) : 1;
+  const cv = canvasRef.value;
+  if (!cv) return;
+  const rect = cv.getBoundingClientRect();
+  let dx = 0;
+  let dy = 0;
+  switch (ev.key) {
+    case 'ArrowLeft':
+      dx = -step;
+      break;
+    case 'ArrowRight':
+      dx = step;
+      break;
+    case 'ArrowUp':
+      dy = -step;
+      break;
+    case 'ArrowDown':
+      dy = step;
+      break;
+    case 'Home':
+      coords.x = 0;
+      coords.y = 0;
+      coords.col = 0;
+      coords.row = 0;
+      ev.preventDefault();
+      return;
+    default:
+      return;
+  }
+  ev.preventDefault();
+  coords.x = Math.max(0, Math.min(coords.x + dx, rect.width));
+  coords.y = Math.max(0, Math.min(coords.y + dy, rect.height));
+  coords.col = Math.max(0, Math.floor(coords.x / params.fontSize));
+  coords.row = Math.max(0, Math.floor(coords.y / params.fontSize));
+}
+
+function resetCoords() {
+  coords.x = 0;
+  coords.y = 0;
+  coords.col = 0;
+  coords.row = 0;
+}
+
+/**
  * 关键修复:原版直接调 matrixRain() 后没有 watch params,
  * 导致 theme/variant/fontSize/trailAlpha/maxDPR/brightness/phase/duration/lockStability/lockOrder 全部不生效。
  *
@@ -817,6 +881,26 @@ onBeforeUnmount(() => {
 .info-pill.mono {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+}
+.info-pill.coords-readout,
+.info-pill.coords-reset {
+  pointer-events: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.info-pill.coords-readout {
+  cursor: pointer;
+  user-select: none;
+}
+.info-pill.coords-readout:hover,
+.info-pill.coords-reset:hover {
+  background: rgba(8, 8, 18, 0.95);
+  border-color: var(--accent);
+}
+.info-pill.coords-reset {
+  cursor: pointer;
+  color: var(--accent);
 }
 .info-pill[data-phase='hold'] {
   color: #7af7d4;
