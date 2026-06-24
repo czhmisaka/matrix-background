@@ -85,6 +85,44 @@ const __ensureDebugHook = () => {
       if (all.length === 0) return 0;
       return Math.round(all.reduce((s, i) => s + i.getFPS(), 0) / all.length);
     },
+    /**
+     * 聚合所有活跃实例的健康快照字段,只暴露"是否出错 + 出错类型"信号,不返回 13 字段全量
+     * - hasErrors=true 时调用方应进一步查 lastGlError / lastErrorScope / lastInitError 定位哪个 renderer
+     * - droppedFrames 跨实例累加(用于"页面整体掉帧"判断)
+     * - 数组:每个实例一条,便于多 canvas 同页时分别高亮
+     * @since 0.6.0
+     */
+    getHealthSummary() {
+      const all = Array.from(__debugInstances);
+      const perInstance = all.map((i) => {
+        const h = i.getRendererHealth();
+        return {
+          id: i.__debugId,
+          theme: i.__debugTheme,
+          variant: i.__debugVariant,
+          renderer: h.renderer,
+          hasErrors: h.lastGlError !== 0 || h.lastErrorScope !== null || h.lastInitError !== null,
+          lastGlError: h.lastGlError,
+          lastErrorScope: h.lastErrorScope,
+          lastInitError: h.lastInitError,
+          droppedFrames: h.droppedFrames,
+        };
+      });
+      const totals = perInstance.reduce(
+        (s, x) => ({
+          droppedFrames: s.droppedFrames + x.droppedFrames,
+          errors: s.errors + (x.hasErrors ? 1 : 0),
+        }),
+        { droppedFrames: 0, errors: 0 }
+      );
+      return {
+        instances: perInstance,
+        totals,
+        get hasErrors() {
+          return totals.errors > 0;
+        },
+      };
+    },
     destroyAll() {
       Array.from(__debugInstances).forEach((i) => {
         try {

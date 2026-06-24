@@ -182,6 +182,32 @@
             />
           </label>
           <button class="btn btn-block" type="button" @click="regenerate">应用</button>
+
+          <hr />
+
+          <details class="health-panel" :open="healthOpen">
+            <summary @click.prevent="healthOpen = !healthOpen">
+              <span class="health-title">Health</span>
+              <span
+                class="health-pill"
+                :data-state="healthBadgeState"
+                :aria-label="`renderer ${health?.renderer ?? '-'}, ${
+                  health ? health.frameCount : 0
+                } 帧`"
+                >{{ healthBadgeLabel }}</span
+              >
+            </summary>
+            <table v-if="health" class="health-table" aria-label="renderer 健康快照(13 字段)">
+              <tbody>
+                <tr v-for="f in HEALTH_FIELDS" :key="f.key" :class="{ 'is-warn': f.warn(health) }">
+                  <th scope="row">{{ f.label }}</th>
+                  <td>{{ formatHealth(f.key, health) }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-else class="health-empty">尚未初始化</p>
+            <p class="health-hint">1Hz 刷新 · 字段背景变红 = 当前值异常</p>
+          </details>
         </aside>
 
         <div class="canvas-area">
@@ -229,8 +255,28 @@ import {
   type MatrixRainOptions,
   type ThemeName,
   type VariantName,
+  type MatrixRainInstance,
 } from '@xietuier/matrix-rain';
 import { useMatrixRain } from '@/composables/useMatrixRain';
+
+/** 复用 inst.getRendererHealth() 返回类型,避免单独 import 未导出的 RendererHealth */
+type Health = ReturnType<MatrixRainInstance['getRendererHealth']>;
+/** Health Panel 字段顺序与高亮规则(0.6.0+:13 字段) */
+const HEALTH_FIELDS: { key: keyof Health; warn: (h: Health) => boolean; label: string }[] = [
+  { key: 'renderer', warn: () => false, label: 'renderer' },
+  { key: 'initialized', warn: (h) => !h.initialized, label: 'initialized' },
+  { key: 'frameCount', warn: () => false, label: 'frameCount' },
+  { key: 'drawCallIdx', warn: () => false, label: 'drawCallIdx' },
+  { key: 'instanceCount', warn: () => false, label: 'instanceCount' },
+  { key: 'gridCols', warn: () => false, label: 'gridCols' },
+  { key: 'gridRows', warn: () => false, label: 'gridRows' },
+  { key: 'initDurationMs', warn: () => false, label: 'initDurationMs' },
+  { key: 'lastFrameDurationMs', warn: () => false, label: 'lastFrameDurationMs' },
+  { key: 'droppedFrames', warn: (h) => h.droppedFrames > 0, label: 'droppedFrames' },
+  { key: 'lastGlError', warn: (h) => h.lastGlError !== 0, label: 'lastGlError' },
+  { key: 'lastErrorScope', warn: (h) => h.lastErrorScope !== null, label: 'lastErrorScope' },
+  { key: 'lastInitError', warn: (h) => h.lastInitError !== null, label: 'lastInitError' },
+];
 
 const themes: ThemeName[] = [
   'silicon-valley',
@@ -285,6 +331,17 @@ const elapsed = ref(0);
 const coords = reactive({ x: 0, y: 0, row: 0, col: 0 });
 let inputRaf: number | null = null;
 let phaseRaf = 0;
+
+/**
+ * Health Panel 状态
+ * - 1Hz setInterval 读 inst.getRendererHealth()(避免每帧 clone + Object.freeze 成本)
+ * - 字段值因 setter 改动而改变(frameCount/drawCallIdx/droppedFrames/initDurationMs 都会动)
+ * - 因 useMatrixRain 在重建时会先 null 旧实例再赋新值,1Hz 读到的可能是旧实例的 last 帧状态
+ *   这没问题 —— 字段变 0 时 panel 会自己反映"未初始化"
+ */
+const health = ref<Health | null>(null);
+const healthOpen = ref(true);
+let healthTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * 完整 options 传给 useMatrixRain
@@ -402,6 +459,57 @@ function phaseTick() {
   phaseRaf = requestAnimationFrame(phaseTick);
 }
 
+/**
+ * Health Panel:1Hz 从 instance 拉一次快照
+ * - 字段值由 getter 返回 Object.freeze 副本,Vue 浅比较能检测到字段变化
+ * - 任一异常字段触发 is-warn 高亮
+ * - 整个面板不参与 rAF,不污染渲染主循环
+ */
+function pollHealth() {
+  const inst = instance.value;
+  if (!inst || typeof inst.getRendererHealth !== 'function') {
+    health.value = null;
+    return;
+  }
+  try {
+    health.value = inst.getRendererHealth();
+  } catch {
+    health.value = null;
+  }
+}
+
+/** Health Panel 折叠头角标:renderer + frameCount + 错误数 */
+const healthBadgeState = computed<'ok' | 'warn' | 'init'>(() => {
+  if (!health.value) return 'init';
+  const h = health.value;
+  if (h.lastGlError !== 0 || h.lastErrorScope !== null || h.lastInitError !== null) return 'warn';
+  if (!h.initialized || h.frameCount === 0) return 'init';
+  return 'ok';
+});
+const healthBadgeLabel = computed(() => {
+  const h = health.value;
+  if (!h) return '未初始化';
+  const errCount =
+    (h.lastGlError !== 0 ? 1 : 0) +
+    (h.lastErrorScope !== null ? 1 : 0) +
+    (h.lastInitError !== null ? 1 : 0);
+  if (errCount > 0) return `${h.renderer} · ${errCount} err`;
+  return `${h.renderer} · ${h.frameCount}f`;
+});
+
+/** Health 字段渲染:错误值裁断长度,数字保持 tabular */
+function formatHealth(key: keyof Health, h: Health): string {
+  const v = h[key];
+  if (key === 'lastErrorScope' || key === 'lastInitError') {
+    return v == null ? 'null' : String(v).slice(0, 80);
+  }
+  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  if (typeof v === 'number') {
+    return Number.isInteger(v) ? String(v) : v.toFixed(2);
+  }
+  return String(v);
+}
+
 // canvas 鼠标坐标 readout · 跟 cell R:C 同步
 function onCanvasMove(ev: PointerEvent) {
   const cv = canvasRef.value;
@@ -450,11 +558,20 @@ watch(
 onMounted(() => {
   setTimeout(regenerate, 250);
   phaseTick();
+  // Health Panel:1Hz 拉一次(等到首帧后再启,避免拿空实例)
+  setTimeout(() => {
+    pollHealth();
+    healthTimer = setInterval(pollHealth, 1000);
+  }, 1100);
 });
 
 onBeforeUnmount(() => {
   if (inputRaf !== null) cancelAnimationFrame(inputRaf);
   cancelAnimationFrame(phaseRaf);
+  if (healthTimer !== null) {
+    clearInterval(healthTimer);
+    healthTimer = null;
+  }
   // instance 销毁由 useMatrixRain 自动处理
 });
 </script>
@@ -545,6 +662,112 @@ onBeforeUnmount(() => {
   background: var(--accent);
   color: var(--bg);
   border-color: var(--accent);
+}
+
+/**
+ * Health Panel 样式(0.6.0+ Playground 可折叠诊断面板)
+ * - 默认折叠角标显示 renderer + frameCount + 错误数
+ * - lastGlError/lastErrorScope/lastInitError 任一异常 → is-warn 红色背景
+ * - 字段宽度自适 table-layout:fixed;保持列对齐
+ */
+.health-panel {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.health-panel > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  user-select: none;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.health-panel > summary::-webkit-details-marker {
+  display: none;
+}
+.health-panel > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 4px;
+  transition: transform 0.15s ease;
+}
+.health-panel[open] > summary::before {
+  transform: rotate(90deg);
+}
+.health-title {
+  font-weight: 500;
+}
+.health-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.health-pill[data-state='ok'] {
+  color: #7af7d4;
+  border-color: rgba(122, 247, 212, 0.3);
+}
+.health-pill[data-state='warn'] {
+  color: #ff5c7c;
+  border-color: rgba(255, 92, 124, 0.5);
+  background: rgba(255, 92, 124, 0.08);
+}
+.health-pill[data-state='init'] {
+  color: var(--text-faint);
+}
+.health-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  table-layout: fixed;
+}
+.health-table th,
+.health-table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 400;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+.health-table th {
+  width: 48%;
+  color: var(--text-faint);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.health-table td {
+  color: var(--text);
+}
+.health-table tr.is-warn td,
+.health-table tr.is-warn th {
+  background: rgba(255, 92, 124, 0.12);
+  color: #ff5c7c;
+}
+.health-empty {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin: 8px 0 0;
+}
+.health-hint {
+  font-size: 10px;
+  color: var(--text-faint);
+  margin: 8px 0 0;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .canvas-area {
