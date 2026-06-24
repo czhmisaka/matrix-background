@@ -483,8 +483,12 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         dt: state.lastDt,
         fps: Math.round(state.fps),
       });
-    } catch {
-      /* */
+    } catch (e) {
+      state.userCallbackError = {
+        name: 'onFrame',
+        message: e instanceof Error ? e.message : String(e),
+        frame: state.f,
+      };
     }
   };
 
@@ -493,8 +497,11 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     if (!opts.onResize) return;
     try {
       opts.onResize({ w: state.a, h: state.o, cols: state.r, rows: state.i });
-    } catch {
-      /* */
+    } catch (e) {
+      state.userCallbackError = {
+        name: 'onResize',
+        message: e instanceof Error ? e.message : String(e),
+      };
     }
   };
 
@@ -503,8 +510,11 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     if (!opts.onThemeChange) return;
     try {
       opts.onThemeChange(newTheme);
-    } catch {
-      /* */
+    } catch (e) {
+      state.userCallbackError = {
+        name: 'onThemeChange',
+        message: e instanceof Error ? e.message : String(e),
+      };
     }
   };
 
@@ -513,8 +523,11 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     if (!opts.onTargetFinish) return;
     try {
       opts.onTargetFinish();
-    } catch {
-      /* */
+    } catch (e) {
+      state.userCallbackError = {
+        name: 'onTargetFinish',
+        message: e instanceof Error ? e.message : String(e),
+      };
     }
   };
 

@@ -606,7 +606,12 @@ export const createSetters = (
     phaseFunc?: string;
     charsetFunc?: string;
     colorCurve?: string;
-  } => ({ ...state.diagnostics });
+    userCallbackError?: {
+      name: 'onFrame' | 'onResize' | 'onThemeChange' | 'onTargetFinish';
+      message: string;
+      frame?: number;
+    } | null;
+  } => ({ ...state.diagnostics, userCallbackError: state.userCallbackError });
 
   const getClickBurstState = (): {
     active: boolean;

@@ -720,6 +720,11 @@ export interface MatrixRainInstance {
     phaseFunc?: string;
     charsetFunc?: string;
     colorCurve?: string;
+    userCallbackError?: {
+      name: 'onFrame' | 'onResize' | 'onThemeChange' | 'onTargetFinish';
+      message: string;
+      frame?: number;
+    } | null;
   };
 
   /**

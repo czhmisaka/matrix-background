@@ -405,6 +405,16 @@ export interface MatrixRainState {
   diagnostics: Diagnostics;
   /** 颜色动态曲线(每帧调,返回度数值) */
   colorCurve: UserFunc | null;
+  /**
+   * 最近一次 fireOn* 回调(onFrame / onResize / onThemeChange / onTargetFinish)
+   * 中由用户 throw 抛出的错误。null = 上一帧没出错。
+   * 透出口:getDiagnostics().userCallbackError
+   */
+  userCallbackError: {
+    name: 'onFrame' | 'onResize' | 'onThemeChange' | 'onTargetFinish';
+    message: string;
+    frame?: number;
+  } | null;
 
   // ============ 颜色覆盖 ============
   colorOverrides: ColorOverrides | null;
@@ -816,6 +826,7 @@ export const createMatrixRainState = (
     userFuncs,
     diagnostics,
     colorCurve,
+    userCallbackError: null,
 
     // color overrides
     colorOverrides,
