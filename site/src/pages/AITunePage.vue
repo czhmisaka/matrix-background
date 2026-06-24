@@ -28,7 +28,7 @@
       />
 
       <section class="stage" ref="stageRef" aria-label="画布与状态">
-        <canvas ref="canvasRef"></canvas>
+        <canvas ref="canvasRef" aria-hidden="true"></canvas>
         <div class="stage-info">
           <span class="stage-tag">FPS: {{ fps.toFixed(0) }}</span>
           <span class="stage-tag">主题: {{ currentOptions.theme || 'silicon-valley' }}</span>
