@@ -452,7 +452,11 @@ function phaseTick() {
   if (inst && typeof (inst as any).getTargetState === 'function') {
     const state = (inst as any).getTargetState();
     if (state) {
-      phase.value = state.phase;
+      // aria-live 区域每秒 60 次写入会让屏幕阅读器 (NVDA/VoiceOver) 反复播报。
+      // 只在 phase 真正切换时更新 ref,中间 elapsed 不再触发 DOM 写入。
+      if (state.phase !== phase.value) {
+        phase.value = state.phase;
+      }
       elapsed.value = state.elapsed;
     }
   }
