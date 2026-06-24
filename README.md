@@ -1185,6 +1185,31 @@ GUI 面板见 `demo/99-debug.html`,启动即看到:
 
 ---
 
+## 🖥️ 本地站点(0.6.0+ `site/`)
+
+`site/` 是文档/演示站,Vue 3 + Vite,只用于本地预览,**不进 npm 包**。
+
+**需要 pnpm**(仓库自带 `site/pnpm-lock.yaml` 入库,锁住所有依赖版本)。
+
+```bash
+# 一键构建并起本地预览(等价于 npm run deploy:local + deploy:serve)
+npm run deploy:local              # build 主包 → 拷资产到 site/public/matrix-rain/ → pnpm install --frozen-lockfile → type-check → build site
+npm run deploy:serve              # 起 vite preview,http://127.0.0.1:4173
+```
+
+**为什么用 `--frozen-lockfile` 而不是 `--prefer-offline`?**
+
+`deploy:local` 必须用仓库入的 `site/pnpm-lock.yaml`,不能漂移到最新版。如果有人改 `site/package.json` 但忘了更新 lockfile,`--frozen-lockfile` 会**立即报错**而不是悄悄装新版本(防 P2 漂移,见 `docs/audit-test-release-2026-06-24.md` §P1-4)。
+
+**首次 clone 或 lockfile 缺失时**:
+
+```bash
+cd site && pnpm install            # 先生成 lockfile
+git add pnpm-lock.yaml             # 入库
+```
+
+---
+
 ## 📐 浏览器兼容
 
 - Chrome / Edge ≥ 90
