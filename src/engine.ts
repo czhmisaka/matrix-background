@@ -617,6 +617,17 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       }
       state.f++;
 
+      // 0.6.2+ dirty check:setDensity / setMaxDPR 不主动调 buildGrid
+      // 这里检测 fontSize / maxDPR 变化,触发 buildGrid
+      // draw 每帧跑,保证 renderer.init() 已完成,race-safe
+      const wantMaxDPR = Math.min(
+        typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1,
+        state.cfg.maxDPR
+      );
+      if (state.cfg.fontSize !== state.ef || wantMaxDPR !== state.n) {
+        buildGrid();
+      }
+
       // dt / wallTime
       if (state.fixedTimeStep) {
         state.lastDt = state.FIXED_DT;
@@ -847,6 +858,14 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     setFlickerSpeed: methods.setFlickerSpeed,
     setTargetFPS: methods.setTargetFPS,
     setDensity: methods.setDensity,
+    // 0.6.2+ 软更新 setter(Playground 调参不需重建)
+    setTrailAlpha: methods.setTrailAlpha,
+    setMaxDPR: methods.setMaxDPR,
+    setTargetPhase: methods.setTargetPhase,
+    setTargetNoiseDuration: methods.setTargetNoiseDuration,
+    setTargetConvergeDuration: methods.setTargetConvergeDuration,
+    setTargetLockOrder: methods.setTargetLockOrder,
+    setTargetLockStability: methods.setTargetLockStability,
     setCharGap: methods.setCharGap,
     setRenderScale: methods.setRenderScale,
     getRenderScale: methods.getRenderScale,

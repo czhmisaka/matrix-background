@@ -40,7 +40,19 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run test:unit
-      - run: npm run test:unit:coverage
+      # P1-1: coverage step 用 continue-on-error,fail 不阻断 — 真正的 fail 信号已由上一步 test:unit 给出
+      # 这一步只是为了拿数字落盘(coverage/.summary.json + coverage/coverage-summary.json)
+      - name: Coverage (non-blocking, signal preserved by test:unit step)
+        run: npm run test:unit:coverage
+        continue-on-error: true
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-summary
+          path: |
+            coverage/.summary.json
+            coverage/coverage-summary.json
 
   size:
     name: size (size-limit)

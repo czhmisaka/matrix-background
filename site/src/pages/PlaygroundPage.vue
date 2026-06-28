@@ -249,11 +249,8 @@
 
       <section class="code-output">
         <h2>代码</h2>
-        <pre
-          role="region"
-          tabindex="0"
-          aria-label="当前 matrixRain 调用代码"
-        ><code>{{ codeString }}</code></pre>
+        <p class="sr-only">{{ summary }}</p>
+        <pre role="region" tabindex="0" aria-hidden="true"><code>{{ codeString }}</code></pre>
         <p class="hint">点击「复制代码」可一键复制当前调用。改任一参数,代码块会实时刷新。</p>
       </section>
     </div>
@@ -264,7 +261,6 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import ThemeSwitcher from '@/components/ThemeSwitcher.vue';
 import {
-  textToBitmap,
   type MatrixRainOptions,
   type ThemeName,
   type VariantName,
@@ -342,11 +338,16 @@ const targetText = ref('MATRIX');
 const phase = ref<'idle' | 'noise' | 'converge' | 'hold' | 'dissolve'>('idle');
 const elapsed = ref(0);
 const coords = reactive({ x: 0, y: 0, row: 0, col: 0 });
-let inputRaf: number | null = null;
 let phaseRaf = 0;
 
 /**
- * Health Panel 状态
+ * 0.6.2+ 重构(Playground 修复):
+ * - matrixOptions 只承载"非 target"参数(theme/variant/fontSize/trailAlpha/maxDPR/brightness/phase/durations/...)
+ * - target bitmap 由 useMatrixRain.setTarget(text) 单独管理,自动处理 mount 重建后的恢复
+ * - 删除了旧版的 regenerate() 函数 + 自己 watch 12 个 params 的逻辑(那是 race condition 的来源)
+ * - useMatrixRain 内部 effectKey 监听 12 个 params + 软更新 setter,完全消除 race
+ *
+ * 0.6.0+ Health Panel 状态:
  * - 1Hz setInterval 读 inst.getRendererHealth()(避免每帧 clone + Object.freeze 成本)
  * - 字段值因 setter 改动而改变(frameCount/drawCallIdx/droppedFrames/initDurationMs 都会动)
  * - 因 useMatrixRain 在重建时会先 null 旧实例再赋新值,1Hz 读到的可能是旧实例的 last 帧状态
@@ -355,12 +356,6 @@ let phaseRaf = 0;
 const health = ref<Health | null>(null);
 const healthOpen = ref(true);
 let healthTimer: ReturnType<typeof setInterval> | null = null;
-
-/**
- * 完整 options 传给 useMatrixRain
- * - useMatrixRain 内部 deep watch,任意字段变化 → 销毁旧实例 + 重建
- * - brightness 包在 themeParams 里(引擎约定)
- */
 const matrixOptions = computed<MatrixRainOptions>(() => ({
   theme: params.theme,
   variant: params.variant,
@@ -378,7 +373,7 @@ const matrixOptions = computed<MatrixRainOptions>(() => ({
   targetFadeOut: 2.0,
 }));
 
-const instance = useMatrixRain(matrixOptions, canvasRef);
+const rain = useMatrixRain(matrixOptions, canvasRef);
 
 const codeString = computed(() => {
   const opts: Record<string, unknown> = {
@@ -420,30 +415,24 @@ rain.setTargetBitmap(bitmap, {
 });`;
 });
 
+// sr-only 播报用的"人类可读"参数摘要,屏幕阅读器一次读出所有关键参数
+const summary = computed(
+  () =>
+    `当前调用: theme ${params.theme}, variant ${params.variant}, fontSize ${params.fontSize}px, ` +
+    `trailAlpha ${params.trailAlpha.toFixed(2)}, maxDPR ${params.maxDPR.toFixed(1)}, ` +
+    `brightness ${params.brightness.toFixed(2)}, targetPhase ${params.targetPhase}` +
+    (params.targetPhase === 'noise-converge' ? `, lockOrder ${params.targetLockOrder}` : '')
+);
+
 function setLockOrder(o: typeof params.targetLockOrder) {
+  // 0.6.2+: 通过 matrixOptions.targetLockOrder → useMatrixRain effectKey → inst.setTargetLockOrder
+  // useMatrixRain 内部自动调 setter,无需额外动作
   params.targetLockOrder = o;
-  // regenerate 由下方 watcher 自动触发(useMatrixRain 重建 + rAF 后重新 setTargetBitmap)
 }
 
 function regenerate() {
-  const inst = instance.value;
-  if (!inst || !canvasRef.value) return;
-  // **DPR-safe** 修复:用 clientWidth/clientHeight(CSS 像素)而不是 canvas.width/height(DPR-缩放 backing store)
-  // 旧版用 canvas.width/height 传 textToBitmap,DPR=2 时 cols 翻倍 → 文字"过大"溢出
-  // 详见 docs/playwright/text-overflow-report.md(阶段 1 报告,commit 1efa77d)
-  const cssW = canvasRef.value.clientWidth || canvasRef.value.width;
-  const cssH = canvasRef.value.clientHeight || canvasRef.value.height;
-  const cols = Math.max(8, Math.floor(cssW / params.fontSize));
-  const rows = Math.max(6, Math.floor(cssH / params.fontSize));
-  const text = (targetText.value || ' ').trim() || ' ';
-  const bm = textToBitmap(text, cols, rows, undefined, 'contain');
-  inst.setTargetBitmap(bm, {
-    phase: params.targetPhase,
-    noiseDuration: params.targetNoiseDuration,
-    convergeDuration: params.targetConvergeDuration,
-    lockOrder: params.targetLockOrder,
-    lockStability: params.targetLockStability,
-  });
+  // 0.6.2+: 单一入口,由 useMatrixRain 内部缓存 + mount 后自动恢复
+  rain.setTarget(targetText.value);
 }
 
 function copyCode() {
@@ -457,11 +446,12 @@ function copyCode() {
 function resetParams() {
   Object.assign(params, defaults);
   targetText.value = 'MATRIX';
-  // regenerate 由下方 watcher 自动触发
+  // 0.6.2+: 重置后让 useMatrixRain 重建(themeParams/phase 变化)→ 自动调 setTarget
+  rain.setTarget(targetText.value);
 }
 
 function phaseTick() {
-  const inst = instance.value;
+  const inst = rain.value;
   if (inst && typeof (inst as any).getTargetState === 'function') {
     const state = (inst as any).getTargetState();
     if (state) {
@@ -483,7 +473,7 @@ function phaseTick() {
  * - 整个面板不参与 rAF,不污染渲染主循环
  */
 function pollHealth() {
-  const inst = instance.value;
+  const inst = rain.value;
   if (!inst || typeof inst.getRendererHealth !== 'function') {
     health.value = null;
     return;
@@ -591,40 +581,16 @@ function resetCoords() {
   coords.row = 0;
 }
 
-/**
- * 关键修复:原版直接调 matrixRain() 后没有 watch params,
- * 导致 theme/variant/fontSize/trailAlpha/maxDPR/brightness/phase/duration/lockStability/lockOrder 全部不生效。
- *
- * 现在 useMatrixRain 已 deep watch matrixOptions → 任意 param 变化触发重建。
- * 但重建后新实例没有 target bitmap,必须再 setTargetBitmap 才能保持涌现效果。
- * 监听 targetText + 所有 params,rAF 节流后调 regenerate()。
- */
-watch(
-  [
-    () => targetText.value,
-    () => params.theme,
-    () => params.variant,
-    () => params.fontSize,
-    () => params.trailAlpha,
-    () => params.maxDPR,
-    () => params.brightness,
-    () => params.targetPhase,
-    () => params.targetLockOrder,
-    () => params.targetNoiseDuration,
-    () => params.targetConvergeDuration,
-    () => params.targetLockStability,
-  ],
-  () => {
-    if (inputRaf !== null) cancelAnimationFrame(inputRaf);
-    inputRaf = requestAnimationFrame(() => {
-      inputRaf = null;
-      regenerate();
-    });
-  }
-);
+// 0.6.2+: 唯一保留的 watcher —— targetText 变化 → 重新 setTarget
+// (其他 11 个 params 都由 useMatrixRain effectKey 自动处理)
+watch(targetText, () => {
+  rain.setTarget(targetText.value);
+});
 
 onMounted(() => {
-  setTimeout(regenerate, 250);
+  // 0.6.2+: 延迟 250ms 等 useMatrixRain onMounted + matrixRain init 完成后再 setTarget
+  // (matrixRain init 是 async: webgl 路径需要 load atlas PNG)
+  setTimeout(() => rain.setTarget(targetText.value), 250);
   phaseTick();
   // Health Panel:1Hz 拉一次(等到首帧后再启,避免拿空实例)
   setTimeout(() => {
@@ -634,7 +600,6 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  if (inputRaf !== null) cancelAnimationFrame(inputRaf);
   cancelAnimationFrame(phaseRaf);
   if (healthTimer !== null) {
     clearInterval(healthTimer);

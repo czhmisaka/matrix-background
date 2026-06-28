@@ -37,6 +37,13 @@ Thumbs.db
 # Test
 coverage/
 .nyc_output/
+.playwright/
+.playwright-cli/
+test/_probe-webgpu.mjs
+test/theme-transition.mjs
+# pixel baseline 由 MATRIX_RAIN_PIXEL_BASELINE_MODE=init 录制,默认不入库
+# 评审后用 `git add -f test/fixtures/baselines/` 显式提交,commit message 加 [pixel-update]
+test/fixtures/baselines/
 
 # Misc
 .cache/

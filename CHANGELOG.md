@@ -5,9 +5,31 @@ All notable changes to `@xietuier/matrix-rain` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-06-28
 
-### Added — `charGap` 字符间距配置
+### Added — 全局错误处理 + 诊断面板 + Playground 增强
+
+- **`MatrixRain.installGlobalErrorHandler()`** 静态方法：全局错误兜底，捕获引擎/回调中未处理的异常，防止雨滴静默崩溃。
+- **Playground Health Panel**：新增 `__matrixRainDebug.getHealthSummary()` 调试入口，实时展示 renderer 健康快照（fps / drawCalls / cellsRendered / lastError）。
+- **Playground coords readout**：坐标读数支持键盘可调 + reset 按钮，提升 a11y 可用性。
+- **`RendererHealth` 13 字段加 `readonly`**：编译期防篡改，保证诊断数据完整性。
+- **`size-limit` 五条目**（ESM/CJS/themes/UMD/CSS）：CI 构建体积门禁上线。
+
+### Fixed
+
+- **a11y**: throttle phase pill live region，仅在 phase 变更时播报，避免 aria-live 刷屏。
+- **a11y**: AITunePage canvas 加 `aria-hidden="true"`，防止屏幕阅读器读无意义像素数据。
+- **build**: tsup dts chunk 稳定命名，修 `npm pack` 时 `./themes-F8oKFGEV.d.ts` 引用失效。
+- **callbacks**: `fireOn*` 回调抛错透出到 `getDiagnostics().userCallbackError`，不再静默吞错。
+- **deploy**: `deploy:local` 用 `--frozen-lockfile` 防 lockfile 漂移。
+
+### Changed
+
+- **engines**: 锁 Node 20 LTS（`.nvmrc` + `engines >=20` + CI workflow 读 nvmrc）。
+
+## [0.6.2] - 2026-06-24
+
+### Added — `charGap` 字符间距配置 (从 0.6.1 升版,补 0.6.2 正式节)
 
 - **`charGap` 选项**(默认 `0`,范围 `[-10, +20]` CSS px):控制相邻字符字形之间的视觉间距,对称应用到 x 和 y 轴。
   - `charGap: 1` 或 `2` 让字到字更紧(收紧字体 side bearing 留白)
@@ -17,6 +39,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **跨 3 个 renderer 行为一致**(canvas2d / WebGL2 / WebGPU):仅在 `draw-helpers.ts` 的 12 个 `(cx, cy)` 算式末尾加 `state.cfg.charGap`,**不动** atlas、shader、`setFontSize`
 - **默认 `0` 完全向后兼容**:`test/char-gap.mjs` 验证 `charGap=0` 时 fillText 的 `(x, y)` 与原公式 byte-for-byte 等价
 - 不破字号 4px 硬下限(`memory:feedback_min_font_size.md`),与 fontSize 独立
+
+### Changed — 0.6.2+ Playground 修复轮
+
+- Playground 页内参数滑块 / 主题切换 / 字符集切换的可用性修复(详见 `81cf503 docs(audit): 0.6.2+ Playground 修复轮只读审查`)
+- `useMatrixRain.ts:170-186` 参数联动收紧(由 `audit-playground-fix-2026-06-16.md` P0-2 标的对账)
+- `PlaygroundPage.vue` 渲染 / 卸载时序修正,避免热重载残留
+- 见 `audit-test-release-2026-06-24.md` §3.3 收敛清单
+
+## [0.6.1] - 2026-06-23
+
+### Added — `charGap` 字符间距配置(对称 x/y)
+
+- `charGap` 选项 + `inst.setCharGap(n)` 热更新 API
+- 跨 3 个 renderer 行为一致,`charGap=0` 默认完全向后兼容
+- 对应 commit: `de352a2 feat(renderer): 0.6.1 charGap 字符间距配置(对称 x/y)`
+
+> 注:此 0.6.1 节保留作为 commit 索引,`charGap` 详细条目已升级并入 [0.6.2] 节。
+
+## [0.6.0] - 2026-06-22
+
+### Added — `getRendererHealth()` 诊断快照(跨 3 renderer)
+
+- 新增 `inst.getRendererHealth()` 公开 API,返回 canvas2d / WebGL2 / WebGPU 三种 renderer 的统一健康快照(fps / drawCalls / cellsRendered / lastError / buffer 状态)
+- `deploy:local` / `deploy:serve` 一键本地部署脚本同步上线(commit `4c63418`),完全本地部署、少用 CDN(`memory:project_deployment_goal.md`)
+- 对应 commit: `346122a feat(renderer): 0.6.0 getRendererHealth() 诊断快照 (跨 3 renderer)`
 
 ## [0.5.0] - 2026-06-11
 

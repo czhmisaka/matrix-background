@@ -10,6 +10,14 @@
  *   - 同一场景下, webgl / webgpu 与 canvas2d 基准的匹配像素占比 ≥ 95%
  *   - 单像素 |Δ灰度| < 5/255
  *
+ * Baseline 模式 (audit-test-release-2026-06-24 P1-5 修法):
+ *   - 默认 test 模式: 抓 canvas2d 实时基准 + 比对 webgl/webgpu (旧行为)
+ *   - 初始化: MATRIX_RAIN_PIXEL_BASELINE_MODE=init 或 --baseline-mode init
+ *     → 把 6 个 case (3 scenarios × 2 renderers: webgl/webgpu) 的 PNG 抓到
+ *       test/fixtures/baselines/<scenario>-<renderer>.png,跳过对比(只 sanity check)
+ *   - 后续 test 模式可读 test/fixtures/baselines/ 作 canvas2d 替代基准
+ *     (避免每次重抓 canvas2d,稳定 baseline;若文件缺失回退到 live canvas2d)
+ *
  * 用法:
  *   # 一次性准备
  *   npx playwright install chromium
@@ -20,6 +28,10 @@
  *   npm run test:pixel -- --only webgl      # 只跑 webgl
  *   npm run test:pixel -- --scenario 1080p  # 只跑 1080p 场景
  *   npm run test:pixel -- --threshold 0.99  # 提高门槛
+ *
+ *   # 首次/重新录制 baseline
+ *   MATRIX_RAIN_PIXEL_BASELINE_MODE=init npm run test:pixel
+ *   # 等价 npm run test:pixel -- --baseline-mode init
  *
  * 不依赖 CDN, 完全本地。0.5.0+ 默认纳入 release 前冒烟。
  */
@@ -36,6 +48,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const DIST = join(ROOT, 'dist');
 const FIXTURE_DIR = join(__dirname, 'fixtures');
+const BASELINE_DIR = join(FIXTURE_DIR, 'baselines');
 
 // ==================== 参数解析 ====================
 const argv = process.argv.slice(2);
@@ -53,6 +66,18 @@ const SAVE_DIR = (() => {
   const i = argv.indexOf('--save-dir');
   return i >= 0 ? argv[i + 1] : null;
 })();
+// Baseline 模式: env MATRIX_RAIN_PIXEL_BASELINE_MODE=init | test | undefined(默认 test)
+// 或 CLI --baseline-mode init|test
+const BASELINE_MODE = (() => {
+  const cliMode = arg('baseline-mode', null);
+  if (cliMode) return cliMode;
+  const envMode = process.env.MATRIX_RAIN_PIXEL_BASELINE_MODE;
+  return envMode || 'test';
+})();
+if (!['init', 'test'].includes(BASELINE_MODE)) {
+  console.error(`❌ BASELINE_MODE 必须 init | test,收到 "${BASELINE_MODE}"`);
+  process.exit(2);
+}
 
 // ==================== 场景 & 渲染器 ====================
 const SCENARIOS = [
@@ -203,9 +228,35 @@ async function runCase(page, baseUrl, scenario, renderer) {
   }
 }
 
+// ==================== baseline 读写 ====================
+function baselinePath(scenarioName, renderer) {
+  return join(BASELINE_DIR, `${scenarioName}-${renderer}.png`);
+}
+
+async function readBaseline(scenarioName, renderer) {
+  try {
+    const buf = await readFile(baselinePath(scenarioName, renderer));
+    return {
+      ok: true,
+      pixels: await dataUrlToRGBA(`data:image/png;base64,${buf.toString('base64')}`),
+    };
+  } catch (e) {
+    return { ok: false, reason: e.code === 'ENOENT' ? 'baseline missing' : e.message };
+  }
+}
+
+async function writeBaseline(scenarioName, renderer, dataUrl) {
+  await mkdir(BASELINE_DIR, { recursive: true });
+  const b64 = dataUrl.slice('data:image/png;base64,'.length);
+  await writeFile(baselinePath(scenarioName, renderer), Buffer.from(b64, 'base64'));
+}
+
 // ==================== 主流程 ====================
 async function main() {
   console.log('┌─ 真像素测试 (Phase 1 / P2-1) ─────────────────────');
+  console.log(
+    `│ baseline  = ${BASELINE_MODE}${BASELINE_MODE === 'init' ? ' (write test/fixtures/baselines/*.png)' : ''}`
+  );
   console.log(`│ threshold = ${THRESHOLD * 100}%  pixel |Δ| < ${PIXEL_DELTA}/255`);
   console.log(`│ scenarios = ${SCENARIOS.map((s) => s.name).join(', ')}`);
   console.log(`│ renderers = ${RENDERERS.join(', ')}`);
@@ -233,16 +284,65 @@ async function main() {
   const results = [];
   let webgpuAvailable = null; // 第一次跑 webgpu 时探测, 决定后续 skip
 
+  // ============ INIT 模式:录制 baseline,跳过对比 ============
+  if (BASELINE_MODE === 'init') {
+    for (const sc of SCENARIOS) {
+      if (ONLY_SCENARIO && sc.name !== ONLY_SCENARIO) continue;
+      console.log(`├─ 录制 ${sc.name} (${sc.w}×${sc.h}, fs=${sc.fontSize})`);
+      for (const r of RENDERERS) {
+        if (ONLY_RENDERER && ONLY_RENDERER !== r) continue;
+        const res = await runCase(page, baseUrl, sc, r);
+        if (!res.ok) {
+          // webgpu 在 headless 可能 init 失败 → skip 但仍尝试写(写不到)
+          if (r === 'webgpu' && /init failed|webgpu/i.test(res.reason)) {
+            console.log(`│  ⏭  ${r} 跳过 (headless 不支持): ${res.reason}`);
+            results.push({ scenario: sc.name, renderer: r, ok: 'skip', reason: res.reason });
+            continue;
+          }
+          console.log(`│  ❌ ${r} 录制失败: ${res.reason}`);
+          results.push({ scenario: sc.name, renderer: r, ok: false, reason: res.reason });
+          continue;
+        }
+        // 把 dataUrl 落盘 baseline
+        const dataUrl = await page.evaluate(async () => await window.__captureFrame());
+        await writeBaseline(sc.name, r, dataUrl);
+        console.log(`│  ✓ ${r.padEnd(8)} → ${baselinePath(sc.name, r).replace(ROOT + '/', '')}`);
+        results.push({ scenario: sc.name, renderer: r, ok: true, baseline: 'written' });
+      }
+    }
+    await browser.close();
+    srv.close();
+    console.log('│');
+    console.log('└─ INIT 模式完成 ─────────────────────────────');
+    const written = results.filter((r) => r.ok === true).length;
+    const skipped = results.filter((r) => r.ok === 'skip').length;
+    console.log(`   已写 baseline: ${written} / 跳过: ${skipped}`);
+    console.log(`   位置: ${BASELINE_DIR}`);
+    console.log('\n✅ baseline 录制完成。后续 test 模式会读这些文件做比对。');
+    return;
+  }
+
+  // ============ TEST 模式:对比模式 ============
   for (const sc of SCENARIOS) {
     if (ONLY_SCENARIO && sc.name !== ONLY_SCENARIO) continue;
     console.log(`├─ 场景 ${sc.name} (${sc.w}×${sc.h}, fs=${sc.fontSize})`);
 
-    // 1. 先抓 canvas2d 基准
-    const baseline = await runCase(page, baseUrl, sc, 'canvas2d');
+    // 1. 先抓 canvas2d 基准(优先读 disk,缺失回退 live)
+    let baseline = await readBaseline(sc.name, 'canvas2d');
+    let baselineFromDisk = baseline.ok;
     if (!baseline.ok) {
-      console.log(`│  ❌ canvas2d 基准失败: ${baseline.reason}`);
-      results.push({ scenario: sc.name, renderer: 'canvas2d', ok: false, reason: baseline.reason });
-      continue;
+      console.log(`│  ℹ  baseline 缺失 (${baseline.reason}),fallback 到 live canvas2d`);
+      const live = await runCase(page, baseUrl, sc, 'canvas2d');
+      if (!live.ok) {
+        console.log(`│  ❌ canvas2d 基准失败: ${live.reason}`);
+        results.push({ scenario: sc.name, renderer: 'canvas2d', ok: false, reason: live.reason });
+        continue;
+      }
+      baseline = { ok: true, pixels: live.pixels };
+    } else {
+      console.log(
+        `│  ✓ baseline 读自 disk: ${baselinePath(sc.name, 'canvas2d').replace(ROOT + '/', '')}`
+      );
     }
     console.log(
       `│  ✓ canvas2d 基准: ${baseline.pixels.width}×${baseline.pixels.height} (${(baseline.pixels.data.length / 4).toLocaleString()} px)`
@@ -279,8 +379,9 @@ async function main() {
       const cmp = comparePixels(baseline.pixels, res.pixels);
       const ok = cmp.matchRatio >= THRESHOLD;
       const mark = ok ? '✅' : '❌';
+      const src = baselineFromDisk ? 'vs disk' : 'vs live';
       console.log(
-        `│  ${mark} ${r}: match=${(cmp.matchRatio * 100).toFixed(2)}% meanΔ=${cmp.meanDelta.toFixed(2)} (n=${cmp.size.toLocaleString()})`
+        `│  ${mark} ${r}: match=${(cmp.matchRatio * 100).toFixed(2)}% meanΔ=${cmp.meanDelta.toFixed(2)} (n=${cmp.size.toLocaleString()}) ${src}`
       );
       if (!ok && res.errors && res.errors.length) {
         for (const e of res.errors.slice(0, 3)) console.log(`│     ${e}`);

@@ -1,6 +1,10 @@
 /**
  * Easing + 中断与回退测试(0.4.0+)
  *
+ * @deprecated: 0.8.0 迁移到 test/unit/engine/easing.spec.ts(Vitest)。
+ *             本探针保留作过渡期对照(参见 docs/test-strategy.md §7.1),
+ *             旧 `test:easing` script 暂不删除,后续 minor 移除。
+ *
  * 验证:
  *   1. 默认 easing = 'smooth' = cubic ease
  *   2. setEasing('linear') 立即生效(下一帧起)

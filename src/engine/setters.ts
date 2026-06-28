@@ -72,6 +72,13 @@ export const createSetters = (
   | 'setFlickerSpeed'
   | 'setTargetFPS'
   | 'setDensity'
+  | 'setTrailAlpha'
+  | 'setMaxDPR'
+  | 'setTargetPhase'
+  | 'setTargetNoiseDuration'
+  | 'setTargetConvergeDuration'
+  | 'setTargetLockOrder'
+  | 'setTargetLockStability'
   | 'setCharGap'
   | 'setRenderScale'
   | 'getRenderScale'
@@ -548,9 +555,100 @@ export const createSetters = (
     state.lastFrameTime = typeof performance !== 'undefined' ? performance.now() : 0;
   };
 
+  /**
+   * 动态调整 fontSize
+   * - 写 state.cfg.fontSize 和 state.options.fontSize(buildGrid 用 userOverride 读)
+   * - 0.6.2+ 不主动调 buildGrid —— 交给 draw() 每帧 dirty check 重建
+   *   原因:webgl 路径下 buildGrid 内的 resizeGrid 在 renderer.init() 未完成时
+   *   会触发 _vbo 未创建的 race(INVALID_OPERATION: bufferData: no buffer)
+   *   draw 每帧调,保证 renderer 已 ready 后才 buildGrid
+   * @since 0.6.2+ 不再主动调 buildGrid
+   */
   const setDensity = (fontSize: number): void => {
-    state.cfg = { ...state.cfg, fontSize };
-    hooks.buildGrid();
+    const v = Number.isFinite(fontSize) ? Math.max(4, Math.min(64, fontSize)) : 6;
+    state.cfg = { ...state.cfg, fontSize: v };
+    state.options = { ...state.options, fontSize: v };
+  };
+
+  /**
+   * 0.6.2+: 动态调整残影 alpha(0-1)· 不触发 buildGrid/render
+   * - 钳到 [0, 1];非有限数 → 0
+   * - 与原行为一致:state.cfg.trailAlpha 是 draw() 内 drawTrail 的 alpha 参数
+   */
+  const setTrailAlpha = (alpha: number): void => {
+    const v = Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 0;
+    state.cfg = { ...state.cfg, trailAlpha: v };
+  };
+
+  /**
+   * 0.6.2+: 动态调整 DPR 上限(0.5-4)
+   * - 钳到 [0.5, 4];非有限数 → 1
+   * - 不调 buildGrid —— draw 每帧检测 maxDPR 变化后调
+   *   避免 webgl 路径下的 renderer-init race
+   */
+  const setMaxDPR = (dpr: number): void => {
+    const v = Number.isFinite(dpr) ? Math.max(0.5, Math.min(4, dpr)) : 1;
+    state.cfg = { ...state.cfg, maxDPR: v };
+  };
+
+  // ============ 目标位图 软更新 setter (0.6.2+) ============
+  /**
+   * 切换 target 出现阶段(fade <-> noise-converge)
+   * - noise-converge 且当前有活跃位图 → recompute lock times
+   * - 不会重置 targetStartTime · 下一次循环时新的 phase 会自然应用
+   */
+  const setTargetPhase = (phase: 'fade' | 'noise-converge'): void => {
+    if (state.targetPhase === phase) return;
+    state.targetPhase = phase;
+    if (phase === 'noise-converge' && state.targetBitmap && state.targetActive) {
+      hooks.recomputeTargetLockTimes();
+    }
+  };
+
+  /**
+   * 动态调整 noise-converge 噪点时长(秒)· >=0
+   * - noise-converge 且当前活跃 → recompute lock times (lock 时序计算依赖 noiseDuration)
+   */
+  const setTargetNoiseDuration = (dur: number): void => {
+    const v = Number.isFinite(dur) ? Math.max(0, dur) : 0;
+    state.targetNoiseDuration = v;
+    if (state.targetPhase === 'noise-converge' && state.targetBitmap && state.targetActive) {
+      hooks.recomputeTargetLockTimes();
+    }
+  };
+
+  /**
+   * 动态调整 noise-converge 逐 cell 锁定时长(秒)· >=0.001
+   * - noise-converge 且当前活跃 → recompute lock times
+   */
+  const setTargetConvergeDuration = (dur: number): void => {
+    const v = Number.isFinite(dur) ? Math.max(0.001, dur) : 1.5;
+    state.targetConvergeDuration = v;
+    if (state.targetPhase === 'noise-converge' && state.targetBitmap && state.targetActive) {
+      hooks.recomputeTargetLockTimes();
+    }
+  };
+
+  /**
+   * 动态调整 lock 顺序· noise-converge 且活跃 → recompute
+   */
+  const setTargetLockOrder = (
+    order: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft'
+  ): void => {
+    if (state.targetLockOrder === order) return;
+    state.targetLockOrder = order;
+    if (state.targetPhase === 'noise-converge' && state.targetBitmap && state.targetActive) {
+      hooks.recomputeTargetLockTimes();
+    }
+  };
+
+  /**
+   * 动态调整 lock 后字符稳定性 (0-1)
+   * - 不需 recompute(只在 cell lock 后使用时读 state.targetLockStability)
+   */
+  const setTargetLockStability = (stab: number): void => {
+    const v = Number.isFinite(stab) ? Math.max(0, Math.min(1, stab)) : 0.7;
+    state.targetLockStability = v;
   };
 
   /**
@@ -833,6 +931,13 @@ export const createSetters = (
     setFlickerSpeed,
     setTargetFPS,
     setDensity,
+    setTrailAlpha,
+    setMaxDPR,
+    setTargetPhase,
+    setTargetNoiseDuration,
+    setTargetConvergeDuration,
+    setTargetLockOrder,
+    setTargetLockStability,
     setCharGap,
     setRenderScale,
     getRenderScale,

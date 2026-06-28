@@ -551,6 +551,51 @@ export interface MatrixRainInstance {
   setDensity(fontSize: number): void;
 
   /**
+   * 0.6.2+: 动态调整残影 alpha(0-1)· 不触发 buildGrid
+   * - 钳到 [0, 1];非有限数 → 0
+   * - 运行时立即生效(下一帧 drawTrail 使用新值)
+   */
+  setTrailAlpha(alpha: number): void;
+
+  /**
+   * 0.6.2+: 动态调整 DPR 上限(0.5-4)· 触发 buildGrid
+   * - 钳到 [0.5, 4];非有限数 → 1
+   * - 重建 canvas backing store 尺寸,不影响字符间距/fontSize
+   */
+  setMaxDPR(dpr: number): void;
+
+  /**
+   * 0.6.2+: 切换 target 出现阶段(fade <-> noise-converge)
+   * - 切到 noise-converge 且当前有活跃位图 → 自动 recompute lock times
+   * - 不重置 targetStartTime,下一次循环时新 phase 会自然应用
+   */
+  setTargetPhase(phase: 'fade' | 'noise-converge'): void;
+
+  /**
+   * 0.6.2+: 动态调整 noise-converge 噪点时长(秒)· >=0
+   * - noise-converge 且活跃 → recompute lock times
+   */
+  setTargetNoiseDuration(dur: number): void;
+
+  /**
+   * 0.6.2+: 动态调整 noise-converge 逐 cell 锁定时长(秒)· >=0.001
+   * - noise-converge 且活跃 → recompute lock times
+   */
+  setTargetConvergeDuration(dur: number): void;
+
+  /**
+   * 0.6.2+: 动态调整 lock 顺序· noise-converge 且活跃 → recompute
+   */
+  setTargetLockOrder(
+    order: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft'
+  ): void;
+
+  /**
+   * 0.6.2+: 动态调整 lock 后字符稳定性 (0-1)· 不需 recompute
+   */
+  setTargetLockStability(stab: number): void;
+
+  /**
    * 动态调整字符间距(对称应用 x/y)· 不触发 buildGrid
    * - 列数/行数不变,仅每个 cell 内字符的 (cx, cy) 偏移
    * - 钳到 [-10, 20];非有限数 → 0

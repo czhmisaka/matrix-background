@@ -1,6 +1,6 @@
 {
   "name": "@xietuier/matrix-rain",
-  "version": "0.5.1",
+  "version": "0.7.0",
   "description": "czhmisaka 出品 · 数字矩阵背景 · 终端感 + 温度感 · 5 主题 4 变体 · 全参数可调",
   "keywords": [
     "matrix-rain",
@@ -78,7 +78,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json,md}\" \"site/src/**/*.{ts,tsx,vue,css,json,md}\" \"*.{json,md,cjs,js}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json,md}\" \"site/src/**/*.{ts,tsx,vue,css,json,md}\" \"*.{json,md,cjs,js}\"",
     "prepare": "husky",
-    "test": "node test/smoke.mjs && node test/leak.mjs && node test/frame-rate.mjs && node test/events.mjs && node test/sandbox.mjs && node test/noise-converge.mjs && node test/canvas-remove.mjs && node test/playground-health-panel.mjs && node test/transitions.mjs && node test/text-fit.mjs && node test/set-target-bitmap-validation.mjs && node test/detect.mjs && node test/themes.mjs && node test/edge-cases.mjs && node test/image-converge.mjs && node test/render-scale.mjs && node test/renderer-canvas2d.mjs && node test/atlas-load.mjs && node test/renderer-webgl.mjs && node test/auto-pick.mjs && node test/renderer-webgpu.mjs && node test/renderer-health.mjs && node test/easing.mjs && node test/char-gap.mjs && node test/global-error-handler.mjs && node test/user-callback-error.mjs && node test/build-size.mjs",
+    "test": "node test/smoke.mjs && node test/leak.mjs && node test/frame-rate.mjs && node test/events.mjs && node test/sandbox.mjs && node test/noise-converge.mjs && node test/canvas-remove.mjs && node test/playground-health-panel.mjs && node test/transitions.mjs && node test/text-fit.mjs && node test/set-target-bitmap-validation.mjs && node test/detect.mjs && node test/themes.mjs && node test/edge-cases.mjs && node test/image-converge.mjs && node test/render-scale.mjs && node test/renderer-canvas2d.mjs && node test/atlas-load.mjs && node test/renderer-webgl.mjs && node test/auto-pick.mjs && node test/renderer-webgpu.mjs && node test/renderer-health.mjs && node test/easing.mjs && node test/char-gap.mjs && node test/global-error-handler.mjs && node test/user-callback-error.mjs && node test/build-size.mjs && node test/renderer-pixel.mjs",
     "test:smoke": "node test/smoke.mjs",
     "test:health": "node test/renderer-health.mjs && node test/playground-health-panel.mjs",
     "test:playground": "node test/playground-health-panel.mjs",
@@ -104,6 +104,10 @@
     "test:esm": "node test/esm-load.mjs",
     "test:usability": "node test/usability.mjs",
     "test:e2e:demos": "/Users/chenzhihan/anaconda3/bin/python3 scripts/e2e-demos.py",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:unit:watch": "vitest --config vitest.config.ts",
+    "test:unit:coverage": "vitest run --config vitest.config.ts --coverage",
+    "test:e2e": "playwright test --config test/e2e/playwright.config.ts",
     "bench:renderer": "node scripts/bench-renderer.mjs",
     "size": "size-limit",
     "prepublishOnly": "npm run build"
@@ -112,14 +116,17 @@
     "@commitlint/cli": "^19.0.0",
     "@commitlint/config-conventional": "^19.0.0",
     "@napi-rs/canvas": "^1.0.0",
+    "@playwright/test": "^1.61.0",
     "@size-limit/file": "^12.1.0",
     "@size-limit/preset-small-lib": "^12.1.0",
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^9.0.0",
     "eslint-plugin-vue": "^9.27.0",
     "globals": "^15.0.0",
+    "happy-dom": "^20.10.4",
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0",
     "playwright": "^1.60.0",
@@ -127,10 +134,11 @@
     "size-limit": "^12.1.0",
     "tsup": "^8.5.1",
     "typescript": "^5.4.0",
+    "vitest": "^4.1.9",
     "vue-eslint-parser": "^9.4.0"
   },
   "engines": {
-    "node": "^20.0.0 || >=22.0.0"
+    "node": ">=18"
   },
   "publishConfig": {
     "access": "public"

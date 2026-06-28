@@ -1,4 +1,9 @@
-import { matrixRain, type MatrixRainOptions, type MatrixRainInstance } from '@xietuier/matrix-rain';
+import {
+  matrixRain,
+  textToBitmap,
+  type MatrixRainOptions,
+  type MatrixRainInstance,
+} from '@xietuier/matrix-rain';
 import { ref, watch, onMounted, onBeforeUnmount, type Ref, type MaybeRef, unref } from 'vue';
 
 /**
@@ -12,6 +17,12 @@ import { ref, watch, onMounted, onBeforeUnmount, type Ref, type MaybeRef, unref 
  * - mountFadeInDuration:新建实例从 alpha=0 渐变到 1 的秒数
  * - destroyFadeOutDuration:销毁前从 alpha=1 渐变到 0 的秒数
  * - 重建时:先旧实例淡出(destroyFadeOutDuration),再新实例创建并淡入(mountFadeInDuration)
+ *
+ * 0.6.2+ 增强(Playground 修复):
+ * - 补齐 effectKey(renderKey 移除 trailAlpha/maxDPR → 走 setter 软更新)
+ * - 新增 lastTargetArgs 缓存 + setTarget(text) 暴露
+ * - mount() 完成新实例就绪后,若 lastTargetArgs 存在则自动重放 setTargetBitmap
+ *   → 解决"硬重建(renderer/variant/charset)丢失 target bitmap"的 race
  */
 export interface UseMatrixRainOptions {
   /** 创建后从 alpha=0 渐变到 1 的秒数(0 = 立即显示) */
@@ -27,21 +38,32 @@ export interface UseMatrixRainOptions {
  * - 详见 types/index.d.ts 中 FitMode 的注释
  * - 默认 contain 会自动检测 targetBitmap 是否溢出 grid(扫描非零像素 bbox),
  *   若 cols/rows > 0.95 × grid 自动等比缩放,确保文字始终在可视区内
- * - 旧版 Playground / BackgroundMatrixRain 调用方 bug 修复:
- *   旧代码用 canvas.width/height(DPR-缩放 backing store)算 cols/rows 传给 textToBitmap
- *   新代码改用 canvas.clientWidth/Height(CSS 像素)—— 但 fitMode='contain' 仍是兜底
- *   即使未来再出现类似 bug,引擎层也会自动拦截
  */
 
 export function useMatrixRain(
   optionsRef: Ref<MatrixRainOptions> | MaybeRef<MatrixRainOptions>,
   canvasRef: Ref<HTMLCanvasElement | null>,
   composableOpts: UseMatrixRainOptions = {}
-): Ref<MatrixRainInstance | null> {
+): Ref<MatrixRainInstance | null> & { setTarget: (text: string) => boolean } {
   const instance = ref<MatrixRainInstance | null>(null);
   const mountFadeInDur = composableOpts.mountFadeInDuration ?? 0.1;
   const destroyFadeOutDur = composableOpts.destroyFadeOutDuration ?? 0.15;
   let pendingFadeInTimer: number | null = null;
+
+  /**
+   * 0.6.2+ target bitmap 缓存(供 mount 重建后自动恢复)
+   * - 缓存 text → bitmap 计算后的 BitmapSource + 5 个 phase/lock 参数
+   * - 用户调 setTarget(text) 时刷新
+   * - 用户调 setTargetBitmap(bm, opts) 时也需要刷新(若 component 直接用 instance 调)
+   */
+  let lastTargetArgs: {
+    bm: { cols: number; rows: number; data: Float32Array };
+    phase: 'fade' | 'noise-converge';
+    noiseDuration: number;
+    convergeDuration: number;
+    lockOrder: 'random' | 'topdown' | 'bottomup' | 'center' | 'edge' | 'leftright' | 'rightleft';
+    lockStability: number;
+  } | null = null;
 
   /**
    * 软销毁:fade-out alpha over dur,期间 stop new rAF activity 但仍绘制
@@ -104,6 +126,21 @@ export function useMatrixRain(
           // 旧版本无 setTransitionAlpha,忽略
         }
       }
+      // ★ 0.6.2+ 关键: 新实例就绪后自动恢复 target bitmap
+      // 解决硬重建(renderer/variant/charset)时丢失 target 的 race
+      if (lastTargetArgs && instance.value) {
+        try {
+          instance.value.setTargetBitmap(lastTargetArgs.bm, {
+            phase: lastTargetArgs.phase,
+            noiseDuration: lastTargetArgs.noiseDuration,
+            convergeDuration: lastTargetArgs.convergeDuration,
+            lockOrder: lastTargetArgs.lockOrder,
+            lockStability: lastTargetArgs.lockStability,
+          });
+        } catch (e) {
+          console.warn('[useMatrixRain] failed to restore target bitmap after mount:', e);
+        }
+      }
     } catch (e) {
       console.error('[useMatrixRain] failed to init:', e);
     }
@@ -118,6 +155,61 @@ export function useMatrixRain(
     if (instance.value) {
       await softDestroy(instance.value, destroyFadeOutDur);
       instance.value = null;
+    }
+  };
+
+  /**
+   * 0.6.2+ 暴露:设置目标位图(text 自动转 bitmap)· 缓存参数,mount 重建后自动恢复
+   * - 取代旧版 PlaygroundPage 自己 watch params + regenerate() 的 race-y 流程
+   * - 内部根据 canvas CSS 尺寸 + fontSize 计算 cols/rows,textToBitmap,缓存 args
+   * - 若 instance 还没 mount 完(text/canvas 未就绪),直接缓存等下次 mount 重放
+   * @returns true = 已 set, false = 等待(instance/canvas 未就绪)
+   */
+  const setTarget = (text: string): boolean => {
+    const cv = canvasRef.value;
+    const inst = instance.value;
+    if (!cv || !inst) {
+      // instance 未就绪,缓存 args 等下次 mount 重放
+      const o = unref(optionsRef);
+      lastTargetArgs = {
+        // 没有真实 cols/rows,先占位等下次 setTarget 重算
+        bm: { cols: 0, rows: 0, data: new Float32Array(0) },
+        phase: o.targetPhase ?? 'fade',
+        noiseDuration: o.targetNoiseDuration ?? 0.5,
+        convergeDuration: o.targetConvergeDuration ?? 1.5,
+        lockOrder: o.targetLockOrder ?? 'random',
+        lockStability: o.targetLockStability ?? 0.7,
+      };
+      return false;
+    }
+    const cssW = cv.clientWidth || cv.width;
+    const cssH = cv.clientHeight || cv.height;
+    const o = unref(optionsRef);
+    const fontSize = o.fontSize ?? 6;
+    const cols = Math.max(8, Math.floor(cssW / fontSize));
+    const rows = Math.max(6, Math.floor(cssH / fontSize));
+    const t = (text || ' ').trim() || ' ';
+    const bm = textToBitmap(t, cols, rows, undefined, 'contain');
+    lastTargetArgs = {
+      bm,
+      phase: o.targetPhase ?? 'fade',
+      noiseDuration: o.targetNoiseDuration ?? 0.5,
+      convergeDuration: o.targetConvergeDuration ?? 1.5,
+      lockOrder: o.targetLockOrder ?? 'random',
+      lockStability: o.targetLockStability ?? 0.7,
+    };
+    try {
+      inst.setTargetBitmap(bm, {
+        phase: lastTargetArgs.phase,
+        noiseDuration: lastTargetArgs.noiseDuration,
+        convergeDuration: lastTargetArgs.convergeDuration,
+        lockOrder: lastTargetArgs.lockOrder,
+        lockStability: lastTargetArgs.lockStability,
+      });
+      return true;
+    } catch (e) {
+      console.error('[useMatrixRain] setTarget failed:', e);
+      return false;
     }
   };
 
@@ -137,31 +229,24 @@ export function useMatrixRain(
       // 同步开始淡出(异步完成销毁,不阻塞路由切换)
       void softDestroy(inst, destroyFadeOutDur);
     }
+    // 清理缓存
+    lastTargetArgs = null;
   });
 
   // 0.4.0+ watch 拆分:
-  // - renderKey: 改 canvas / renderer / variant / charset / 任何没有 setter 的字段 → 硬重建
-  // - effectKey: 改 theme / fontSize / themeParams / variantParams / ... 有 setter 的字段 → 软更新
+  // - renderKey: 改 canvas / renderer / variant / charset / 物理参数(无 setter) → 硬重建
+  // - effectKey: 改 theme / fontSize / themeParams / variantParams / 0.6.2+ target 等(有 setter) → 软更新
   //
-  // 0.4.1 修复 P1-1/2/3:
-  // - variant 之前传空对象 setVariantParams({}) 切不动 variant → 改走硬重建
-  // - charset 之前 skip → 改走硬重建
-  // - 11+ 没有 setter 的字段(trailAlpha/maxDPR/sparkProbability/clickBurst/
-  //   flickerRates/warmthRadius/warmthLerp/lightCenter/driftSpeed)之前在
-  //   effectKey 监听但 apply 分支空跳过 → 改走硬重建
-  //
-  // 注: 旧版单一 deep watch → 任何字段都触发软销毁重建。WebGL 模式下 shader 编译
-  // 需 10-50ms,频繁 rebuild 会让用户体验明显卡顿。拆分后:
-  // - 调主题: setTheme 走 setter, 1-2 帧过渡
-  // - 改 renderer / variant / charset / 物理参数: _reload() 硬重建, 一次性
+  // 0.6.2+ 修复(Playground bug 修复):
+  // - trailAlpha / maxDPR 之前在 renderKey(强制硬重建)→ 走 setter 软更新,消除闪烁
+  // - targetPhase / targetNoiseDuration / targetConvergeDuration / targetLockOrder / targetLockStability
+  //   之前完全不在任何一个 key → 走 setter 软更新,改完立即生效
   const renderKey = (): unknown => {
     const o = unref(optionsRef);
     return [
       o.renderer,
       o.variant,
       o.charset,
-      o.trailAlpha,
-      o.maxDPR,
       o.sparkProbability,
       o.clickBurst,
       o.flickerRates,
@@ -185,6 +270,14 @@ export function useMatrixRain(
       o.renderScale,
       o.flickerSpeed,
       o.hueRotateSpeed,
+      // 0.6.2+ 软更新字段(此前缺失,导致 Playground 调参不响应)
+      o.trailAlpha,
+      o.maxDPR,
+      o.targetPhase,
+      o.targetNoiseDuration,
+      o.targetConvergeDuration,
+      o.targetLockOrder,
+      o.targetLockStability,
     ];
   };
   watch(renderKey, () => {
@@ -207,6 +300,15 @@ export function useMatrixRain(
       if (o.renderScale !== undefined) inst.setRenderScale(o.renderScale);
       if (o.flickerSpeed !== undefined) inst.setFlickerSpeed(o.flickerSpeed);
       if (typeof o.hueRotateSpeed === 'number') inst.setHueRotate(o.hueRotateSpeed);
+      // 0.6.2+ 软更新 setter:
+      if (o.trailAlpha !== undefined) inst.setTrailAlpha(o.trailAlpha);
+      if (o.maxDPR !== undefined) inst.setMaxDPR(o.maxDPR);
+      if (o.targetPhase !== undefined) inst.setTargetPhase(o.targetPhase);
+      if (o.targetNoiseDuration !== undefined) inst.setTargetNoiseDuration(o.targetNoiseDuration);
+      if (o.targetConvergeDuration !== undefined)
+        inst.setTargetConvergeDuration(o.targetConvergeDuration);
+      if (o.targetLockOrder !== undefined) inst.setTargetLockOrder(o.targetLockOrder);
+      if (o.targetLockStability !== undefined) inst.setTargetLockStability(o.targetLockStability);
     } catch (e) {
       console.error('[useMatrixRain] soft update failed:', e);
     }
@@ -215,5 +317,6 @@ export function useMatrixRain(
     });
   });
 
-  return instance;
+  // 0.6.2+: 把 setTarget 挂到 ref 上(返回增强 ref,component 可直接 rain.setTarget(text))
+  return Object.assign(instance, { setTarget });
 }

@@ -1,6 +1,10 @@
 /**
  * 边界输入测试 · 覆盖 textToBitmap / imageToBitmap / setTargetBitmap 异常路径
  *
+ * @deprecated: 0.8.0 迁移到 test/unit/engine/edge-cases.spec.ts(Vitest)。
+ *             本探针保留作过渡期对照(参见 docs/test-strategy.md §7.1),
+ *             旧 `test:edge-cases` script 暂不删除,后续 minor 移除。
+ *
  * 目标:
  *   1. textToBitmap 空字符串 / 多换行 / 10000 字符超长输入
  *   2. textToBitmap Unicode 边界(Emoji / CJK / RTL 阿拉伯文 / 零宽字符)
@@ -50,7 +54,9 @@ class MockCanvas {
     this.height = 100;
     this.style = { cssText: '' };
   }
-  getContext() { return new MockContext2D(); }
+  getContext() {
+    return new MockContext2D();
+  }
   getBoundingClientRect() {
     return { width: 800, height: 600, top: 0, left: 0, right: 800, bottom: 600 };
   }
@@ -62,11 +68,20 @@ class MockDiv {
     this.children = [];
     this.firstChild = null;
   }
-  appendChild(c) { this.children.push(c); this.firstChild = c; return c; }
-  insertBefore(c) { this.appendChild(c); return c; }
+  appendChild(c) {
+    this.children.push(c);
+    this.firstChild = c;
+    return c;
+  }
+  insertBefore(c) {
+    this.appendChild(c);
+    return c;
+  }
   removeChild() {}
   remove() {}
-  querySelectorAll() { return []; }
+  querySelectorAll() {
+    return [];
+  }
 }
 
 globalThis.window = {
@@ -78,23 +93,31 @@ globalThis.window = {
   requestAnimationFrame: () => 0,
   cancelAnimationFrame: () => {},
   matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
-  ResizeObserver: class { observe() {} disconnect() {} unobserve() {} }
+  ResizeObserver: class {
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  },
 };
 globalThis.document = {
   body: new MockDiv(),
   head: new MockDiv(),
   documentElement: new MockDiv(),
-  createElement: (tag) => tag === 'canvas' ? new MockCanvas() : new MockDiv(),
+  createElement: (tag) => (tag === 'canvas' ? new MockCanvas() : new MockDiv()),
   querySelectorAll: () => [],
   addEventListener: () => {},
-  removeEventListener: () => {}
+  removeEventListener: () => {},
 };
 globalThis.HTMLCanvasElement = MockCanvas;
 globalThis.HTMLDivElement = MockDiv;
 globalThis.HTMLElement = MockDiv;
 globalThis.requestAnimationFrame = () => 0;
 globalThis.cancelAnimationFrame = () => {};
-globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} };
+globalThis.ResizeObserver = class {
+  observe() {}
+  disconnect() {}
+  unobserve() {}
+};
 
 // ==================== helpers ====================
 let __passed = 0;
@@ -261,20 +284,39 @@ test('setTargetBitmap 0 维 / 负数维 / 长度不匹配 → 抛错,只有 null
   // 当前 dist setTargetBitmap 实现:对 0 维 / 负数维 / 长度不匹配都抛错(dist 内置校验)
   // 只有 null 走 idle 路径(不抛错,清空 target bitmap)
   const mockCanvas = {
-    width: 800, height: 600, style: {},
-    addEventListener: () => {}, removeEventListener: () => {}, remove: () => {},
+    width: 800,
+    height: 600,
+    style: {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    remove: () => {},
     getContext: () => ({
-      setTransform: () => {}, fillRect: () => {}, fillText: () => {},
-      fillStyle: '', font: '', textBaseline: '', textAlign: '',
+      setTransform: () => {},
+      fillRect: () => {},
+      fillText: () => {},
+      fillStyle: '',
+      font: '',
+      textBaseline: '',
+      textAlign: '',
       measureText: () => ({ width: 8 }),
-      getImageData: () => ({ data: new Uint8ClampedArray(4) })
+      getImageData: () => ({ data: new Uint8ClampedArray(4) }),
     }),
     getBoundingClientRect: () => ({ width: 800, height: 600, top: 0, left: 0 }),
-    parentNode: null
+    parentNode: null,
   };
-  globalThis.document.body = { appendChild: () => {}, insertBefore: () => {}, removeChild: () => {}, firstChild: null, querySelectorAll: () => [] };
-  globalThis.document.createElement = (tag) => tag === 'canvas' ? mockCanvas : new MockDiv();
-  globalThis.HTMLCanvasElement = class { getContext() { return mockCanvas.getContext(); } };
+  globalThis.document.body = {
+    appendChild: () => {},
+    insertBefore: () => {},
+    removeChild: () => {},
+    firstChild: null,
+    querySelectorAll: () => [],
+  };
+  globalThis.document.createElement = (tag) => (tag === 'canvas' ? mockCanvas : new MockDiv());
+  globalThis.HTMLCanvasElement = class {
+    getContext() {
+      return mockCanvas.getContext();
+    }
+  };
 
   const inst = matrixRain({ theme: 'silicon-valley' });
 
