@@ -1168,13 +1168,16 @@ import { themes, textToBitmap, PRESETS, compileUserFunction } from '@xietuier/ma
 
 ## 🐛 DevTools 调试
 
+### 浏览器端 · 全局调试对象
+
 ```js
 // 浏览器控制台:
 // 全局调试对象
 window.__matrixRainDebug.instances; // → [{id, theme, variant, fps}, ...]
 window.__matrixRainDebug.count; // → 当前实例数
 window.__matrixRainDebug.avgFps; // → 平均 FPS
-window.__matrixRainDebug.destroyAll(); // 销毁全部
+window.__matrixRainDebug.destroyAll(); // → 销毁全部实例
+window.__matrixRainDebug.getHealthSummary(); // → 0.7.0+ · 渲染器健康面板(Playground 顶部)
 ```
 
 GUI 面板见 `demo/99-debug.html`,启动即看到:
@@ -1183,25 +1186,200 @@ GUI 面板见 `demo/99-debug.html`,启动即看到:
 - 每实例的 ID / 主题 / 变体 / 实时 FPS
 - 一键新增/销毁
 
----
+### 实例级 · `getDiagnostics()`
 
-## 🖥️ 本地站点(0.6.0+ `site/`)
-
-`site/` 是文档/演示站,Vue 3 + Vite,只用于本地预览,**不进 npm 包**。
-
-**需要 pnpm**(仓库自带 `site/pnpm-lock.yaml` 入库,锁住所有依赖版本)。
-
-```bash
-# 一键构建并起本地预览(等价于 npm run deploy:local + deploy:serve)
-npm run deploy:local              # build 主包 → 拷资产到 site/public/matrix-rain/ → pnpm install --frozen-lockfile → type-check → build site
-npm run deploy:serve              # 起 vite preview,http://127.0.0.1:4173
+```ts
+const inst = matrixRain({ canvas });
+inst.getDiagnostics();
+// → {
+//   fps, frameTimeMs, droppedFrames,
+//   activeCells, totalCells, fpsEstimate,
+//   targetActive, targetPhase, targetLockProgress,
+//   userCallbackError?,   // 0.6.1+ · 最近一次 fireOn* 抛错
+//   globalErrorCount,     // 0.6.0+ · installGlobalErrorHandler 累计
+//   lastError?,
+// }
 ```
 
-**为什么用 `--frozen-lockfile` 而不是 `--prefer-offline`?**
+### 渲染器健康 · `getRendererHealth()`
 
-`deploy:local` 必须用仓库入的 `site/pnpm-lock.yaml`,不能漂移到最新版。如果有人改 `site/package.json` 但忘了更新 lockfile,`--frozen-lockfile` 会**立即报错**而不是悄悄装新版本(防 P2 漂移,见 `docs/audit-test-release-2026-06-24.md` §P1-4)。
+```ts
+inst.getRendererHealth();
+// → { rendererName, cells, fps, ...13 个字段 readonly 快照 }
+// ⚠️ 0.6.2+ API,跨 3 renderer 统一(canvas2d / webgl / webgpu),Object.freeze 防篡改。
+// 当前真实消费点:Playground 顶部 Health Panel。
+```
 
-**首次 clone 或 lockfile 缺失时**:
+### SSR · Node 端无 DOM
+
+```ts
+// matrixRain() / detect() / themes 都是纯 ESM,无 window/document 引用,可直接:
+import { detect, themes } from '@xietuier/matrix-rain/core'; // ✓ SSR 友好子路径
+import { matrixRain } from '@xietuier/matrix-rain'; // ✗ 运行时需 DOM
+```
+
+**在 Node 测试环境里**,`getRendererHealth()` / `__matrixRainDebug.*` 不存在(它们是运行时挂载到 window 的对象)。Vitest 配置了 `happy-dom` + `setup-happy-dom-stub.ts` 给 canvas 桩(否则 `canvas.getContext('2d')` 会返 null)。
+
+### 像素基准 · 真浏览器回归
+
+```bash
+# 首次录制 baseline(只在根目录 test/fixtures/baselines/ 落盘,gitignore)
+MATRIX_RAIN_PIXEL_BASELINE_MODE=init node test/renderer-pixel.mjs
+git add -f test/fixtures/baselines/   # 评审后显式 commit,commit msg 加 [pixel-update]
+```
+
+默认模式是 `regress`(校验 + 报告 < 95% 阈值 fail)。阈值写死在 `test/renderer-pixel.mjs`,不要随意降低,webgpu 浮点误差会误报。
+
+### 调试速查表
+
+| 场景                       | 命令 / API                                                               |
+| -------------------------- | ------------------------------------------------------------------------ |
+| 看实例数 / FPS             | `window.__matrixRainDebug.count / avgFps`                                |
+| 看某个实例内部状态         | `inst.getDiagnostics()`                                                  |
+| 看渲染器层细节             | `inst.getRendererHealth()`                                               |
+| 看回调是否抛错             | `inst.getDiagnostics().userCallbackError`                                |
+| 看全局错误(未捕获 promise) | `inst.getDiagnostics().globalErrorCount` + `installGlobalErrorHandler()` |
+| Node 端像素基线录制        | `MATRIX_RAIN_PIXEL_BASELINE_MODE=init node test/renderer-pixel.mjs`      |
+| WebGPU 浏览器支持探测      | `node test/detect.mjs` → 输出当前环境能力                                |
+| 单实例调试面板             | 打开 Playground 路由 → 顶部 Health Panel                                 |
+
+---
+
+## 🖥️ 本地站点与开发工作流
+
+`site/` 是文档/演示站,Vue 3 + Vite,**不进 npm 包**。本节涵盖三类开发场景:
+
+- 改 `src/`(库源)→ 需要"库 watch + 站点 dev"双开
+- 改 `site/src/`(站点)→ 只需站点 dev
+- 一次性发布验证 → `deploy:local`
+
+### 首次安装
+
+```bash
+# 仓库根(库 + 站点管理器)
+nvm use                        # .nvmrc → Node 20 LTS
+npm install                    # 装库构建/测试/提交工具
+
+# 站点(单独 pnpm,lockfile 入库)
+cd site && pnpm install --frozen-lockfile
+cd ..
+```
+
+### 场景 1 · 改 `src/`(库源码)
+
+需要两个进程并行——库 watch 编译、站点 dev 引用编译产物。一行命令起两个:
+
+```bash
+npm run dev:all
+# 等价于(手动版,需要两个终端):
+#   终端 1:npx tsup --watch
+#   终端 2:cd site && pnpm dev
+#
+# → http://localhost:5173/
+```
+
+`dev:all` 内置了:
+
+- **preflight**:缺 `node_modules` / `dist/matrix-rain.css` 立刻 fail-fast 提示
+- **日志着色**:`[lib]` (cyan) / `[site]` (green) 前缀分流
+- **同步关闭**:Ctrl-C 同时关两个子进程,无残留
+
+`predev` 钩子在站点启动时**一次性**把 `dist/` 资产复制到 `site/public/matrix-rain/`。**watch 触发的后续 rebuild 不会自动同步**——这是有意的设计(避免站点 dev 误读半成品 dist)。要让浏览器拿到最新 UMD/CSS:
+
+```bash
+# 手动触发资产复制(约 100 KB,瞬时完成)
+node scripts/copy-site-assets.mjs
+# 然后 vite HMR 自动刷新(如果 src/ 改动是源文件 → 站点 dev 重载)
+```
+
+**单跑其中之一** (调试时用):
+
+```bash
+npm run dev                    # 只跑 tsup --watch(不开站点)
+cd site && pnpm dev            # 只跑 vite(库代码改了需要先 build)
+```
+
+### 场景 2 · 只改 `site/src/`(站点)
+
+```bash
+cd site && pnpm dev
+# → http://localhost:5173/(Vite HMR,无需库 watch)
+```
+
+### 场景 3 · 一次性构建 + 离线预览
+
+```bash
+# 全套:构建库 + 复制资产 + 站点 install + 站点 type-check + 站点 build
+npm run deploy:local
+
+# 预览已 build 的产物(端口 4173,纯静态服务)
+npm run deploy:serve
+# → http://127.0.0.1:4173/
+```
+
+`deploy:local` 用 `pnpm install --frozen-lockfile`(不是 `--prefer-offline`),目的是 **lockfile 漂移立刻报错** 而不是悄悄装新版本 —— 防 P2 漂移,见 `docs/audits/test-release-2026-06-24.md` §P1-4。
+
+### 场景 4 · 调试某条 .mjs 探针(不启站点)
+
+```bash
+# 单跑任一探针,直接看 stdout
+node test/smoke.mjs                # 入口冒烟
+node test/leak.mjs                 # 内存泄漏
+node test/renderer-pixel.mjs       # 真浏览器像素校验(默认 regress)
+node test/playground-health-panel.mjs  # 0.7.0+ Health Panel 数据
+node test/detect.mjs               # 当前环境 renderer 推荐
+
+# 全套(28 个 .mjs 顺序跑,~2 分钟)
+npm test
+```
+
+### 场景 5 · 单元测试 (Vitest)
+
+```bash
+# ⚠️ 注意:.gitignore 把 test/{unit,e2e,perf,pixel}/ 与 vitest.config.ts 一并排除,
+# 首次需先把它们放出来(2026-07 之前部分 CI 永远绿灯的根因)。
+npm run test:unit                 # vitest run,默认 spec 在 test/unit/
+npm run test:unit:watch           # TDD 模式
+npm run test:unit:coverage        # 输出 coverage/ 目录
+```
+
+### 场景 6 · 端到端 (Playwright)
+
+```bash
+npm run test:e2e                  # playwright test,spec 在 test/e2e/specs/
+```
+
+### 构建管线一览
+
+```
+src/*.ts ─► tsup ─► dist/
+                  ├─ index.js / index.cjs / index.umd.js (3 格式)
+                  ├─ themes.js + .d.ts
+                  ├─ matrix-rain-element.js (Web Component)
+                  └─ fps-overlay.js
+
+dist/ ─► copy-site-assets.mjs ─► site/public/matrix-rain/   (站点 dev 引用)
+                                └► dist/ 拷贝同步
+
+src/fonts/*.woff2 ─► tsup ─► dist/fonts/   (字体,自动)
+
+src/matrix-rain.css ─► tsup ─► dist/matrix-rain.css
+```
+
+### 端口与进程
+
+| 服务                                         | 默认端口 | 命令                      | 关闭     |
+| -------------------------------------------- | -------: | ------------------------- | -------- |
+| **开发期主入口**（库 watch + 站点 dev 一键） |     5173 | `npm run dev:all`         | `Ctrl-C` |
+| 站点 dev (Vite)                              |     5173 | `cd site && pnpm dev`     | `Ctrl-C` |
+| 站点 preview                                 |     4173 | `cd site && pnpm preview` | `Ctrl-C` |
+| 库 watch                                     |        — | `npx tsup --watch`        | `Ctrl-C` |
+
+**Vite dev 默认只听 localhost**。要从局域网访问:`cd site && pnpm dev --host`。
+
+### 需要 pnpm
+
+仓库自带 `site/pnpm-lock.yaml` 入库,锁住所有站点依赖版本。**不要用 npm 装站点依赖**(lockfile 漂移)。首次 lockfile 缺失时:
 
 ```bash
 cd site && pnpm install            # 先生成 lockfile

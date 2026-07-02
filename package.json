@@ -72,6 +72,7 @@
     "deploy:local": "npm run build && node scripts/copy-site-assets.mjs && cd site && pnpm install --frozen-lockfile && pnpm type-check && pnpm build",
     "deploy:serve": "cd site && pnpm preview --port 4173 --host 127.0.0.1",
     "dev": "tsup --watch",
+    "dev:all": "node scripts/dev.mjs",
     "type-check": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"site/src/**/*.{ts,tsx,vue}\"",
     "lint:fix": "eslint --fix \"src/**/*.{ts,tsx}\" \"site/src/**/*.{ts,tsx,vue}\"",
