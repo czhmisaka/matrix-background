@@ -1,7 +1,7 @@
 /**
  * setTargetBitmap 输入校验测试
  *
- * 来源:docs/audit-security-2026-06-08.md §5 输入校验 P1 (S-03)
+ * 来源:docs/audits/security-2026-06-08.md §5 输入校验 P1 (S-03)
  * 目标:验证 setTargetBitmap 入口校验 3 条规则
  *   1. bitmap 必须是 Float32Array(显式 instanceof 检查)
  *   2. 尺寸上限:cols * rows <= 1_000_000(防 10000x10000 OOM)

@@ -4,15 +4,15 @@
 >
 > **范围**: `src/` 全量 `.ts` 文件 + `types/index.d.ts` + `src/matrix-rain.css`。
 >
-> **不覆盖**: site 路由 / Vue 组件 / Playwright 测试 — 见 `site/src/` 与 `docs/A11Y-AUDIT-2026-06-08.md`。
+> **不覆盖**: site 路由 / Vue 组件 / Playwright 测试 — 见 `site/src/` 与 `docs/audits/a11y-deep-audit-2026-06-08.md`。
 >
 > **配套文档**:
 >
 > - `README.md` —— 用户面向的 API
 > - `CHANGELOG.md` —— 版本历史
-> - `docs/AUDIT-2026-06-07.md` —— 2026-06-07 深度审计
-> - `docs/PERF-BASELINE-2026-06-08.md` —— 性能基线
-> - `docs/audit-docs-2026-06-08.md` —— 文档完整度审计
+> - `docs/audits/audit-2026-06-07.md` —— 2026-06-07 深度审计
+> - `docs/audits/perf-baseline-2026-06-08.md` —— 性能基线
+> - `docs/audits/docs-2026-06-08.md` —— 文档完整度审计
 
 ---
 
@@ -114,7 +114,7 @@
 | `avalanche` | `drawAvalanche`     | 头部更亮 + 整列雪崩更新      | 加密牛市 / 高强度                      |
 | `ripple`    | `drawRipple`        | 涟漪式波动 + 字符按 sin 相位 | 水波 / 平静 UI                         |
 
-> **⚠️ 注意**:`ascii` 变体在 `src/variant-defaults.ts` 与 `classic` 默认值一字不差,字符集未真正独立(`docs/AUDIT-2026-06-07.md` U-08)。
+> **⚠️ 注意**:`ascii` 变体在 `src/variant-defaults.ts` 与 `classic` 默认值一字不差,字符集未真正独立(`docs/audits/audit-2026-06-07.md` U-08)。
 
 ### 2.4 Canvas2D 输出顺序
 
@@ -497,7 +497,7 @@ graph TD
 | **gzip JS**         |       < 20KB |        ~12-15KB(预计) | 🟢               |
 | **内存**            |       < 30MB |           估算 8-15MB | 🟢               |
 
-> 详细数字见 `docs/PERF-BASELINE-2026-06-08.md`。
+> 详细数字见 `docs/audits/perf-baseline-2026-06-08.md`。
 
 ### 8.2 热路径优化清单
 
@@ -560,7 +560,7 @@ graph TD
 
 ### 10.1 A 层沙箱安全模型
 
-详见 `docs/audit-security-2026-06-08.md` 和 `src/curves/sandbox.ts`:
+详见 `docs/audits/security-2026-06-08.md` 和 `src/curves/sandbox.ts`:
 
 | 防线              | 机制                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------------ |
@@ -703,4 +703,4 @@ destroy()                         → renderer.destroy() (释放 GL 资源)
 
 ---
 
-> 本文档随 `docs/audit-docs-2026-06-08.md` P1 项落地。如发现与源码不一致,请开 issue 标注「arch drift」并附文件:行号。
+> 本文档随 `docs/audits/docs-2026-06-08.md` P1 项落地。如发现与源码不一致,请开 issue 标注「arch drift」并附文件:行号。

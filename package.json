@@ -103,7 +103,6 @@
     "test:size": "node test/build-size.mjs",
     "test:esm": "node test/esm-load.mjs",
     "test:usability": "node test/usability.mjs",
-    "test:e2e:demos": "/Users/chenzhihan/anaconda3/bin/python3 scripts/e2e-demos.py",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:unit:watch": "vitest --config vitest.config.ts",
     "test:unit:coverage": "vitest run --config vitest.config.ts --coverage",

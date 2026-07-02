@@ -33,7 +33,7 @@ let _rgbaBufIdx = 0;
 /**
  * 用轮换 buffer 生成 rgba 字符串(避免每次模板字符串分配)
  * - 8 槽轮换,V8 短字符串 inline,实测零 GC
- * - 详情见 docs/audit-perf-2026-06-09.md P0-1
+ * - 详情见 docs/audits/perf-2026-06-09.md P0-1
  *
  * @param r g b 0-255 整数
  * @param a 0-1 浮点

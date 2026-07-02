@@ -5,7 +5,7 @@
  *             本探针保留作过渡期对照(参见 docs/test-strategy.md §7.1),
  *             旧 `test:detect` script 暂不删除,后续 minor 移除。
  *
- * 来源:docs/audit-docs-2026-06-08.md P0
+ * 来源:docs/audits/docs-2026-06-08.md P0
  *   - `types/index.d.ts:577` 声明 detect(),`src/index.ts` 之前没实现
  *   - 此测试验证 MatrixRain.detect() 返回字段齐全、类型正确、SSR-safe
  *

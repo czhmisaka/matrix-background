@@ -2,7 +2,7 @@
 
 > **状态**: ⏳ 待开始 · **创建**: 2026-06-10
 > **目标**: 真像素测试安全网 + WebGPU compute 恢复 + 代码清理 + 发版
-> **前置**: 0.4.1 已发布,12 个 bug 已修 ([audit-fake-impl-2026-06-10.md](docs/audit-fake-impl-2026-06-10.md))
+> **前置**: 0.4.1 已发布,12 个 bug 已修 ([audit-fake-impl-2026-06-10.md](docs/audits/fake-impl-2026-06-10.md))
 > **Plan 结构**: 每个 Phase 必含 `### 长期目标` / `### 本轮交付` / `### 实际测试代码` / `### 自我验证` 四段(由 [[feedback_plan_structure]] 强制)
 
 ---
@@ -25,7 +25,7 @@
 ### 长期目标
 
 - 永久防"假实现"回归:任何 renderer 上线前,必须在真浏览器中跑出**与 canvas2d 基准视觉等价**的像素,才能 merge。
-- 与 [audit-fake-impl-2026-06-10.md](docs/audit-fake-impl-2026-06-10.md) P2-1 直接对应:Node 端 `MockCanvas` + "只验不抛"的契约测试无法证明渲染正确,必须升级为 headed 浏览器像素对比。
+- 与 [audit-fake-impl-2026-06-10.md](docs/audits/fake-impl-2026-06-10.md) P2-1 直接对应:Node 端 `MockCanvas` + "只验不抛"的契约测试无法证明渲染正确,必须升级为 headed 浏览器像素对比。
 - 建立 0.5.0+ 的视觉回归门槛:此 Phase 完成后,**任何 P0 渲染 bug 一旦回归,CI 立刻红屏**。
 
 ### 本轮交付
@@ -324,7 +324,7 @@ npm run bench:renderer
 ### 长期目标
 
 - 接口契约自洽:`drawTrail` 不再接受永远被忽略的 `w` / `h` 参数
-- 对应 [audit-fake-impl-2026-06-10.md](docs/audit-fake-impl-2026-06-10.md) P2-3
+- 对应 [audit-fake-impl-2026-06-10.md](docs/audits/fake-impl-2026-06-10.md) P2-3
 - 顺手清掉 3 个 renderer 的形参噪音 + 1 个调用点
 - 风险极低(纯签名调整,无行为变化),可与 Phase 2 穿插
 
@@ -395,7 +395,7 @@ test('webgpu drawTrail 是 4 参函数', () => {
    - Features: 真像素测试基建 + WebGPU compute 恢复
    - Bugfixes: P2-3 drawTrail 接口
    - Performance: esbuild splitting
-4. **[docs/audit-fake-impl-2026-06-10.md](docs/audit-fake-impl-2026-06-10.md)** "修复进度"表更新:
+4. **[docs/audits/fake-impl-2026-06-10.md](docs/audits/fake-impl-2026-06-10.md)** "修复进度"表更新:
    - P2-1 → ✅ (test/renderer-pixel.mjs)
    - P2-3 → ✅ (drawTrail 清理)
    - 其余保持 0.4.1 状态

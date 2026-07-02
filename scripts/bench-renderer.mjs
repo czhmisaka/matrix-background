@@ -7,7 +7,7 @@
  * 策略: Playwright 打开 about:blank，addInitScript 注入 UMD build，
  *       然后 evaluate 调用 matrixRain() 并记录 fps + canvas 中心像素 hash
  *       (0.4.1+ 加 pixelHash + nonZeroRatio 兜底, 防 fake renderer 跑出 fps 但
- *        实际不渲染 — 历史教训见 docs/audit-fake-impl-2026-06-10.md)
+ *        实际不渲染 — 历史教训见 docs/audits/fake-impl-2026-06-10.md)
  *
  * @since 0.4.0
  */

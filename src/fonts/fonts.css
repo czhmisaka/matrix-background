@@ -13,8 +13,8 @@
  *   - pyftsubset 关键参数: --no-hinting (减重), --ignore-missing-glyphs (安全)
  *   - 注意:--desubroutinize 会导致 Fraunces 丢失 B/X/Y/Z/6/8/9,故仅用 --no-hinting
  *
- * 历史:见 docs/ROUTING-AUDIT-2026-06-07.md (阶段 2 字体本地化,270 KB → 125 KB)
- *      + docs/audit-perf-2026-06-08.md §0 P0-4 / §5 P1-5
+ * 历史:见 docs/audits/routing-2026-06-07.md (阶段 2 字体本地化,270 KB → 125 KB)
+ *      + docs/audits/perf-2026-06-08.md §0 P0-4 / §5 P1-5
  */
 
 /* Inter: variable font, 单文件覆盖 weight 400/500/600 */

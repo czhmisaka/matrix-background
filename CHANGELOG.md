@@ -158,7 +158,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — 0.4.0 渲染器虚假实现修复
 
-0.4.0 已发布的 WebGL / WebGPU 渲染器是 fake 实现:`tsc --noEmit` 静态类型 clean、`npm test 21/21` 通过(MockCanvas 只验"不抛")、`npm run bench:renderer 29 fps`(只读 `getFPS()` 不读像素),三层假绿信号互相佐证。但真浏览器选 `renderer: 'webgl'` 或 `'webgpu'` 会看到空白/24 字符画面。详见 `docs/audit-fake-impl-2026-06-10.md`(6 P0 + 4 P1 + 3 P2)。
+0.4.0 已发布的 WebGL / WebGPU 渲染器是 fake 实现:`tsc --noEmit` 静态类型 clean、`npm test 21/21` 通过(MockCanvas 只验"不抛")、`npm run bench:renderer 29 fps`(只读 `getFPS()` 不读像素),三层假绿信号互相佐证。但真浏览器选 `renderer: 'webgl'` 或 `'webgpu'` 会看到空白/24 字符画面。详见 `docs/audits/fake-impl-2026-06-10.md`(6 P0 + 4 P1 + 3 P2)。
 
 本版本修复:
 
@@ -224,7 +224,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Phase 5 优化空间**: esbuild `splitting: true` + `manualChunks` 拆 webgl/webgpu → canvas2d 默认路径恢复 ~28 KB gzip
   - 配套文档:
     - `docs/atlas-format.md` —— 字符布局图 + JSON schema + WebGL/WebGPU 加载示例
-    - `docs/audit-perf-renderer-baseline-2026-06-09.md` —— 3 renderer × 8 场景性能矩阵
+    - `docs/audits/perf-renderer-baseline-2026-06-09.md` —— 3 renderer × 8 场景性能矩阵
   - 配套测试 (5 个新 .mjs, 共 36 case):
     - `test/renderer-canvas2d.mjs` (10 case) —— 默认 canvas2d 行为 / webgl/webgpu throw
     - `test/atlas-load.mjs` (9 case) —— PNG magic / JSON schema / 字符覆盖
@@ -298,7 +298,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 安全
 
-- **CSP meta + 安全 headers** —— `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; ...">` 注入 demo / docs;`X-Frame-Options: DENY` + `X-Content-Type-Options: nosniff` + `Referrer-Policy: strict-origin-when-cross-origin`。详见 `docs/audit-security-2026-06-08.md`。
+- **CSP meta + 安全 headers** —— `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; ...">` 注入 demo / docs;`X-Frame-Options: DENY` + `X-Content-Type-Options: nosniff` + `Referrer-Policy: strict-origin-when-cross-origin`。详见 `docs/audits/security-2026-06-08.md`。
 
 #### 工具链
 
@@ -306,12 +306,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 审计文档(6 份)
 
-- `docs/audit-a11y-2026-06-08.md` —— axe-core 12 路由扫描 + 残留 gap
-- `docs/audit-perf-2026-06-08.md` —— P0/P1/P2 优化路线图(NPM -1.8MB / site -1MB)
-- `docs/audit-security-2026-06-08.md` —— v-html / sandbox / localStorage / CSP 评估
-- `docs/audit-code-quality-2026-06-08.md` —— `noUnusedLocals` / `noUnusedParameters` 启用 + 死代码清理
-- `docs/audit-test-coverage-2026-06-08.md` —— 现有 12 个 test 脚本覆盖率图 + 缺失测试提案
-- `docs/audit-docs-2026-06-08.md` —— README / JSDoc / missing-doc 列表
+- `docs/audits/a11y-2026-06-08.md` —— axe-core 12 路由扫描 + 残留 gap
+- `docs/audits/perf-2026-06-08.md` —— P0/P1/P2 优化路线图(NPM -1.8MB / site -1MB)
+- `docs/audits/security-2026-06-08.md` —— v-html / sandbox / localStorage / CSP 评估
+- `docs/audits/code-quality-2026-06-08.md` —— `noUnusedLocals` / `noUnusedParameters` 启用 + 死代码清理
+- `docs/audits/test-coverage-2026-06-08.md` —— 现有 12 个 test 脚本覆盖率图 + 缺失测试提案
+- `docs/audits/docs-2026-06-08.md` —— README / JSDoc / missing-doc 列表
 
 ### Changed
 
@@ -473,7 +473,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- 用户函数沙箱(`src/curves/sandbox.ts`):词级黑名单 + 白名单全局 + 步数上限 + 字符串上限,详见 `docs/audit-security-2026-06-08.md`
+- 用户函数沙箱(`src/curves/sandbox.ts`):词级黑名单 + 白名单全局 + 步数上限 + 字符串上限,详见 `docs/audits/security-2026-06-08.md`
 
 ---
 
@@ -487,4 +487,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/)
 - [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
-- `docs/audit-docs-2026-06-08.md` —— 本 changelog 内容的源头审计
+- `docs/audits/docs-2026-06-08.md` —— 本 changelog 内容的源头审计
