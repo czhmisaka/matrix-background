@@ -95,7 +95,7 @@
 
 #### 3.1.1 目标
 
-覆盖 `src/engine.ts` + `src/engine/setters.ts` + `src/engine/getRendererHealth.ts` + `src/bitmap.ts` + `src/core.ts` + `src/themes.ts` + `src/palette-lut.ts` 的**纯逻辑分支**和**公开 API 契约**。覆盖 `types/index.d.ts` 中声明的每个 setter/getter(确保 TS 契约与运行时一致)。
+覆盖 `src/engine.ts` + `src/engine/setters.ts` + `src/renderer/health.ts` + `src/bitmap.ts` + `src/core.ts` + `src/themes.ts` + `src/palette-lut.ts` 的**纯逻辑分支**和**公开 API 契约**。覆盖 `types/index.d.ts` 中声明的每个 setter/getter(确保 TS 契约与运行时一致)。
 
 #### 3.1.2 工具与版本
 

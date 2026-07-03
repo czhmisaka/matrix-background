@@ -167,7 +167,7 @@ assert.equal(errors.length, 0);
 
 - 全部 3 个 case 的 `console.warn` / `console.error` 数为 0
 - `getTargetBitmap()` 返回合法 cols/rows
-- 像素层(200ms 后)target 区域 ≥ 30% 字符命中(用 `getRendererHealth().targetCellsLocked` > 0 间接验证)
+- 像素层(200ms 后)target 区域 ≥ 30% 字符命中(用 `getTargetState()?.lockedCount` > 0 间接验证)
 
 ---
 
