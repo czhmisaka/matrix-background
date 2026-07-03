@@ -80,6 +80,8 @@ export const MatrixRain = {
    * @returns 销毁的实例数
    */
   destroyAll(container?: HTMLElement): number {
+    // SSR / Node 环境:document 不存在,直接返回 0(无副作用)
+    if (typeof document === 'undefined') return 0;
     let count = 0;
     const wrappers = container
       ? container.querySelectorAll<HTMLElement>('.matrix-rain-wrapper')
@@ -102,6 +104,8 @@ export const MatrixRain = {
 
   /** 当前活跃实例数(估算 · 通过数 DOM wrapper) */
   get activeCount(): number {
+    // SSR / Node 环境:document 不存在,返回 0(无活跃实例)
+    if (typeof document === 'undefined') return 0;
     return document.querySelectorAll('.matrix-rain-wrapper').length;
   },
 
