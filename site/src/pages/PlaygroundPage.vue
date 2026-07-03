@@ -250,7 +250,7 @@
       <section class="code-output">
         <h2>代码</h2>
         <p class="sr-only">{{ summary }}</p>
-        <pre role="region" tabindex="0" aria-hidden="true"><code>{{ codeString }}</code></pre>
+        <pre aria-hidden="true"><code>{{ codeString }}</code></pre>
         <p class="hint">点击「复制代码」可一键复制当前调用。改任一参数,代码块会实时刷新。</p>
       </section>
     </div>
@@ -418,10 +418,9 @@ rain.setTargetBitmap(bitmap, {
 // sr-only 播报用的"人类可读"参数摘要,屏幕阅读器一次读出所有关键参数
 const summary = computed(
   () =>
-    `当前调用: theme ${params.theme}, variant ${params.variant}, fontSize ${params.fontSize}px, ` +
-    `trailAlpha ${params.trailAlpha.toFixed(2)}, maxDPR ${params.maxDPR.toFixed(1)}, ` +
-    `brightness ${params.brightness.toFixed(2)}, targetPhase ${params.targetPhase}` +
-    (params.targetPhase === 'noise-converge' ? `, lockOrder ${params.targetLockOrder}` : '')
+    `当前调用: theme ${params.theme}, variant ${params.variant}, ` +
+    `fontSize ${params.fontSize}px, trailAlpha ${params.trailAlpha.toFixed(2)}, ` +
+    `brightness ${params.brightness.toFixed(2)}`
 );
 
 function setLockOrder(o: typeof params.targetLockOrder) {
