@@ -996,7 +996,11 @@ if (cb?.active) console.log(`爆闪中 @(${cb.x.toFixed(2)}, ${cb.y.toFixed(2)})
 
 ```ts
 // server.ts
-import { matrixRain } from '@xietuier/matrix-rain/core';
+// 注意:matrixRain() 需要 DOM,SSR 端只调纯函数路径(serialize / themes / 曲线编译)
+import { matrixRain } from '@xietuier/matrix-rain';
+// 无 DOM 的纯函数从 /core 拿:
+//   themes / PRESETS / compileUserFunction / 曲线 LUT(SSR 安全,见 §主题工厂)
+import { themes } from '@xietuier/matrix-rain/core';
 const serverInstance = matrixRain({ theme: 'matrix-green' });
 const html = `<script id="mr-snapshot" type="application/json">${serverInstance.serialize()}</script>`;
 
@@ -1155,13 +1159,13 @@ canvas2d 永远支持               (兜底)
 
 ```js
 // 浏览器主包
-import { matrixRain } from '@xietuier/matrix-rain';
+import { matrixRain, mountFpsOverlay } from '@xietuier/matrix-rain';
 // 浏览器:Web Component 标签
 import '@xietuier/matrix-rain/element';
-// 浏览器:独立 FPS 角标 overlay
-import { mountFpsOverlay } from '@xietuier/matrix-rain/fps-overlay';
 // 服务端:无 DOM 依赖,可在 Node/Edge/Worker 跑
-import { themes, textToBitmap, PRESETS, compileUserFunction } from '@xietuier/matrix-rain/core';
+//   textToBitmap / imageToBitmap 需要 OffscreenCanvas,Node 端用
+//   import 'happy-dom' 或 jsdom 即可,或走 main entry(浏览器优先)
+import { themes, PRESETS, compileUserFunction } from '@xietuier/matrix-rain/core';
 ```
 
 ---
@@ -1213,9 +1217,12 @@ inst.getRendererHealth();
 ### SSR · Node 端无 DOM
 
 ```ts
-// matrixRain() / detect() / themes 都是纯 ESM,无 window/document 引用,可直接:
-import { detect, themes } from '@xietuier/matrix-rain/core'; // ✓ SSR 友好子路径
-import { matrixRain } from '@xietuier/matrix-rain'; // ✗ 运行时需 DOM
+// matrixRain() / MatrixRain.detect() / themes 都是纯 ESM,无 window/document 引用,可直接:
+//   MatrixRain 是主入口导出的命名空间(含 detect / destroyAll / activeCount / installGlobalErrorHandler)
+import { MatrixRain, themes } from '@xietuier/matrix-rain'; // ✓ 浏览器主入口
+//   themes 也能从 /core 拿(SSR 友好,无 DOM 依赖):
+import { themes as coreThemes } from '@xietuier/matrix-rain/core'; // ✓ SSR 友好子路径
+const env = MatrixRain.detect();
 ```
 
 **在 Node 测试环境里**,`getRendererHealth()` / `__matrixRainDebug.*` 不存在(它们是运行时挂载到 window 的对象)。Vitest 配置了 `happy-dom` + `setup-happy-dom-stub.ts` 给 canvas 桩(否则 `canvas.getContext('2d')` 会返 null)。
