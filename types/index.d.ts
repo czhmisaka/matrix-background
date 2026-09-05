@@ -895,6 +895,8 @@ export interface EnvironmentInfo {
   hasWebGPU: boolean;
   /** 0.4.0+ 根据 viewport + fontSize + 浏览器能力推荐的 renderer */
   recommendedRenderer: 'canvas2d' | 'webgl' | 'webgpu';
+  /** 0.7.1+ 包版本(构建时注入) */
+  version: string;
 }
 
 /** 默认主题导出 */

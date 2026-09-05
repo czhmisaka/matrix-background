@@ -82,8 +82,14 @@ export const mountFpsOverlay = (): FpsOverlayHandle => {
       const fps = dbg?.avgFps ?? lastFps;
       const count = dbg?.count ?? 0;
       const theme = dbg?.instances?.[0]?.theme ?? '—';
+      // 0.7.1+ B4/P2-7: renderer health 错误信号 → overlay 变红提示
+      const summary = typeof dbg?.getHealthSummary === 'function' ? dbg.getHealthSummary() : null;
+      const errInst = summary?.instances?.find((x: any) => x.hasErrors);
+      const errRow = errInst
+        ? `<div class="fps-row low">GL: ${errInst.lastErrorScope ?? (errInst.lastGlError ? '0x' + Number(errInst.lastGlError).toString(16) : (errInst.lastInitError ?? 'error'))}</div>`
+        : '';
       const fpsClass = fps < 30 ? 'fps-row low' : 'fps-row';
-      el.innerHTML = `<div class="${fpsClass}">FPS: ${fps}</div><div class="info-row">${theme} · ${count} inst</div>`;
+      el.innerHTML = `<div class="${fpsClass}">FPS: ${fps}</div><div class="info-row">${theme} · ${count} inst</div>${errRow}`;
     }
   };
   raf = requestAnimationFrame(tick);
@@ -95,7 +101,7 @@ export const mountFpsOverlay = (): FpsOverlayHandle => {
       destroyed = true;
       cancelAnimationFrame(raf);
       el.remove();
-    }
+    },
   };
 };
 

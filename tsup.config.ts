@@ -1,4 +1,8 @@
 import { defineConfig } from 'tsup';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const pkg = require('./package.json') as { version: string };
 
 const outExt = ({ format }: { format: string }) => {
   if (format === 'cjs') return { js: '.cjs' };
@@ -27,6 +31,8 @@ export default [
     target: 'es2020',
     splitting: false,
     treeshake: true,
+    // 0.7.1+: 包版本注入 (engine.ts / index.ts 的 __MATRIX_RAIN_VERSION__)
+    define: { __MATRIX_RAIN_VERSION__: JSON.stringify(pkg.version) },
     outExtension: outExt
   }),
   // SSR 友好核心:ESM + CJS(无 DOM)

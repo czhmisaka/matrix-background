@@ -26,6 +26,11 @@
 // ==================== 非 DOM 部分(SSR 友好)====================
 export * from './core';
 
+/** 0.7.1+ B1: 包版本 — tsup define 注入, 与 engine.ts 内同一全局名 */
+declare const __MATRIX_RAIN_VERSION__: string | undefined;
+const VERSION: string =
+  typeof __MATRIX_RAIN_VERSION__ !== 'undefined' ? __MATRIX_RAIN_VERSION__ : '0.7.1';
+
 // ==================== DOM 部分 ====================
 export { matrixRain as matrixRainInternal } from './engine';
 import { matrixRain } from './engine';
@@ -140,6 +145,7 @@ export const MatrixRain = {
         hasWebGL2: false,
         hasWebGPU: false,
         recommendedRenderer: 'canvas2d',
+        version: VERSION,
       };
     }
 
@@ -201,6 +207,8 @@ export const MatrixRain = {
       hasWebGL2,
       hasWebGPU,
       recommendedRenderer,
+      // 0.7.1+ B1: 包版本(从 tsup define 注入)
+      version: VERSION,
     };
   },
 
@@ -291,6 +299,93 @@ export const MatrixRain = {
     return () => {
       window.removeEventListener('error', onErrorEvent);
       window.removeEventListener('unhandledrejection', onRejection);
+    };
+  },
+
+  /**
+   * 0.7.1+ B3/F-3: telemetry 桥 — 把 renderer health 错误信号推给外部监控
+   *
+   * 触发时机: 每次任一活跃实例的 health 出现错误信号变化时(lastGlError /
+   * lastErrorScope / lastInitError / contextLostCount), 推送该实例快照。
+   * 内部 500ms 去抖, 避免每帧轮询。
+   *
+   * 用法:
+   *   const stop = MatrixRain.installTelemetryHook((e) => {
+   *     mySentry.captureMessage('matrix-rain', e.lastErrorScope ?? String(e.lastGlError));
+   *   });
+   *   stop(); // 卸载
+   *
+   * @param onEvent 错误事件回调(参数为出事实例的 health 摘要)
+   * @returns 卸载函数
+   */
+  installTelemetryHook(
+    onEvent: (e: {
+      renderer: string;
+      lastGlError: number;
+      lastErrorScope: string | null;
+      lastInitError: string | null;
+      contextLostCount: number;
+      frameCount: number;
+    }) => void
+  ): () => void {
+    if (typeof onEvent !== 'function') {
+      throw new TypeError('MatrixRain.installTelemetryHook: onEvent must be a function');
+    }
+    // 每实例记录上次已推送的错误指纹, 只在变化时推送
+    const lastSent = new WeakMap<object, string>();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const flush = () => {
+      timer = null;
+      const dbg = (
+        typeof window !== 'undefined'
+          ? (window as unknown as {
+              __matrixRainDebug?: { instances?: unknown[]; getHealthSummary?: () => unknown };
+            })
+          : undefined
+      )?.__matrixRainDebug;
+      if (!dbg || typeof dbg.getHealthSummary !== 'function') return;
+      const summary = dbg.getHealthSummary() as { instances?: Array<Record<string, unknown>> };
+      const list = summary.instances ?? [];
+      for (const inst of list) {
+        const fingerprint = [
+          String(inst.lastGlError ?? 0),
+          String(inst.lastErrorScope ?? ''),
+          String(inst.lastInitError ?? ''),
+          String(inst.contextLostCount ?? 0),
+        ].join('|');
+        const key = inst as object;
+        if (lastSent.get(key) === fingerprint) continue;
+        // 有错误信号才首推; 全零且从未出错则不推(避免纯心跳)
+        const hasError = fingerprint !== '0|||0';
+        if (!hasError && !lastSent.has(key)) continue;
+        lastSent.set(key, fingerprint);
+        if (!hasError) continue; // 恢复正常不推送(避免抖动), 需要心跳用 getHealthSummary 轮询
+        try {
+          onEvent({
+            renderer: String(inst.renderer ?? ''),
+            lastGlError: Number(inst.lastGlError ?? 0),
+            lastErrorScope: (inst.lastErrorScope as string | null) ?? null,
+            lastInitError: (inst.lastInitError as string | null) ?? null,
+            contextLostCount: Number(inst.contextLostCount ?? 0),
+            frameCount: 0,
+          });
+        } catch (_) {
+          // 用户回调 throw 不影响轮询
+        }
+      }
+    };
+    const tick = () => {
+      if (timer !== null) return;
+      timer = setTimeout(flush, 500);
+    };
+    // 挂到 setInterval 轮询(2s) — health 无原生变更事件, 轮询是最可靠桥接
+    const interval = setInterval(tick, 2000);
+    return () => {
+      clearInterval(interval);
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
     };
   },
 };

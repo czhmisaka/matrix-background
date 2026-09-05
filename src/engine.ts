@@ -64,6 +64,14 @@ const __debugInstances: Set<DebugInstance> = (() => {
 })();
 let __debugNextId = 1;
 
+/**
+ * 0.7.1+ B1: 包版本 — tsup define 注入 (package.json version)
+ * fallback: 直接写死, 防止非 tsup 构建路径 (vitest / 用户自定义 bundler) undefined
+ */
+declare const __MATRIX_RAIN_VERSION__: string | undefined;
+const VERSION: string =
+  typeof __MATRIX_RAIN_VERSION__ !== 'undefined' ? __MATRIX_RAIN_VERSION__ : '0.7.1';
+
 const __ensureDebugHook = () => {
   if (typeof window === 'undefined') return;
   const w = window as unknown as { __matrixRainDebug?: unknown };
@@ -106,16 +114,19 @@ const __ensureDebugHook = () => {
           lastErrorScope: h.lastErrorScope,
           lastInitError: h.lastInitError,
           droppedFrames: h.droppedFrames,
+          contextLostCount: h.contextLostCount,
         };
       });
       const totals = perInstance.reduce(
         (s, x) => ({
           droppedFrames: s.droppedFrames + x.droppedFrames,
           errors: s.errors + (x.hasErrors ? 1 : 0),
+          contextLostCount: s.contextLostCount + x.contextLostCount,
         }),
-        { droppedFrames: 0, errors: 0 }
+        { droppedFrames: 0, errors: 0, contextLostCount: 0 }
       );
       return {
+        version: VERSION,
         instances: perInstance,
         totals,
         get hasErrors() {
@@ -866,6 +877,28 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     window.addEventListener('resize', onResize);
   }
 
+  // ============ 8.5 0.7.1+ B7/P2-8: 后台标签页主动暂停 ============
+  // 被动方案靠浏览器把 rAF 节流到 1Hz, 但 rAF 仍会跑; 这里主动 pause 彻底停帧。
+  // 尊重用户手动 pause: visibility 恢复只 resume "由本机制暂停"的实例。
+  let __visAutoPaused = false;
+  const onVisibilityChange = () => {
+    if (typeof document === 'undefined') return;
+    if (document.hidden) {
+      if (!state.isPaused && !state.isDestroyed) {
+        methods.pause();
+        __visAutoPaused = true;
+      }
+    } else if (__visAutoPaused) {
+      __visAutoPaused = false;
+      if (state.isPaused && !state.isDestroyed) {
+        methods.resume();
+      }
+    }
+  };
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  }
+
   // ============ 9. 构造 instance 对象 ============
   const instance: MatrixRainInstance = {
     destroy: methods.destroy,
@@ -937,12 +970,15 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     __debugInstances.add(di);
   }
 
-  // 销毁时从 debug set 移除
+  // 销毁时从 debug set 移除 + 卸载 visibilitychange 监听(0.7.1+ B7)
   const origDestroy = instance.destroy;
   instance.destroy = () => {
     origDestroy();
     if (typeof window !== 'undefined') {
       __debugInstances.delete(instance as DebugInstance);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     }
   };
 

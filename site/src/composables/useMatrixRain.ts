@@ -143,6 +143,17 @@ export function useMatrixRain(
       }
     } catch (e) {
       console.error('[useMatrixRain] failed to init:', e);
+      // 0.7.1+ B6/P2-10: 错误时带上 renderer health 快照, 便于远程定位
+      try {
+        const dbg = (
+          window as unknown as { __matrixRainDebug?: { getHealthSummary?: () => unknown } }
+        ).__matrixRainDebug;
+        if (dbg && typeof dbg.getHealthSummary === 'function') {
+          console.error('[useMatrixRain] health summary at failure:', dbg.getHealthSummary());
+        }
+      } catch {
+        /* 忽略 */
+      }
     }
   };
 
@@ -209,6 +220,16 @@ export function useMatrixRain(
       return true;
     } catch (e) {
       console.error('[useMatrixRain] setTarget failed:', e);
+      try {
+        const dbg = (
+          window as unknown as { __matrixRainDebug?: { getHealthSummary?: () => unknown } }
+        ).__matrixRainDebug;
+        if (dbg && typeof dbg.getHealthSummary === 'function') {
+          console.error('[useMatrixRain] health summary:', dbg.getHealthSummary());
+        }
+      } catch {
+        /* 忽略 */
+      }
       return false;
     }
   };
@@ -311,6 +332,16 @@ export function useMatrixRain(
       if (o.targetLockStability !== undefined) inst.setTargetLockStability(o.targetLockStability);
     } catch (e) {
       console.error('[useMatrixRain] soft update failed:', e);
+      try {
+        const dbg = (
+          window as unknown as { __matrixRainDebug?: { getHealthSummary?: () => unknown } }
+        ).__matrixRainDebug;
+        if (dbg && typeof dbg.getHealthSummary === 'function') {
+          console.error('[useMatrixRain] health summary:', dbg.getHealthSummary());
+        }
+      } catch {
+        /* 忽略 */
+      }
     }
     onCleanup(() => {
       /* noop */
