@@ -207,25 +207,20 @@ await test('集成: matrixRain() 跑 60 帧 fillText 计数正常 (默认 canvas
   inst.destroy();
 });
 
-// ==================== Test 4: renderer=webgl 在 Node 抛错(无 webgl context)================
-await test('renderer=webgl 在 Node test env 抛错(无 webgl2 context 或 atlas URL)', () => {
+// ==================== Test 4: renderer=webgl 在 Node 走 canvas2d 懒升级兜底 ================
+// 0.7.1+ C1 懒升级: webgl chunk 动态加载, init 失败保持 canvas2d 继续(不再同步 throw)
+await test('renderer=webgl 在 Node 不抛错(懒升级失败保持 canvas2d)', () => {
   const canvas = new MockCanvas();
   let threw = false;
+  let inst;
   try {
-    matrixRain({ canvas, fontSize: 14, renderer: 'webgl' });
+    inst = matrixRain({ canvas, fontSize: 14, renderer: 'webgl' });
   } catch (e) {
     threw = true;
-    // 注: Phase 2B 已实现 webgl, 但 Node test env:
-    // - 没有 webgl2 context, 或
-    // - atlas URL /atlas/... 无法 fetch (无 HTTP server)
-    // 错误信息应提到 webgl / atlas / context / URL
-    assert.match(
-      e.message,
-      /webgl|atlas|getContext|Invalid URL|Failed to parse URL|not a function|is not a function/i,
-      '错误信息应提到 webgl / atlas / context / URL'
-    );
   }
-  assert.ok(threw, 'renderer=webgl 在 Node test env 应 throw (无 webgl2)');
+  assert.ok(!threw, '懒升级下 webgl 指定不应同步 throw');
+  assert.ok(inst, '应返回可用 instance (canvas2d 兜底)');
+  inst.destroy();
 });
 
 // ==================== Test 5: renderer=webgpu 在 Node 异步静默 fail (无 navigator.gpu)====================

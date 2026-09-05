@@ -5,7 +5,31 @@ All notable changes to `@xietuier/matrix-rain` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.0] - 2026-06-28
+## [Unreleased] — 0.7.1 候选
+
+### Added
+
+- **渲染器自愈**:WebGL `webglcontextlost/restored` 自愈(重建 atlas/program/VAO/buffer),WebGPU `device.lost` 监听;`RendererHealth` 新增 `contextLostCount`(14 字段)。
+- **自动降级**:`enableAutoFallback`(默认 `true`)— webgl/webgpu init 或懒加载失败自动换 canvas2d;失败即暂停,不再 rAF 空转。
+- **遥测桥**:`MatrixRain.installTelemetryHook(fn)` — health 错误信号(lastGlError / lastErrorScope / lastInitError / contextLostCount)变化时推送给外部监控,2s 轮询 + 500ms 去抖。
+- **版本注入**:`MatrixRain.detect()` 返回 `version` 字段(tsup define 注入);`__matrixRainDebug.getHealthSummary()` 输出 `version` + `contextLostCount`。
+- **懒升级架构**(0.7.1):webgl/webgpu 渲染器改为 dynamic chunk,主包只含 canvas2d;指定 GPU 渲染器时先 canvas2d 出画、chunk 就绪后下一帧无缝切换。
+- **后台暂停**:`visibilitychange` — 标签页隐藏主动 pause,回前台 resume(尊重用户手动暂停)。
+- **fps-overlay**:renderer 出错时显示红色 GL 错误行。
+
+### Fixed
+
+- **pixel 测试回绿**:原"跨渲染器 ≥95%"断言不可达(引擎随机驱动无 seed,同渲染器跨进程上限 ~82-83%)。改为 per-renderer baseline + 确定性 fixture(mulberry32 seed + fixedTimeStep + 固定帧数 gate + pause 冻结)+ per-scenario 阈值;全黑帧(headless WebGPU)自动 skip 不写黑 baseline。
+- **测试资产入库**:`test/unit`(535 用例)/ `test/e2e` / `vitest.config.ts` / pixel baselines 纳入版本控制。
+- **CI perf job**:修正引用不存在的 `perf:bench` / `perf:report` script,改调 `bench:renderer`。
+- **engines**:`>=20` 与 `.nvmrc` / CHANGELOG 对齐。
+- **WebGPU 空指针**:14 处 `createTexture/BindGroup/Pipeline/Buffer` 返回值 null 检查(设备丢失时不再静默渲染失败)。
+- **atlas onerror**:WebGL atlas PNG 加载失败写入 health(`ATLAS_LOAD_FAILED`)。
+- **canvas2d init**:失败也写 health(`INIT_FAILED`),与其他渲染器一致。
+
+### Changed
+
+- **size-limit**:index (ESM) 32→33 KB(懒升级后主包实测 32.6KB gzip,较 0.7.0 的 100.3KB raw 大幅缩小)。
 
 ### Added — 全局错误处理 + 诊断面板 + Playground 增强
 

@@ -1209,9 +1209,30 @@ inst.getDiagnostics();
 
 ```ts
 inst.getRendererHealth();
-// → { rendererName, cells, fps, ...13 个字段 readonly 快照 }
+// → { renderer, initialized, frameCount, drawCallIdx, instanceCount, gridCols, gridRows,
+//     initDurationMs, lastFrameDurationMs, droppedFrames, lastGlError, lastErrorScope,
+//     lastInitError, contextLostCount }   // 0.7.1+ · 14 个字段 readonly 快照
 // ⚠️ 0.6.2+ API,跨 3 renderer 统一(canvas2d / webgl / webgpu),Object.freeze 防篡改。
-// 当前真实消费点:Playground 顶部 Health Panel。
+// 0.7.1+: contextLostCount — WebGL context-lost 自愈 / WebGPU device-lost 计数。
+// 当前真实消费点:Playground 顶部 Health Panel + fps-overlay 错误红行。
+```
+
+### 遥测桥 · `MatrixRain.installTelemetryHook(fn)` (0.7.1+)
+
+```ts
+const stop = MatrixRain.installTelemetryHook((e) => {
+  // e: { renderer, lastGlError, lastErrorScope, lastInitError, contextLostCount, frameCount }
+  mySentry.captureMessage(`matrix-rain[${e.renderer}]`, e.lastErrorScope ?? String(e.lastGlError));
+});
+// 2s 轮询 health,错误指纹变化时 500ms 去抖推送;stop() 卸载。
+```
+
+### 自动降级 · `enableAutoFallback` (0.7.1+)
+
+```ts
+matrixRain({ renderer: 'webgl', enableAutoFallback: true }); // 默认 true
+// webgl/webgpu init 失败(含 chunk 加载失败)→ 自动换 canvas2d 重新初始化。
+// false: 失败即暂停引擎(rAF 链断,不空转耗 CPU)。
 ```
 
 ### SSR · Node 端无 DOM
@@ -1230,12 +1251,12 @@ const env = MatrixRain.detect();
 ### 像素基准 · 真浏览器回归
 
 ```bash
-# 首次录制 baseline(只在根目录 test/fixtures/baselines/ 落盘,gitignore)
+# 首次录制 baseline(test/fixtures/baselines/ 默认 gitignore,需显式提交)
 MATRIX_RAIN_PIXEL_BASELINE_MODE=init node test/renderer-pixel.mjs
 git add -f test/fixtures/baselines/   # 评审后显式 commit,commit msg 加 [pixel-update]
 ```
 
-默认模式是 `regress`(校验 + 报告 < 95% 阈值 fail)。阈值写死在 `test/renderer-pixel.mjs`,不要随意降低,webgpu 浮点误差会误报。
+**0.7.1+ 对比策略(per-renderer baseline)**:每个渲染器与自己上一代 baseline 比对,per-scenario 阈值(1080p 80% / 1440p 40%)。fixture 用 mulberry32 seed + `fixedTimeStep` + 固定帧数 gate 保证确定性;但引擎运行期仍有 ~0.01%/帧随机调用漂移(rAF 时序扰动),同渲染器跨进程复跑上限实测 ~82-83%(1080p),95% 不可达。全黑帧(headless WebGPU 呈现问题)自动 skip,不写黑 baseline。4K 场景已移出默认表(headless 软渲染崩溃),需要时 `--scenario 4K-fs4`。
 
 ### 调试速查表
 
@@ -1246,6 +1267,8 @@ git add -f test/fixtures/baselines/   # 评审后显式 commit,commit msg 加 [p
 | 看渲染器层细节             | `inst.getRendererHealth()`                                               |
 | 看回调是否抛错             | `inst.getDiagnostics().userCallbackError`                                |
 | 看全局错误(未捕获 promise) | `inst.getDiagnostics().globalErrorCount` + `installGlobalErrorHandler()` |
+| 接外部监控(遥测)           | `MatrixRain.installTelemetryHook(fn)` (0.7.1+)                           |
+| 看 context 丢失次数        | `inst.getRendererHealth().contextLostCount` (0.7.1+)                     |
 | Node 端像素基线录制        | `MATRIX_RAIN_PIXEL_BASELINE_MODE=init node test/renderer-pixel.mjs`      |
 | WebGPU 浏览器支持探测      | `node test/detect.mjs` → 输出当前环境能力                                |
 | 单实例调试面板             | 打开 Playground 路由 → 顶部 Health Panel                                 |

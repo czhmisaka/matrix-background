@@ -43,8 +43,7 @@ import {
 } from './engine/draw-helpers';
 import { createSetters } from './engine/setters';
 import { Canvas2DRenderer } from './renderer/canvas2d-renderer';
-import { WebGLRenderer } from './renderer/webgl-renderer';
-import { WebGPURenderer } from './renderer/webgpu-renderer';
+// 0.7.1+ C1: WebGL/WebGPU renderer 类改为 dynamic import(懒升级), 主 chunk 只含 canvas2d
 import { autoPickRenderer, setAtlasUrls } from './renderer/index';
 import type { MatrixRainRenderer, RendererImpl } from './renderer/types';
 
@@ -221,75 +220,70 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
   });
 
   // ============ 0.5 同步创建 renderer instance(同步, 不 init)============
-  // 0.4.0+ Phase 2B: 静态 import (Phase 3 改 esbuild dynamic chunk 拆体积)
-  const renderer: MatrixRainRenderer = (() => {
-    switch (impl) {
-      case 'canvas2d':
-        return new Canvas2DRenderer();
-      case 'webgl':
-        // 0.4.0+ Phase 2B: webgl 走静态 import
-        // 注: canvas2d 默认 chunk 会包含 webgl 代码 (~5-8 KB gzip 增量)
-        // Phase 3 优化:用 esbuild dynamic chunk 把 webgl 拆出去
-        // Phase 2B 验证:先用静态 import 跑通,Phase 3 再优化体积
-        return new WebGLRenderer();
-      case 'webgpu':
-        // 0.4.0+ Phase 4: WebGPU renderer
-        return new WebGPURenderer();
-    }
-  })();
+  // 0.7.1+ C1「懒升级」重构: webgl/webgpu 的类定义 (~14KB gzip) 不再静态打进主 chunk。
+  // - canvas2d(默认兜底)同步创建, 首帧立即可画
+  // - picked = webgl/webgpu 时后台 dynamic import chunk, 就绪后无缝替换 state.renderer
+  //   (替换点在两帧边界, 用户无感; 替换失败保持 canvas2d 继续, health 记 UPGRADE_FAILED)
+  const renderer: MatrixRainRenderer =
+    impl === 'canvas2d' ? new Canvas2DRenderer() : new Canvas2DRenderer();
 
   // ============ 1. 创建 state(传入 renderer)============
   const state = createMatrixRainState(options, renderer);
 
-  // webgl 路径下, init 之前需要先 set atlas URL
-  // 静态 import WebGLRenderer 不会带 atlas URL,所以在 matrixRain 入口注入
-  // 注: 必须在 init() 之前调(否则 webgl 找不到 atlas 抛错)
-  if (impl === 'webgl') {
-    setAtlasUrls('/atlas/jetbrains-mono-32.json', '/atlas/jetbrains-mono-32.png');
-  }
+  // webgl/webgpu 路径下, init 之前需要先注入 atlas URL(0.7.1+: 移入 upgrade 阶段)
 
-  // 同步触发 init(对 canvas2d 是 sync; webgl 是 async, 内部 await atlas PNG load)
-  // 异步 init 期间, renderer 的 drawChar / drawTrail 等都 early-return
-  // (canvas2d: this._ctx 已 set; webgl: this._gl 是 null 直到 init 完成)
-  // 注: webgl 路径下 init 可能 fail(atlas fetch 失败 / 无 webgl2 context),
-  //     不应 unhandled rejection — 静默 catch + warn 一次
-  void renderer.init(state.canvas, state).catch((e: unknown) => {
-    const msg = e instanceof Error ? e.message : String(e);
-
-    console.warn(`[matrix-rain] renderer.init() failed: ${msg}`);
-    // 0.7.1+ P0-3: init 失败不再让 rAF 空转 —
-    // 1) enableAutoFallback (默认 true) 且失败的不是 canvas2d → 换 canvas2d 重 init
-    // 2) fallback 失败 / 已是 canvas2d / 用户显式关闭 → 暂停引擎, rAF 链断
-    const enableFallback = options.enableAutoFallback !== false;
-    if (enableFallback && impl !== 'canvas2d') {
-      console.warn('[matrix-rain] falling back to canvas2d renderer (enableAutoFallback)');
-      try {
-        const fallback = new Canvas2DRenderer();
-        void fallback
-          .init(state.canvas, state)
-          .then(() => {
-            renderer.destroy();
-            state.renderer = fallback;
-            fallback.resize(state.a, state.o, state.n);
-            fallback.setCharset(state.charset);
-            console.info('[matrix-rain] canvas2d fallback active');
-          })
-          .catch((fe: unknown) => {
-            const fmsg = fe instanceof Error ? fe.message : String(fe);
-            console.error(`[matrix-rain] canvas2d fallback init failed: ${fmsg} → pausing`);
-            state.isPaused = true;
-            fallback.destroy();
-          });
-      } catch (ce: unknown) {
-        const cmsg = ce instanceof Error ? ce.message : String(ce);
-        console.error(`[matrix-rain] canvas2d fallback create failed: ${cmsg} → pausing`);
-        state.isPaused = true;
+  /**
+   * 0.7.1+ C1 懒升级: 动态加载 webgl/webgpu chunk 并无缝替换 state.renderer
+   * - 先同步 canvas2d 出画(首帧不空窗)
+   * - chunk 就绪 → 新 renderer init → 成功后销毁旧 renderer 并替换
+   * - 任何一步失败 → 保持 canvas2d 继续(health 记 UPGRADE_FAILED), 不 pause
+   */
+  const upgradeRenderer = async (): Promise<void> => {
+    try {
+      if (impl === 'webgl') {
+        setAtlasUrls('/atlas/jetbrains-mono-32.json', '/atlas/jetbrains-mono-32.png');
+        const { WebGLRenderer } = await import('./renderer/webgl-renderer');
+        const next = new WebGLRenderer();
+        await next.init(state.canvas, state);
+        const prev = state.renderer;
+        state.renderer = next;
+        next.resize(state.a, state.o, state.n);
+        next.setCharset(state.charset);
+        prev.destroy();
+        console.info('[matrix-rain] upgraded to webgl renderer (lazy chunk)');
+      } else if (impl === 'webgpu') {
+        const { WebGPURenderer } = await import('./renderer/webgpu-renderer');
+        const next = new WebGPURenderer();
+        await next.init(state.canvas, state);
+        const prev = state.renderer;
+        state.renderer = next;
+        next.resize(state.a, state.o, state.n);
+        next.setCharset(state.charset);
+        prev.destroy();
+        console.info('[matrix-rain] upgraded to webgpu renderer (lazy chunk)');
       }
-    } else {
-      // 已是 canvas2d / 关闭 fallback → 停 rAF 空转
-      state.isPaused = true;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[matrix-rain] lazy upgrade to ${impl} failed: ${msg} — keep canvas2d`);
+      // health 侧: 当前 renderer(可能是刚 init 失败的)已自己记录 lastInitError
     }
-  });
+  };
+
+  if (impl === 'canvas2d') {
+    // 同步 init(canvas2d 是同步完成)
+    void renderer.init(state.canvas, state).catch((e: unknown) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[matrix-rain] renderer.init() failed: ${msg}`);
+      // 0.7.1+ P0-3: canvas2d 也失败 → 停 rAF 空转
+      state.isPaused = true;
+    });
+  } else {
+    // 先用 canvas2d 兜底出画, 同时后台升级
+    void renderer.init(state.canvas, state).catch(() => {
+      /* 升级会替换, 静默 */
+    });
+    void upgradeRenderer();
+  }
   renderer.setCharset(state.charset);
   // 同步 resize(DPR 缩放)
   renderer.resize(state.a, state.o, state.n);
@@ -895,7 +889,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       }
     }
   };
-  if (typeof document !== 'undefined') {
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('visibilitychange', onVisibilityChange);
   }
 
@@ -944,7 +938,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     getOptions: methods.getOptions,
     serialize: methods.serialize,
     // 0.6.0+: 透传 renderer 健康快照(给外部调试 + 测试用)
-    getRendererHealth: () => renderer.getHealth(),
+    getRendererHealth: () => state.renderer.getHealth(),
   };
 
   // ============ 10. Boot ============
@@ -977,7 +971,7 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     if (typeof window !== 'undefined') {
       __debugInstances.delete(instance as DebugInstance);
     }
-    if (typeof document !== 'undefined') {
+    if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     }
   };

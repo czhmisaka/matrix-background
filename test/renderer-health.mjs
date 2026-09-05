@@ -261,10 +261,16 @@ await test('webgl Node env: getRendererHealth() 暴露 lastInitError 字段 + �
     return;
   }
   const h = inst.getRendererHealth();
-  assert.equal(h.renderer, 'webgl', 'webgl 路径 renderer=webgl');
+  // 0.7.1+ C1 懒升级: Node env 下 webgl chunk init 失败 → 保持 canvas2d 兜底,
+  // health.renderer 反映实际生效的 renderer (浏览器环境升级成功时才是 'webgl')
+  assert.ok(
+    h.renderer === 'webgl' || h.renderer === 'canvas2d',
+    'renderer 应为 webgl 或 canvas2d(懒升级兜底)'
+  );
   assert.ok('lastInitError' in h, '字段 lastInitError 必须存在');
   assert.ok('lastGlError' in h, '字段 lastGlError 必须存在');
   assert.ok('droppedFrames' in h, '字段 droppedFrames 必须存在(0.6.0+)');
+  assert.ok('contextLostCount' in h, '字段 contextLostCount 必须存在(0.7.1+)');
   assert.equal(typeof h.lastInitError === 'string' || h.lastInitError === null, true);
   inst.destroy();
 });
@@ -280,7 +286,11 @@ await test('webgpu Node env: getRendererHealth() 暴露 lastInitError 字段 + �
     return;
   }
   const h = inst.getRendererHealth();
-  assert.equal(h.renderer, 'webgpu', 'webgpu 路径 renderer=webgpu');
+  // 0.7.1+ 懒升级: Node env 下 webgpu 升级失败保持 canvas2d
+  assert.ok(
+    h.renderer === 'webgpu' || h.renderer === 'canvas2d',
+    'renderer 应为 webgpu 或 canvas2d(懒升级兜底)'
+  );
   assert.ok('lastInitError' in h, '字段 lastInitError 必须存在');
   assert.ok('lastErrorScope' in h, '字段 lastErrorScope 必须存在');
   inst.destroy();

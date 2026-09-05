@@ -84,7 +84,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:pixel
+      # 0.7.1+: --save-dir 落盘各渲染器抓帧, 失败时随 artifact 上传供远程比对
+      - run: npm run test:pixel -- --save-dir test/pixel/diff
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

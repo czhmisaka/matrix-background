@@ -29,7 +29,9 @@ export default [
     //     后续 0.6.0 可考虑 Promise 化 matrixRain() 让 webgl/webgpu 真拆出去。
     minify: true,
     target: 'es2020',
-    splitting: false,
+    // 0.7.1+ C1: splitting 开启 — webgl/webgpu 走 dynamic import 自动拆 chunk,
+    // canvas2d 默认路径不再内联 GPU 渲染器 (仅 ESM/CJS; iife/umd 单文件场景自动不分包)
+    splitting: true,
     treeshake: true,
     // 0.7.1+: 包版本注入 (engine.ts / index.ts 的 __MATRIX_RAIN_VERSION__)
     define: { __MATRIX_RAIN_VERSION__: JSON.stringify(pkg.version) },
