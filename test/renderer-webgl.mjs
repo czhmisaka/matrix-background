@@ -121,6 +121,8 @@ await test('matrixRain({ renderer: "webgl" }) 在 Node 不崩 (异步 init fail 
     // 允许 throw(因为 init 是 async,可能在 init 失败后 unhandled rejection)
     // 但 matrixRain 本身应 sync 返回 instance
   }
+  // 0.7.1+: 必须销毁 — mock rAF 是真实 setTimeout(16ms), 不销毁会让 rAF 链永续、Node 进程挂起
+  if (inst) inst.destroy();
   // 实际: matrixRain() 在 Node 不抛(atlas fetch 失败是 async warn)
   // 验证 inst 是有效对象(或至少不崩)
   // 注: 此测试主要验证 matrixRain({ renderer: 'webgl' }) 路径不挂掉

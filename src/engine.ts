@@ -239,12 +239,22 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
    * - 任何一步失败 → 保持 canvas2d 继续(health 记 UPGRADE_FAILED), 不 pause
    */
   const upgradeRenderer = async (): Promise<void> => {
+    // 0.7.1+: Node/SSR 环境跳过升级 — fetch/Image 不可用, 只会留下 undici keepalive socket
+    // 且必然失败。canvas2d 兜底本身就是 Node 环境的最终 renderer。
+    // 注意: 测试环境可能 mock window (renderer-webgl.mjs), 所以还要查 Image (webgl init 必需)
+    if (typeof window === 'undefined' || typeof Image === 'undefined') return;
     try {
       if (impl === 'webgl') {
         setAtlasUrls('/atlas/jetbrains-mono-32.json', '/atlas/jetbrains-mono-32.png');
         const { WebGLRenderer } = await import('./renderer/webgl-renderer');
+        // 0.7.1+: chunk 加载期间实例可能已 destroy — 放弃升级, 不留挂起句柄
+        if (state.isDestroyed) return;
         const next = new WebGLRenderer();
         await next.init(state.canvas, state);
+        if (state.isDestroyed) {
+          next.destroy();
+          return;
+        }
         const prev = state.renderer;
         state.renderer = next;
         next.resize(state.a, state.o, state.n);
@@ -253,8 +263,13 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         console.info('[matrix-rain] upgraded to webgl renderer (lazy chunk)');
       } else if (impl === 'webgpu') {
         const { WebGPURenderer } = await import('./renderer/webgpu-renderer');
+        if (state.isDestroyed) return;
         const next = new WebGPURenderer();
         await next.init(state.canvas, state);
+        if (state.isDestroyed) {
+          next.destroy();
+          return;
+        }
         const prev = state.renderer;
         state.renderer = next;
         next.resize(state.a, state.o, state.n);
