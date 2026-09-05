@@ -212,6 +212,13 @@ export interface MatrixRainOptions {
   fontSize?: number;
 
   /**
+   * 渲染器 init 失败时自动降级到 canvas2d(默认 true)· @since 0.7.1
+   * - true(默认): webgl/webgpu init 失败 → 自动换 canvas2d 重新初始化
+   * - false: 失败即暂停引擎(rAF 链断, 不空转耗 CPU)
+   */
+  enableAutoFallback?: boolean;
+
+  /**
    * 字符间距(CSS px)· 对称应用到 x 和 y · 默认 0
    * - 正值:字符间留空(如 1-2 让字到字更紧或更松)
    * - 负值:字符重叠(最多 -10)
@@ -849,6 +856,8 @@ export interface RendererHealth {
   readonly lastErrorScope: string | null;
   /** init() 失败时的 Error.message(可空) */
   readonly lastInitError: string | null;
+  /** WebGL context-lost / WebGPU device-lost 累计次数(0.7.1+ 含自愈后恢复) */
+  readonly contextLostCount: number;
 }
 
 /** 视口宽度分档(<768 / 768-1024 / 1024-1440 / ≥1440) */

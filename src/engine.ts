@@ -246,6 +246,38 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     const msg = e instanceof Error ? e.message : String(e);
 
     console.warn(`[matrix-rain] renderer.init() failed: ${msg}`);
+    // 0.7.1+ P0-3: init 失败不再让 rAF 空转 —
+    // 1) enableAutoFallback (默认 true) 且失败的不是 canvas2d → 换 canvas2d 重 init
+    // 2) fallback 失败 / 已是 canvas2d / 用户显式关闭 → 暂停引擎, rAF 链断
+    const enableFallback = options.enableAutoFallback !== false;
+    if (enableFallback && impl !== 'canvas2d') {
+      console.warn('[matrix-rain] falling back to canvas2d renderer (enableAutoFallback)');
+      try {
+        const fallback = new Canvas2DRenderer();
+        void fallback
+          .init(state.canvas, state)
+          .then(() => {
+            renderer.destroy();
+            state.renderer = fallback;
+            fallback.resize(state.a, state.o, state.n);
+            fallback.setCharset(state.charset);
+            console.info('[matrix-rain] canvas2d fallback active');
+          })
+          .catch((fe: unknown) => {
+            const fmsg = fe instanceof Error ? fe.message : String(fe);
+            console.error(`[matrix-rain] canvas2d fallback init failed: ${fmsg} → pausing`);
+            state.isPaused = true;
+            fallback.destroy();
+          });
+      } catch (ce: unknown) {
+        const cmsg = ce instanceof Error ? ce.message : String(ce);
+        console.error(`[matrix-rain] canvas2d fallback create failed: ${cmsg} → pausing`);
+        state.isPaused = true;
+      }
+    } else {
+      // 已是 canvas2d / 关闭 fallback → 停 rAF 空转
+      state.isPaused = true;
+    }
   });
   renderer.setCharset(state.charset);
   // 同步 resize(DPR 缩放)

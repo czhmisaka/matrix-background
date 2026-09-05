@@ -71,10 +71,30 @@
         })();
 
         try {
+          // ★ 确定性改造 (2026-09-06): mulberry32 种子化 Math.random
+          //    必须在 matrixRain() 之前替换, 引擎全部随机源(列位/字符/速度)走同一种子序列
+          const seed = Number(params.get('seed') || 42);
+          const frames = Number(params.get('frames') || 90);
+          let s = seed >>> 0;
+          window.__randCount = 0;
+          window.__randSnap = []; // 每 5 帧: {frame, randCount}
+          Math.random = function () {
+            window.__randCount++;
+            s |= 0;
+            s = (s + 0x6d2b79f5) | 0;
+            let t = Math.imul(s ^ (s >>> 15), 1 | s);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+          // ★ 先等布局稳定 (canvas 插入会触发一次 resize → 200ms debounce 后
+          //   buildGrid 重跑并重新随机化, 若落在帧序列中间会造成跨加载分叉)
+          await new Promise((r) => setTimeout(r, 400));
           const inst = MatrixRain.matrixRain({
             container: host,
             fontSize,
             renderer,
+            // ★ 固定时间步: 每帧 dt 恒为 1/60, 帧内容只依赖帧序号, 不依赖墙钟
+            fixedTimeStep: 1 / 60,
             // 静音 transition / easing 噪声, 保证画面尽快稳定
             themeTransitionDuration: 0,
             variantTransitionDuration: 0,
@@ -82,10 +102,23 @@
             cursor: false,
           });
           window.__inst = inst;
-          // 等 N ms 让引擎跑几帧 + 字体/atlas 加载完
-          await new Promise((r) => setTimeout(r, waitMs));
+          // ★ 等到 "初始化完成 + 跑满 frames 帧" 再冻结画面并报告就绪
+          //    (pause 冻结 → 抓帧期间引擎不再前进, 消除 rAF 抖动带来的帧序漂移)
+          const t0 = performance.now();
+          for (;;) {
+            const h = inst.getRendererHealth && inst.getRendererHealth();
+            if (h && h.initialized && h.frameCount >= frames) break;
+            if (performance.now() - t0 > 45000) break; // 兜底, 防 health 缺字段死等
+            const fc = h ? h.frameCount : 0;
+            if (window.__randSnap.length === 0 || fc >= window.__randSnap[window.__randSnap.length - 1].frame + 5) {
+              window.__randSnap.push({ frame: fc, randCount: window.__randCount });
+            }
+            await new Promise((r) => requestAnimationFrame(r));
+          }
+          inst.pause();
+          window.__randSnap.push({ frame: inst.getRendererHealth().frameCount, randCount: window.__randCount });
           window.__ready = true;
-          console.log(`[pixel-demo] ready renderer=${renderer} fontSize=${fontSize} frameIdx=${window.__frameIdx}`);
+          console.log(`[pixel-demo] ready renderer=${renderer} fontSize=${fontSize} seed=${seed} frames=${frames} frameIdx=${window.__frameIdx}`);
         } catch (e) {
           window.__error = String(e && e.message || e);
           console.error('[pixel-demo] init failed:', e);

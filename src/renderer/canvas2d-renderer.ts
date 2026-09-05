@@ -20,6 +20,7 @@ import type { MatrixRainRenderer, RendererImpl } from './types';
 import type { MatrixRainState } from '../engine/state';
 import {
   createHealthTracker,
+  recordHealthError,
   snapshotHealth,
   tickDroppedFrames,
   type RendererHealth,
@@ -75,14 +76,22 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
 
   async init(canvas: HTMLCanvasElement, _state: MatrixRainState): Promise<void> {
     if (this._destroyed) throw new Error('[Canvas2DRenderer] init() called after destroy()');
-    const ctx = canvas.getContext('2d', { alpha: true });
-    if (!ctx) throw new Error('[Canvas2DRenderer] Failed to get 2D context');
-    this._ctx = ctx;
-    // textBaseline/textAlign 在 init 时设一次,rAF 循环不再改
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'center';
-    this._charset = ''; // engine.ts 会在 init 后调 setCharset(state.charset)
-    this._health.initialized = true;
+    // 0.7.1+ P1-6: init 失败也写 health (与 webgl/webgpu 行为一致)
+    try {
+      const ctx = canvas.getContext('2d', { alpha: true });
+      if (!ctx) throw new Error('[Canvas2DRenderer] Failed to get 2D context');
+      this._ctx = ctx;
+      // textBaseline/textAlign 在 init 时设一次,rAF 循环不再改
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'center';
+      this._charset = ''; // engine.ts 会在 init 后调 setCharset(state.charset)
+      this._health.initialized = true;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this._health.lastInitError = msg;
+      recordHealthError(this._health, 'INIT_FAILED');
+      throw e;
+    }
   }
 
   resize(w: number, h: number, dpr: number): void {

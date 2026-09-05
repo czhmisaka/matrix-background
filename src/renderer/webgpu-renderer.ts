@@ -173,6 +173,18 @@ export class WebGPURenderer implements MatrixRainRenderer {
       });
       this._queue = this._device.queue;
 
+      // 0.7.1+ P0-2 修复: device.lost 监听 — WebGPU 设备丢失后无监听会静默黑屏
+      // - 记录 health.contextLostCount + DEVICE_LOST:<reason>
+      // - 标记未初始化 (render/beginFrame 跳过空帧, 不再让 GPU 调用打在失效设备上)
+      // - 恢复策略: WebGPU 无 context-restored 等价事件, 由引擎层 enableAutoFallback
+      //   (A3) 在 init 失败/丢失后切 canvas2d 兜底
+      this._device.lost.then((info) => {
+        this._initialized = false;
+        this._health.contextLostCount++;
+        recordHealthError(this._health, 'DEVICE_LOST:' + (info.reason || 'unknown'));
+        this._health.lastInitError = 'DEVICE_LOST:' + (info.reason || 'unknown');
+      });
+
       // 2. Configure GPUCanvasContext (connects canvas to device)
       const ctx = canvas.getContext('webgpu') as unknown as GPUCanvasContext;
       if (!ctx) {
@@ -487,14 +499,23 @@ export class WebGPURenderer implements MatrixRainRenderer {
       { width: bitmap.width, height: bitmap.height }
     );
 
+    // 0.7.1+ P0-4: GPU API 可能返回 null (设备丢失/超限), 后续使用会静默渲染失败
+    if (!tex) {
+      throw new Error('[WebGPURenderer] createTexture(atlas) returned null');
+    }
+
     this._atlasTex = tex;
 
-    this._sampler = device.createSampler({
+    const sampler = device.createSampler({
       magFilter: 'linear',
       minFilter: 'linear',
       addressModeU: 'clamp-to-edge',
       addressModeV: 'clamp-to-edge',
     });
+    if (!sampler) {
+      throw new Error('[WebGPURenderer] createSampler returned null');
+    }
+    this._sampler = sampler;
   }
 
   // ============ Internal: Bind Group Layouts (0.5.0+: compute + render group(1) cells) ============
@@ -569,7 +590,7 @@ export class WebGPURenderer implements MatrixRainRenderer {
     if (!this._trailColorBuffer || !this._cellsBuffer || !this._warmthParamsBuffer) return;
 
     // Render bind group @group(0)
-    this._renderBindGroup = device.createBindGroup({
+    const renderBg = device.createBindGroup({
       layout: this._renderBindGroupLayout!,
       entries: [
         { binding: 0, resource: { buffer: this._vertexUniformsBuffer } },
@@ -577,27 +598,35 @@ export class WebGPURenderer implements MatrixRainRenderer {
         { binding: 2, resource: this._sampler },
       ],
     });
+    if (!renderBg) throw new Error('[WebGPURenderer] createBindGroup(render) returned null');
+    this._renderBindGroup = renderBg;
 
     // Render bind group @group(1): cells storage (vertex shader 读 warmth)
-    this._renderCellsBindGroup = device.createBindGroup({
+    const cellsBg = device.createBindGroup({
       layout: this._renderCellsBindGroupLayout!,
       entries: [{ binding: 0, resource: { buffer: this._cellsBuffer } }],
     });
+    if (!cellsBg) throw new Error('[WebGPURenderer] createBindGroup(renderCells) returned null');
+    this._renderCellsBindGroup = cellsBg;
 
     // Trail bind group
-    this._trailBindGroup = device.createBindGroup({
+    const trailBg = device.createBindGroup({
       layout: this._trailBindGroupLayout!,
       entries: [{ binding: 0, resource: { buffer: this._trailColorBuffer } }],
     });
+    if (!trailBg) throw new Error('[WebGPURenderer] createBindGroup(trail) returned null');
+    this._trailBindGroup = trailBg;
 
     // Compute bind group: cells(rw) + params
-    this._computeBindGroup = device.createBindGroup({
+    const computeBg = device.createBindGroup({
       layout: this._computeBindGroupLayout!,
       entries: [
         { binding: 0, resource: { buffer: this._cellsBuffer } },
         { binding: 1, resource: { buffer: this._warmthParamsBuffer } },
       ],
     });
+    if (!computeBg) throw new Error('[WebGPURenderer] createBindGroup(compute) returned null');
+    this._computeBindGroup = computeBg;
   }
 
   // ============ Internal: Pipelines (0.5.0+: +compute pipeline) ============
@@ -610,7 +639,7 @@ export class WebGPURenderer implements MatrixRainRenderer {
     const renderLayout = device.createPipelineLayout({
       bindGroupLayouts: [this._renderBindGroupLayout!, this._renderCellsBindGroupLayout!],
     });
-    this._renderPipeline = device.createRenderPipeline({
+    const renderPipeline = device.createRenderPipeline({
       layout: renderLayout,
       vertex: {
         module: vsModule,
@@ -644,6 +673,9 @@ export class WebGPURenderer implements MatrixRainRenderer {
       },
       primitive: { topology: 'triangle-strip' },
     });
+    if (!renderPipeline)
+      throw new Error('[WebGPURenderer] createRenderPipeline(render) returned null');
+    this._renderPipeline = renderPipeline;
 
     // Trail pipeline (full-screen fade)
     const trailVs = device.createShaderModule({ code: TRAIL_VERTEX_SHADER });
@@ -651,7 +683,7 @@ export class WebGPURenderer implements MatrixRainRenderer {
     const trailLayout = device.createPipelineLayout({
       bindGroupLayouts: [this._trailBindGroupLayout!],
     });
-    this._trailPipeline = device.createRenderPipeline({
+    const trailPipeline = device.createRenderPipeline({
       layout: trailLayout,
       vertex: { module: trailVs, entryPoint: 'main', buffers: [] },
       fragment: {
@@ -669,19 +701,24 @@ export class WebGPURenderer implements MatrixRainRenderer {
       },
       primitive: { topology: 'triangle-strip' },
     });
+    if (!trailPipeline)
+      throw new Error('[WebGPURenderer] createRenderPipeline(trail) returned null');
+    this._trailPipeline = trailPipeline;
 
     // 0.5.0+ 恢复: compute pipeline (warmth 阻尼并行计算)
     const computeModule = device.createShaderModule({ code: COMPUTE_WARMTH_SHADER });
     const computeLayout = device.createPipelineLayout({
       bindGroupLayouts: [this._computeBindGroupLayout!],
     });
-    this._computePipeline = device.createComputePipeline({
+    const computePipeline = device.createComputePipeline({
       layout: computeLayout,
       compute: {
         module: computeModule,
         entryPoint: 'main',
       },
     });
+    if (!computePipeline) throw new Error('[WebGPURenderer] createComputePipeline returned null');
+    this._computePipeline = computePipeline;
   }
 
   // ============ Internal: Buffers ============
@@ -693,31 +730,42 @@ export class WebGPURenderer implements MatrixRainRenderer {
 
     // Instance buffer (per-frame, per-cell data for drawChar)
     this._instanceData = new Float32Array(count * INSTANCE_STRIDE_FLOATS);
-    this._instanceBuffer = device.createBuffer({
+    const instanceBuffer = device.createBuffer({
       size: this._instanceData.byteLength,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
+    if (!instanceBuffer) throw new Error('[WebGPURenderer] createBuffer(instance) returned null');
+    this._instanceBuffer = instanceBuffer;
 
     // Cells storage buffer (compute 写, vertex 读)
     // 0.5.0+: 1 f32/cell, 8.4M cells × 4 bytes = 32MB(原 0.4.0 nested-struct 256MB)
-    this._cellsBuffer = device.createBuffer({
+    const cellsBuffer = device.createBuffer({
       size: count * 4,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
+    if (!cellsBuffer) throw new Error('[WebGPURenderer] createBuffer(cells) returned null');
+    this._cellsBuffer = cellsBuffer;
 
     // Uniform buffers
-    this._vertexUniformsBuffer = device.createBuffer({
+    const vertexUniforms = device.createBuffer({
       size: VERTEX_UNIFORMS_SIZE,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    this._trailColorBuffer = device.createBuffer({
+    if (!vertexUniforms)
+      throw new Error('[WebGPURenderer] createBuffer(vertexUniforms) returned null');
+    this._vertexUniformsBuffer = vertexUniforms;
+    const trailColor = device.createBuffer({
       size: TRAIL_COLOR_SIZE,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    this._warmthParamsBuffer = device.createBuffer({
+    if (!trailColor) throw new Error('[WebGPURenderer] createBuffer(trailColor) returned null');
+    this._trailColorBuffer = trailColor;
+    const warmthParams = device.createBuffer({
       size: WARMTH_PARAMS_SIZE,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    if (!warmthParams) throw new Error('[WebGPURenderer] createBuffer(warmthParams) returned null');
+    this._warmthParamsBuffer = warmthParams;
   }
 
   /** 更新 vertex shader 的 viewport + cellSize */
@@ -780,20 +828,26 @@ export class WebGPURenderer implements MatrixRainRenderer {
     this._instanceData = new Float32Array(count * INSTANCE_STRIDE_FLOATS);
 
     // 重建 GPU buffer (不能 resize, 只能新建)
-    this._instanceBuffer = this._device.createBuffer({
+    const newInstanceBuffer = this._device.createBuffer({
       size: this._instanceData.byteLength,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
+    if (!newInstanceBuffer)
+      throw new Error('[WebGPURenderer] resizeGrid: createBuffer(instance) returned null');
+    this._instanceBuffer = newInstanceBuffer;
     // 注: render/trail bindgroup 只引用 vertexUniformsBuffer + atlas + sampler + trailColorBuffer
     //     都没换, 不必重建 bindgroup. instanceBuffer 通过 setVertexBuffer 直接挂入 render pass.
 
     // 0.5.0+: cells storage buffer 也要重建 + 重新写 0(compute 需要非 undefined 内存)
     //     bindgroup 也要重建(cells buffer 引用变了)
     if (this._cellsBuffer) this._cellsBuffer.destroy();
-    this._cellsBuffer = this._device.createBuffer({
+    const newCellsBuffer = this._device.createBuffer({
       size: count * 4,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
+    if (!newCellsBuffer)
+      throw new Error('[WebGPURenderer] resizeGrid: createBuffer(cells) returned null');
+    this._cellsBuffer = newCellsBuffer;
     if (this._queue) {
       this._queue.writeBuffer(this._cellsBuffer, 0, new Float32Array(count));
     }

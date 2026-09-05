@@ -125,13 +125,14 @@ jobs:
         with: { node-version-file: .nvmrc, cache: 'npm' }
       - run: npm ci
       - run: npm run build
-      - run: npm run perf:bench
-      - run: npm run perf:report
+      # 2026-09-06 修: 原引用不存在的 perf:bench/perf:report script (job 必挂)
+      # 改用已存在的 bench:renderer (scripts/bench-renderer.mjs)
+      - run: npm run bench:renderer
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: perf-report
-          path: docs/perf-audit-*.md
+          path: docs/audits/bench-results/*.json
 
   # === §6 audit-baseline-drift(聚合 job) ===
   # 任一上游失败 → 自动开 P0 issue(带 24h dedup),遵循 §8.4 治理条款。

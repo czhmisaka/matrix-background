@@ -74,6 +74,13 @@ export type GPUDevice = {
   pushErrorScope(filter: 'validation' | 'out-of-memory' | 'internal'): void;
   popErrorScope(): Promise<GPUError | null>;
   destroy(): void;
+  // 0.7.1+ P0-2: 设备丢失监听(规范: device.lost 一定 resolve, 不 reject)
+  lost: Promise<GPUDeviceLostInfo>;
+};
+
+export type GPUDeviceLostInfo = {
+  reason: 'destroyed' | 'unknown' | string;
+  message: string;
 };
 
 export type GPUError = {

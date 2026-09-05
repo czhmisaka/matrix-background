@@ -125,6 +125,9 @@ export class WebGLRenderer implements MatrixRainRenderer {
   private _w = 0;
   private _h = 0;
   private _dpr = 1;
+  /** 0.7.1+: 最近一次 grid 尺寸 (context-restored 重建 instance buffer 用) */
+  private _lastCols = 0;
+  private _lastRows = 0;
 
   /**
    * 当前帧内 drawChar 的调用计数(0.4.1+ 修复 P0-1)
@@ -245,6 +248,8 @@ export class WebGLRenderer implements MatrixRainRenderer {
       gl.bindVertexArray(null);
 
       // 7. Allocate instance buffer (lazy, expanded on resize)
+      this._lastCols = state.r;
+      this._lastRows = state.i;
       this._allocateInstanceBuffer(gl, state.r, state.i);
 
       // 0.4.3 修复: engine 同步调 setCharset(state.charset) 在 init() 完成前,
@@ -255,6 +260,28 @@ export class WebGLRenderer implements MatrixRainRenderer {
 
       // 0.4.1+ 修复: engine 不 await init(), 用此标志告诉 render/beginFrame/drawChar 现在可以工作了
       this._initialized = true;
+
+      // 0.7.1+ P0-1 修复: WebGL context-lost 自愈
+      // - lost: preventDefault(允许 restore) + 标记未初始化 + health 计数
+      //   (不 preventDefault 的话浏览器会销毁 context, 永远不会 restored)
+      // - restored: 重跑 GPU 资源重建 (atlas texture / programs / VAO/VBO / instance buffer)
+      canvas.addEventListener(
+        'webglcontextlost',
+        (e: Event) => {
+          e.preventDefault();
+          this._initialized = false;
+          this._health.contextLostCount++;
+          recordHealthError(this._health, 'CONTEXT_LOST');
+        },
+        { once: false }
+      );
+      canvas.addEventListener(
+        'webglcontextrestored',
+        () => {
+          void this._rebuildResources();
+        },
+        { once: false }
+      );
     } catch (e) {
       // 0.6.0+: 错误入 health,不 console.error(调用方矩阵雨仍能跑降级路径)
       const msg = e instanceof Error ? e.message : String(e);
@@ -265,6 +292,69 @@ export class WebGLRenderer implements MatrixRainRenderer {
     // 0.6.0+: init 成功,记耗时
     this._health.initialized = true;
     this._health.initDurationMs = performance.now() - initStart;
+  }
+
+  /**
+   * 0.7.1+ P0-1: webglcontextrestored 后重建全部 GPU 资源
+   * (context 丢失时浏览器清空所有 GL 对象, texture/program/buffer 全部失效)
+   * 失败入 health.lastInitError 并保持 _initialized=false, 引擎层 draw 会跳过空帧
+   */
+  private async _rebuildResources(): Promise<void> {
+    const gl = this._gl;
+    if (this._destroyed || !gl || !this._atlasJson || !__atlasPngUrl) return;
+    try {
+      // 1. atlas texture (context 丢失后旧 texture 已失效, 重传)
+      await this._uploadAtlasTexture(gl, __atlasPngUrl);
+      // 2. programs + uniforms
+      this._program = this._compileProgram(gl, VERTEX_SHADER, FRAGMENT_SHADER);
+      this._trailProgram = this._compileProgram(gl, TRAIL_VERTEX_SHADER, TRAIL_FRAGMENT_SHADER);
+      this._uniforms = {
+        uViewport: gl.getUniformLocation(this._program, 'uViewport'),
+        uCellSize: gl.getUniformLocation(this._program, 'uCellSize'),
+        uAtlas: gl.getUniformLocation(this._program, 'uAtlas'),
+      };
+      this._trailUniforms = {
+        uTrailColor: gl.getUniformLocation(this._trailProgram, 'uTrailColor'),
+      };
+      // 3. VAO/VBO (主 + trail) — 与 init() 步骤 5/6 相同
+      this._vao = gl.createVertexArray();
+      this._vbo = gl.createBuffer();
+      gl.bindVertexArray(this._vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._vbo);
+      const stride = INSTANCE_STRIDE_BYTES;
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, stride, 0);
+      gl.vertexAttribDivisor(0, 1);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(1, 1, gl.FLOAT, false, stride, 8);
+      gl.vertexAttribDivisor(1, 1);
+      gl.enableVertexAttribArray(2);
+      gl.vertexAttribPointer(2, 4, gl.FLOAT, false, stride, 12);
+      gl.vertexAttribDivisor(2, 1);
+      gl.enableVertexAttribArray(3);
+      gl.vertexAttribPointer(3, 2, gl.FLOAT, false, stride, 32);
+      gl.vertexAttribDivisor(3, 1);
+      gl.enableVertexAttribArray(4);
+      gl.vertexAttribPointer(4, 2, gl.FLOAT, false, stride, 40);
+      gl.vertexAttribDivisor(4, 1);
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      this._trailVao = gl.createVertexArray();
+      this._trailVbo = gl.createBuffer();
+      gl.bindVertexArray(this._trailVao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._trailVbo);
+      gl.bindVertexArray(null);
+      // 4. instance buffer (按当前 grid 尺寸重分配)
+      this._allocateInstanceBuffer(gl, this._lastCols, this._lastRows);
+      // 5. 恢复 viewport
+      gl.viewport(0, 0, Math.round(this._w * this._dpr), Math.round(this._h * this._dpr));
+      this._initialized = true;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this._health.lastInitError = msg;
+      recordHealthError(this._health, 'RESTORE_FAILED');
+      // 保持 _initialized=false — 引擎每帧 render() 会跳过, 下次 restored 再试
+    }
   }
 
   resize(w: number, h: number, dpr: number): void {
@@ -519,6 +609,9 @@ export class WebGLRenderer implements MatrixRainRenderer {
         resolve();
       };
       img.onerror = (e) => {
+        // 0.7.1+ P0-5: atlas 加载失败也要入 health (原只 reject, health 无感知)
+        this._health.lastInitError = 'ATLAS_LOAD_FAILED';
+        recordHealthError(this._health, 'ATLAS_LOAD_FAILED');
         reject(new Error(`[WebGLRenderer] atlas PNG load failed: ${e}`));
       };
       img.src = pngUrl;
