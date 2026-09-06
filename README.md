@@ -1211,7 +1211,8 @@ inst.getDiagnostics();
 inst.getRendererHealth();
 // → { renderer, initialized, frameCount, drawCallIdx, instanceCount, gridCols, gridRows,
 //     initDurationMs, lastFrameDurationMs, droppedFrames, lastGlError, lastErrorScope,
-//     lastInitError, contextLostCount }   // 0.7.1+ · 14 个字段 readonly 快照
+//     lastInitError, contextLostCount, textureCount, gpuMemoryBytes }
+//   // 0.7.1+ · 16 个字段 readonly 快照
 // ⚠️ 0.6.2+ API,跨 3 renderer 统一(canvas2d / webgl / webgpu),Object.freeze 防篡改。
 // 0.7.1+: contextLostCount — WebGL context-lost 自愈 / WebGPU device-lost 计数。
 // 当前真实消费点:Playground 顶部 Health Panel + fps-overlay 错误红行。
