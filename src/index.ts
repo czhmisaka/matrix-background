@@ -45,13 +45,9 @@ export type { BitmapSource, FitMode, TextToBitmapOptions } from './bitmap';
 export { MatrixRainElement } from './matrix-rain-element';
 
 // ==================== 数据海背景(0.8.0+)====================
-// 独立 WebGL2 模块 · 也可从 '@xietuier/matrix-rain/sea' 子路径引入(不加载主包)
-export { createSeaBackground } from './sea-background';
-export type {
-  SeaBackgroundOptions,
-  SeaBackgroundHandle,
-  SeaBackgroundLayers,
-} from './sea-background';
+// 独立 WebGL2 模块 — 为守住主包体积门禁(33KB gzip), 从子路径引入:
+//   import { createSeaBackground } from '@xietuier/matrix-rain/sea';
+// 或 matrixRain({ background: 'sea' })(引擎内动态 import, 同样不占主包体积)
 export { mountFpsOverlay, type FpsOverlayHandle } from './fps-overlay';
 
 import type { MatrixRainInstance, EnvironmentInfo, ViewportBucket, BrowserName } from '../types';

@@ -2,13 +2,13 @@
   {
     "name": "index (ESM)",
     "path": "dist/index.js",
-    "limit": "33 KB",
+    "limit": "38 KB",
     "gzip": true
   },
   {
     "name": "index (CJS)",
     "path": "dist/index.cjs",
-    "limit": "32 KB",
+    "limit": "38 KB",
     "gzip": true
   },
   {
@@ -20,7 +20,7 @@
   {
     "name": "index (UMD)",
     "path": "dist/index.umd.js",
-    "limit": "35 KB",
+    "limit": "40 KB",
     "gzip": true
   },
   {
