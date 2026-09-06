@@ -146,7 +146,16 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
     this._charset = s;
   }
 
-  drawChar(ch: number, cx: number, cy: number, r: number, g: number, b: number, a: number): void {
+  drawChar(
+    ch: number,
+    cx: number,
+    cy: number,
+    r: number,
+    g: number,
+    b: number,
+    a: number,
+    _gridIdx?: number
+  ): void {
     if (!this._ctx || this._paused) return;
     const chStr = this._charset[ch];
     if (!chStr) return;

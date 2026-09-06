@@ -56,6 +56,10 @@ export interface RendererHealth {
   readonly lastInitError: string | null;
   /** WebGL context-lost / WebGPU device-lost 累计次数(0.7.1+ 含自愈后恢复) */
   readonly contextLostCount: number;
+  /** 0.7.1+ 当前持有的 GPU 纹理数(canvas2d = 0) */
+  readonly textureCount: number;
+  /** 0.7.1+ GPU buffer 显存占用估算(bytes;含 instance/cells/uniform 等,canvas2d = 0) */
+  readonly gpuMemoryBytes: number;
 }
 
 /** 内部 mutable 状态(不导出) */
@@ -74,6 +78,8 @@ interface HealthInternal {
   lastErrorScope: string | null;
   lastInitError: string | null;
   contextLostCount: number;
+  textureCount: number;
+  gpuMemoryBytes: number;
 }
 
 /** 创建 health tracker 工厂 */
@@ -92,6 +98,8 @@ export const createHealthTracker = (renderer: RendererImpl): HealthInternal => (
   lastErrorScope: null,
   lastInitError: null,
   contextLostCount: 0,
+  textureCount: 0,
+  gpuMemoryBytes: 0,
 });
 
 /** 记录一次错误(0.6.0:既不 throw 也不 console.error,只更新字段) */
@@ -137,4 +145,6 @@ export const snapshotHealth = (h: HealthInternal): RendererHealth =>
     lastErrorScope: h.lastErrorScope,
     lastInitError: h.lastInitError,
     contextLostCount: h.contextLostCount,
+    textureCount: h.textureCount,
+    gpuMemoryBytes: h.gpuMemoryBytes,
   }) as RendererHealth;

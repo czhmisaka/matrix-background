@@ -292,6 +292,9 @@ export class WebGLRenderer implements MatrixRainRenderer {
     // 0.6.0+: init 成功,记耗时
     this._health.initialized = true;
     this._health.initDurationMs = performance.now() - initStart;
+    // 0.7.1+ F-4: 资源字段(atlas 纹理 1 个 + vbo/trailVbo;显存 = instance buffer + atlas 纹理估算)
+    this._health.textureCount = 1;
+    this._updateGpuMemoryHealth();
   }
 
   /**
@@ -500,7 +503,16 @@ export class WebGLRenderer implements MatrixRainRenderer {
     }
   }
 
-  drawChar(ch: number, cx: number, cy: number, r: number, g: number, b: number, a: number): void {
+  drawChar(
+    ch: number,
+    cx: number,
+    cy: number,
+    r: number,
+    g: number,
+    b: number,
+    a: number,
+    gridIdx?: number
+  ): void {
     if (!this._gl || !this._instanceBuffer || this._paused) return;
     if (!this._initialized) return; // init 还没完成
     // 0.4.1+ 修复 P0-1: ch 是 charset index (查 atlas/UV 用),
@@ -526,7 +538,7 @@ export class WebGLRenderer implements MatrixRainRenderer {
     buf[slotOff + 0] = cx * this._dpr; // aPos.x
     buf[slotOff + 1] = cy * this._dpr; // aPos.y
     buf[slotOff + 2] = atlasIdx; // aCharIdx
-    buf[slotOff + 3] = 0; // pad
+    buf[slotOff + 3] = gridIdx ?? this._drawCallIdx; // 0.7.1+ P1-4: pad 槽改写 gridIdx(webgl shader 暂未用,与 webgpu 对齐)
     buf[slotOff + 4] = r / 255; // aColor.r (0-1)
     buf[slotOff + 5] = g / 255; // aColor.g
     buf[slotOff + 6] = b / 255; // aColor.b
@@ -575,6 +587,17 @@ export class WebGLRenderer implements MatrixRainRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this._vbo);
     gl.bufferData(gl.ARRAY_BUFFER, this._instanceBuffer.byteLength, gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    this._updateGpuMemoryHealth();
+  }
+
+  /**
+   * 0.7.1+ F-4: 更新 health 的 GPU 显存估算
+   * = instance VBO (r×i×48B) + trail VBO (恒 0, gl_VertexID 计算) + atlas 纹理 (1024²×4B)
+   */
+  private _updateGpuMemoryHealth(): void {
+    const atlasBytes = 1024 * 1024 * 4; // build-atlas 固定 1024×1024 RGBA
+    const instanceBytes = this._instanceBuffer ? this._instanceBuffer.byteLength : 0;
+    this._health.gpuMemoryBytes = instanceBytes + atlasBytes;
   }
 
   /** Public hook: engine.ts resize 时调, 重新分配 instance buffer */

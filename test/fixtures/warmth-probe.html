@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000}</style></head><body>
+<script src="/index.iife.js"></script>
+<script>
+  window.__ready = false;
+  const canvas = document.createElement("canvas");
+  canvas.width = 64; canvas.height = 64;
+  document.body.appendChild(canvas);
+  // 直接用底层 renderer: 强制 webgl
+  const inst = MatrixRain.matrixRain({ canvas, fontSize: 8, renderer: "webgl", charset: "A" });
+  window.__inst = inst;
+  // 等 init 完成 (health.initialized)
+  const check = () => {
+    const h = inst.getRendererHealth ? inst.getRendererHealth() : null;
+    if (h && h.initialized) {
+      // 手动触发一次 draw: 直接调用 renderer 内部? 不行 — 用 render 钩子
+      // 简单法: 等两帧后 readPixels
+      setTimeout(() => { window.__ready = true; }, 300);
+    } else setTimeout(check, 50);
+  };
+  check();
+</script></body></html>

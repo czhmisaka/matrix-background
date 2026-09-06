@@ -858,6 +858,10 @@ export interface RendererHealth {
   readonly lastInitError: string | null;
   /** WebGL context-lost / WebGPU device-lost 累计次数(0.7.1+ 含自愈后恢复) */
   readonly contextLostCount: number;
+  /** 0.7.1+ 当前持有的 GPU 纹理数(canvas2d = 0) */
+  readonly textureCount: number;
+  /** 0.7.1+ GPU buffer 显存占用估算(bytes;canvas2d = 0) */
+  readonly gpuMemoryBytes: number;
 }
 
 /** 视口宽度分档(<768 / 768-1024 / 1024-1440 / ≥1440) */

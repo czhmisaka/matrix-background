@@ -255,6 +255,9 @@ export class WebGPURenderer implements MatrixRainRenderer {
     // 0.6.0+: init 成功,记耗时
     this._health.initialized = true;
     this._health.initDurationMs = performance.now() - initStart;
+    // 0.7.1+ F-4: 资源字段(atlas 纹理 1 个)
+    this._health.textureCount = 1;
+    this._updateGpuMemoryHealth();
   }
 
   resize(w: number, h: number, dpr: number): void {
@@ -262,6 +265,19 @@ export class WebGPURenderer implements MatrixRainRenderer {
     this._w = w;
     this._h = h;
     this._dpr = dpr;
+  }
+
+  /**
+   * 0.7.1+ F-4: 更新 health 的 GPU 显存估算
+   * = instance (r×i×48B) + cells (r×i×4B) + uniforms (固定 3 个小 buffer) + atlas (1024²×4B)
+   */
+  private _updateGpuMemoryHealth(): void {
+    const atlasBytes = 1024 * 1024 * 4;
+    const cells = this._cellsBuffer
+      ? (this as unknown as { _instanceCount: number })._instanceCount * 4
+      : 0;
+    const instance = this._instanceData ? this._instanceData.byteLength : 0;
+    this._health.gpuMemoryBytes = instance + cells + atlasBytes + 256;
   }
 
   /**
@@ -437,7 +453,16 @@ export class WebGPURenderer implements MatrixRainRenderer {
     }
   }
 
-  drawChar(ch: number, cx: number, cy: number, r: number, g: number, b: number, a: number): void {
+  drawChar(
+    ch: number,
+    cx: number,
+    cy: number,
+    r: number,
+    g: number,
+    b: number,
+    a: number,
+    gridIdx?: number
+  ): void {
     if (!this._instanceData || this._paused) return;
     if (!this._initialized) return; // init 还没完成
     // 0.4.1+ 修复 P0-1: ch 是 charset index, 槽位用 _drawCallIdx
@@ -454,7 +479,9 @@ export class WebGPURenderer implements MatrixRainRenderer {
     buf[slotOff + 0] = cx * this._dpr;
     buf[slotOff + 1] = cy * this._dpr;
     buf[slotOff + 2] = atlasIdx;
-    buf[slotOff + 3] = 0;
+    // 0.7.1+ P1-4: pad 槽改写 gridIdx — 暗格跳过时 instance 序号 ≠ grid 索引,
+    // vertex shader 需按 gridIdx 索引 warmth 数据(不再用 instance_index)
+    buf[slotOff + 3] = gridIdx ?? this._drawCallIdx;
     buf[slotOff + 4] = r / 255;
     buf[slotOff + 5] = g / 255;
     buf[slotOff + 6] = b / 255;
@@ -649,11 +676,13 @@ export class WebGPURenderer implements MatrixRainRenderer {
             arrayStride: INSTANCE_STRIDE_BYTES,
             stepMode: 'instance',
             attributes: [
+              // 0.7.1+ P1-4: loc1 改 vec2 (charIdx + gridIdx), color 从 16 起 —
+              // 消除旧布局中 color@12 覆盖 pad 槽导致的通道错位隐患
               { format: 'float32x2', offset: 0, shaderLocation: 0 },
-              { format: 'float32', offset: 8, shaderLocation: 1 },
-              { format: 'float32x4', offset: 12, shaderLocation: 2 },
-              { format: 'float32x2', offset: 28, shaderLocation: 3 },
-              { format: 'float32x2', offset: 36, shaderLocation: 4 },
+              { format: 'float32x2', offset: 8, shaderLocation: 1 },
+              { format: 'float32x4', offset: 16, shaderLocation: 2 },
+              { format: 'float32x2', offset: 32, shaderLocation: 3 },
+              { format: 'float32x2', offset: 40, shaderLocation: 4 },
             ],
           },
         ],
@@ -853,5 +882,7 @@ export class WebGPURenderer implements MatrixRainRenderer {
     }
     // 重绑 cells 到 render@group(1) + compute@group(0)
     this._createBindGroups(this._device);
+    // 0.7.1+ F-4: buffer 重建后刷新显存估算
+    this._updateGpuMemoryHealth();
   }
 }

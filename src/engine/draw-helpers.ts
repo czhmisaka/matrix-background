@@ -47,6 +47,7 @@ const drawFillBlended = (
   const k = blendedLUT.a[lIdx] / 255;
   const finalA = k * state.transitionAlpha;
   // 0.4.0+ 走 renderer(由 renderer 内部 cache fillStyle + 调 fillText)
+  // 0.7.1+ P1-4: 传 gridIdx 供 GPU warmth 索引 (s×cols + h)
   state.renderer.drawChar(
     c.ch,
     h * state.ef + state.ef / 2 + state.cfg.charGap,
@@ -54,7 +55,8 @@ const drawFillBlended = (
     R2,
     G2,
     B2,
-    finalA
+    finalA,
+    _s * state.r + h
   );
 };
 
@@ -106,7 +108,8 @@ export const drawInner = (
         out[0],
         out[1],
         out[2],
-        0.9
+        0.9,
+        s * state.r + h
       );
       return;
     }
@@ -121,7 +124,8 @@ export const drawInner = (
         ov[0],
         ov[1],
         ov[2],
-        0.9
+        0.9,
+        s * state.r + h
       );
       return;
     }
@@ -793,6 +797,7 @@ const drawInnerSub = (
     });
     if (out) {
       // 0.4.0+ 走 renderer
+      // 0.7.1+ P1-4: 子格 warmth 是父粒度 → gridIdx 映射回父格
       state.renderer.drawChar(
         ch,
         hh * subEf + subEf / 2 + state.cfg.charGap,
@@ -800,7 +805,8 @@ const drawInnerSub = (
         out[0],
         out[1],
         out[2],
-        0.9
+        0.9,
+        Math.floor(ss / subEf) * state.r + Math.floor(hh / subEf)
       );
       return;
     }
@@ -815,7 +821,8 @@ const drawInnerSub = (
         ov[0],
         ov[1],
         ov[2],
-        0.9
+        0.9,
+        Math.floor(ss / subEf) * state.r + Math.floor(hh / subEf)
       );
       return;
     }
@@ -830,7 +837,17 @@ const drawInnerSub = (
   const k = blendedLUT.a[lIdx] / 255;
   const finalA = k * state.transitionAlpha;
   // 0.4.0+ 走 renderer
-  state.renderer.drawChar(ch, hh * subEf + subEf / 2 + state.cfg.charGap, y, R2, G2, B2, finalA);
+  // 0.7.1+ P1-4: 子格 warmth 父粒度 → gridIdx 映射回父格
+  state.renderer.drawChar(
+    ch,
+    hh * subEf + subEf / 2 + state.cfg.charGap,
+    y,
+    R2,
+    G2,
+    B2,
+    finalA,
+    Math.floor(ss / subEf) * state.r + Math.floor(hh / subEf)
+  );
 };
 
 /**

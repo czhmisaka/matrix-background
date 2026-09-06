@@ -125,7 +125,8 @@ struct VertexUniforms {
 
 struct InstanceInput {
   @location(0) pos: vec2<f32>,
-  @location(1) charIdx: f32,
+  // 0.7.1+ P1-4: charIdx + gridIdx 打包 (暗格跳过时 instance 序号 ≠ grid 索引)
+  @location(1) charAndGrid: vec2<f32>,
   @location(2) color: vec4<f32>,
   @location(3) uv0: vec2<f32>,
   @location(4) uv1: vec2<f32>,
@@ -140,8 +141,9 @@ fn main(input: InstanceInput, @builtin(vertex_index) vid: u32, @builtin(instance
   var output: VertexOutput;
   output.uv = mix(input.uv0, input.uv1, vec2<f32>(quadU, quadV));
 
-  // 0.5.0+: 读 compute 写的 warmth,乘到 color.alpha 上(亮度受 warmth 调制)
-  let w = cells[iid];
+  // 0.7.1+ P1-4: 按 drawChar 传来的 gridIdx 索引 warmth (不再用 instance_index —
+  // 暗格被 CPU 跳过时 instance 序号与 grid 索引错位, warmth 会张冠李戴)
+  let w = cells[u32(input.charAndGrid.y)];
   output.color = vec4<f32>(input.color.rgb, input.color.a * w);
 
   // 计算角落坐标 (左上角为 origin, +x 右, +y 下)

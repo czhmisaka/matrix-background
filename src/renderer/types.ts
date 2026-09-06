@@ -144,8 +144,20 @@ export interface MatrixRainRenderer {
    * @param cy   字符中心 Y 坐标 (CSS 像素)
    * @param r g b 颜色分量 0-255
    * @param a    alpha 0-1
+   * @param gridIdx 可选 · 该 cell 在 grid 一维数组中的索引 (s × cols + h)· 0.7.1+
+   *   webgl/webgpu 用它把 instance slot 关联回 warmth 数据槽(暗格被跳过时
+   *   instance 序号 ≠ grid 索引, 不传会导致 GPU warmth 调制错位)
    */
-  drawChar(ch: number, cx: number, cy: number, r: number, g: number, b: number, a: number): void;
+  drawChar(
+    ch: number,
+    cx: number,
+    cy: number,
+    r: number,
+    g: number,
+    b: number,
+    a: number,
+    gridIdx?: number
+  ): void;
 
   /**
    * 当 grid 维度变化时通知 renderer(重 alloc instance buffer 等 GPU 资源)

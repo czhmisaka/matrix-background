@@ -64,6 +64,13 @@ const __debugInstances: Set<DebugInstance> = (() => {
 let __debugNextId = 1;
 
 /**
+ * 0.7.1+ P2-12: performance.mark/measure 帧时序埋点开关(默认关,零开销)
+ * 开启后每帧产生 mr:cells / mr:render 两个 measure, 可在 DevTools Performance 面板
+ * 或 performance.getEntriesByType("measure") 消费。
+ */
+let __perfMarksEnabled = false;
+
+/**
  * 0.7.1+ B1: 包版本 — tsup define 注入 (package.json version)
  * fallback: 直接写死, 防止非 tsup 构建路径 (vitest / 用户自定义 bundler) undefined
  */
@@ -132,6 +139,13 @@ const __ensureDebugHook = () => {
           return totals.errors > 0;
         },
       };
+    },
+    /**
+     * 0.7.1+ P2-12: 开/关帧时序 performance 埋点(默认关)
+     * 开启后可从 performance.getEntriesByType("measure") 读 mr:cells / mr:render
+     */
+    setPerfMarks(on: boolean) {
+      __perfMarksEnabled = !!on;
     },
     destroyAll() {
       Array.from(__debugInstances).forEach((i) => {
@@ -825,6 +839,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       // 注: textBaseline/textAlign 在 renderer.init() 内 set 一次,rAF 循环不再设
 
       // 绘制
+      const __perfOn = __perfMarksEnabled;
+      if (__perfOn) performance.mark('mr:cells-start');
       if (state.variant === 'classic' || state.variant === 'ascii') {
         drawClassic(state);
       } else if (state.variant === 'avalanche') {
@@ -832,10 +848,19 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
       } else if (state.variant === 'ripple') {
         drawRipple(state);
       }
+      if (__perfOn) {
+        performance.mark('mr:cells-end');
+        performance.measure('mr:cells', 'mr:cells-start', 'mr:cells-end');
+      }
 
       // 0.4.1+: webgl/webgpu 在 cell 循环写完 instance buffer 后真正 submit GPU 命令
       // canvas2d 的 render() 是 no-op(绘制已在 drawChar 内联完成)
+      if (__perfOn) performance.mark('mr:render-start');
       state.renderer.render(state, state.lastDt);
+      if (__perfOn) {
+        performance.mark('mr:render-end');
+        performance.measure('mr:render', 'mr:render-start', 'mr:render-end');
+      }
 
       // onFrame
       fireOnFrame();
