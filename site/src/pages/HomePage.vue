@@ -26,7 +26,7 @@
     <section class="features">
       <div class="container">
         <span class="eyebrow">FEATURES</span>
-        <h2>5 主题 · 4 变体 · 0 妥协</h2>
+        <h2>6 主题 · 5 变体 · 0 妥协</h2>
         <p class="lead">
           Canvas 2D 直接绘制,所有效果都是像素而非 DOM。从硅谷冷光到熔岩暖意,每个主题都精心调过 HSL
           调色板与色相旋转。

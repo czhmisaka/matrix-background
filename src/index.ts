@@ -43,6 +43,15 @@ export type { BitmapSource, FitMode, TextToBitmapOptions } from './bitmap';
 // 然后 <matrix-rain theme="cyber-blue"></matrix-rain> 自动注册 + 启动
 // 子路径入口: '@xietuier/matrix-rain/element' 也可拿到
 export { MatrixRainElement } from './matrix-rain-element';
+
+// ==================== 数据海背景(0.8.0+)====================
+// 独立 WebGL2 模块 · 也可从 '@xietuier/matrix-rain/sea' 子路径引入(不加载主包)
+export { createSeaBackground } from './sea-background';
+export type {
+  SeaBackgroundOptions,
+  SeaBackgroundHandle,
+  SeaBackgroundLayers,
+} from './sea-background';
 export { mountFpsOverlay, type FpsOverlayHandle } from './fps-overlay';
 
 import type { MatrixRainInstance, EnvironmentInfo, ViewportBucket, BrowserName } from '../types';

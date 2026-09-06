@@ -34,17 +34,18 @@ describe('ESM load - core named exports (from src)', () => {
     expect(themes).not.toBeNull();
   });
 
-  it('themes 含 5 个主题', () => {
+  it('themes 含 6 个主题', () => {
     const keys = Object.keys(themes);
-    expect(keys.length).toBe(5);
+    expect(keys.length).toBe(6);
   });
 
-  it('themes 含 silicon-valley / matrix-green / lava-red / cyber-blue / pure-mono', () => {
+  it('themes 含 silicon-valley / matrix-green / lava-red / cyber-blue / pure-mono / zeabur', () => {
     expect(themes).toHaveProperty('silicon-valley');
     expect(themes).toHaveProperty('matrix-green');
     expect(themes).toHaveProperty('lava-red');
     expect(themes).toHaveProperty('cyber-blue');
     expect(themes).toHaveProperty('pure-mono');
+    expect(themes).toHaveProperty('zeabur');
   });
 
   it('每个主题都是 factory function(返回 cold/warm/...)', () => {

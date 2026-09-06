@@ -8,7 +8,7 @@
             <span class="brand-name">matrix-rain</span>
           </div>
           <p class="footer-tagline">
-            Canvas 2D 渲染的 Matrix 数字雨背景库<br />5 主题 · 4 变体 · Web Component · 29 KB gzip
+            Canvas 2D 渲染的 Matrix 数字雨背景库<br />6 主题 · 5 变体 · Web Component · 29 KB gzip
           </p>
         </div>
         <nav class="footer-col" aria-label="页脚导航 Explore">

@@ -14,8 +14,8 @@ const siliconValley: ThemeFactory = () => ({
   lightnessShift: 0,
   invertHue: 0,
   contrast: 1,
-  cold: { h: 195, s: 0.55, lMin: 0.05, lMax: 0.95, aMax: 0.95 } as HSLPalette,  // 青蓝
-  warm: { h: 35,  s: 0.65, lMin: 0.05, lMax: 0.95, aMax: 0.95 } as HSLPalette   // 琥珀
+  cold: { h: 195, s: 0.55, lMin: 0.05, lMax: 0.95, aMax: 0.95 } as HSLPalette, // 青蓝
+  warm: { h: 35, s: 0.65, lMin: 0.05, lMax: 0.95, aMax: 0.95 } as HSLPalette, // 琥珀
 });
 
 /** 黑客帝国 · 冷绿 + 暖黄 */
@@ -27,8 +27,8 @@ const matrixGreen: ThemeFactory = () => ({
   lightnessShift: 0,
   invertHue: 0,
   contrast: 1.05,
-  cold: { h: 130, s: 0.6,  lMin: 0.05, lMax: 0.95, aMax: 0.95 } as HSLPalette,  // 绿
-  warm: { h: 80,  s: 0.7,  lMin: 0.1,  lMax: 0.98, aMax: 0.95 } as HSLPalette   // 黄绿
+  cold: { h: 130, s: 0.6, lMin: 0.05, lMax: 0.95, aMax: 0.95 } as HSLPalette, // 绿
+  warm: { h: 80, s: 0.7, lMin: 0.1, lMax: 0.98, aMax: 0.95 } as HSLPalette, // 黄绿
 });
 
 /** 熔岩 · 冷紫 + 暖红橙 */
@@ -40,8 +40,8 @@ const lavaRed: ThemeFactory = () => ({
   lightnessShift: 0.05,
   invertHue: 0,
   contrast: 1.1,
-  cold: { h: 290, s: 0.5,  lMin: 0.05, lMax: 0.9,  aMax: 0.95 } as HSLPalette,  // 紫
-  warm: { h: 15,  s: 0.85, lMin: 0.1,  lMax: 0.98, aMax: 0.95 } as HSLPalette   // 橙红
+  cold: { h: 290, s: 0.5, lMin: 0.05, lMax: 0.9, aMax: 0.95 } as HSLPalette, // 紫
+  warm: { h: 15, s: 0.85, lMin: 0.1, lMax: 0.98, aMax: 0.95 } as HSLPalette, // 橙红
 });
 
 /** 赛博 · 冷蓝 + 暖品红 */
@@ -53,8 +53,8 @@ const cyberBlue: ThemeFactory = () => ({
   lightnessShift: -0.05,
   invertHue: 0,
   contrast: 1.15,
-  cold: { h: 220, s: 0.7,  lMin: 0.05, lMax: 0.95, aMax: 0.95 } as HSLPalette,  // 蓝
-  warm: { h: 320, s: 0.7,  lMin: 0.1,  lMax: 0.95, aMax: 0.95 } as HSLPalette   // 品红
+  cold: { h: 220, s: 0.7, lMin: 0.05, lMax: 0.95, aMax: 0.95 } as HSLPalette, // 蓝
+  warm: { h: 320, s: 0.7, lMin: 0.1, lMax: 0.95, aMax: 0.95 } as HSLPalette, // 品红
 });
 
 /** 灰阶 · 冷灰 + 暖灰(无色相) */
@@ -66,8 +66,21 @@ const pureMono: ThemeFactory = () => ({
   lightnessShift: -0.1,
   invertHue: 0,
   contrast: 0.9,
-  cold: { h: 0,   s: 0,    lMin: 0.05, lMax: 0.9,  aMax: 0.95 } as HSLPalette,  // 灰
-  warm: { h: 30,  s: 0,    lMin: 0.1,  lMax: 0.95, aMax: 0.95 } as HSLPalette   // 暖灰
+  cold: { h: 0, s: 0, lMin: 0.05, lMax: 0.9, aMax: 0.95 } as HSLPalette, // 灰
+  warm: { h: 30, s: 0, lMin: 0.1, lMax: 0.95, aMax: 0.95 } as HSLPalette, // 暖灰
+});
+
+/** 数据海(Zeabur 风) · 暗紫 + 暖橙 · 逆向自 zeabur.com Hero 背景的品牌双色 */
+const zeabur: ThemeFactory = () => ({
+  brightness: 1.0,
+  chroma: 1.05,
+  hueShift: 0,
+  saturationShift: 0.05,
+  lightnessShift: 0,
+  invertHue: 0,
+  contrast: 1.05,
+  cold: { h: 262, s: 0.62, lMin: 0.05, lMax: 0.95, aMax: 0.95 } as HSLPalette, // 紫 (#7d36ec)
+  warm: { h: 20, s: 0.9, lMin: 0.1, lMax: 0.98, aMax: 0.95 } as HSLPalette, // 橙 (#fe4400)
 });
 
 export const themes: Record<string, ThemeFactory> = {
@@ -75,5 +88,6 @@ export const themes: Record<string, ThemeFactory> = {
   'matrix-green': matrixGreen,
   'lava-red': lavaRed,
   'cyber-blue': cyberBlue,
-  'pure-mono': pureMono
+  'pure-mono': pureMono,
+  zeabur: zeabur,
 };

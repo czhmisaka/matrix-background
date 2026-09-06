@@ -99,6 +99,10 @@ export class Canvas2DRenderer implements MatrixRainRenderer {
     // backing store 已在 engine.ts 那边 `canvas.width = canvas.width` 强制重置
     // 这里只设 transform (DPR 缩放)
     this._ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // 0.7.1+ 修复: 设置 canvas.width/height 会让浏览器**重置 context 全部状态**(含 font/textAlign),
+    // 而 setFontSize 有 _currentFontPx 缓存 → resize 后 cache 仍命中,font 停留在浏览器默认 10px!
+    // 归零让下一帧 setFontSize 真正重设。
+    this._currentFontPx = 0;
     // 0.5.0+: 缓存 CSS 视口尺寸,drawTrail 用此(避免依赖 _ctx.canvas 兼容性)
     this._w = w;
     this._h = h;

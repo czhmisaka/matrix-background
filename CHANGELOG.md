@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`zeabur` 主题**(第 6 主题):暖橙 #fe4400(亮)/ 暗紫 #7d36ec(暗)冷暖双板,逆向自 zeabur.com 官网 Hero 品牌双色(逆向笔记见 `docs/study-zeabur-hero-animation.md`)。
+- **`zeabur` 变体**(第 5 变体「数据海」):域扭曲流场驱动亮度(3 八度 sin/cos + smoothstep 带状),相位极慢 + 字符几乎不变,复刻 zeabur.com Hero 背景的沉静质感;`{ theme: 'zeabur', variant: 'zeabur' }` 一键获得完整风格。
+- **`background: 'sea'` 背景模式**:一行参数把逆向的数据海(色带流场 × 字符点阵 × 放射光,颜色随时间波动)垫在数字雨底下,随实例创建/销毁;`{ background: { type:'sea', theme:'dark', speed:1.3, colorWave:true } }` 可配置。独立用法 `import { createSeaBackground } from '@xietuier/matrix-rain/sea'`(零依赖主包,9.6KB)。
+- **canvas2d font 缓存修复**:`resize()` 归零 `_currentFontPx` — canvas.width 赋值会重置 context 状态,旧缓存放过导致 resize 后字符回落 10px。
 - **渲染器自愈**:WebGL `webglcontextlost/restored` 自愈(重建 atlas/program/VAO/buffer),WebGPU `device.lost` 监听;`RendererHealth` 新增 `contextLostCount`(14 字段)。
 - **自动降级**:`enableAutoFallback`(默认 `true`)— webgl/webgpu init 或懒加载失败自动换 canvas2d;失败即暂停,不再 rAF 空转。
 - **遥测桥**:`MatrixRain.installTelemetryHook(fn)` — health 错误信号(lastGlError / lastErrorScope / lastInitError / contextLostCount)变化时推送给外部监控,2s 轮询 + 500ms 去抖。
@@ -19,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **pixel 测试回绿**:原"跨渲染器 ≥95%"断言不可达(引擎随机驱动无 seed,同渲染器跨进程上限 ~82-83%)。改为 per-renderer baseline + 确定性 fixture(mulberry32 seed + fixedTimeStep + 固定帧数 gate + pause 冻结)+ per-scenario 阈值;全黑帧(headless WebGPU)自动 skip 不写黑 baseline。
+- **canvas2d font 缓存失效**:`Canvas2DRenderer.resize()` 现在把 `_currentFontPx` 归零 — 设置 `canvas.width/height` 会让浏览器重置 context 全部状态(含 `font`),旧缓存放过导致 resize 后字符回到浏览器默认 10px 且不再恢复(`setFontSize` cache 误命中)。典型症状:窗口尺寸变化/ResizeObserver 首触发后字符突然变小。
+- **`rowPitch` 行距系数**(0.8.0+):新增 `MatrixRainOptions.rowPitch`(默认 1.1 = 原版行为,范围 [0.2, 3]),行 pitch = `fontSize × rowPitch`;`rowPitch ≠ 1.1` 时网格行数按实际行距计算,压缩行距可铺满全高(密集数据海质感)。
+- **pixel 测试回绿**:原"跨渲染器 ≥95%"断言不可达(引擎随机驱动无 seed,同渲染器跨进程上限 ~82-83%)。改为 per-renderer baseline + 确定性 fixture(mulberry32 seed + fixedTimeStep + 固定帧数 gate + pause 冻结)+ per-scenario 阈值;全黑帧(headless WebGPU)自动 skip 不写黑 baseline。已知局限:buildGrid 随机化跨加载分叉仍会随环境抖动(本机 headless 复测 1080p 场景 ~73-74%),该场景断言以结构测试(test/renderer-\*.mjs)兜底。
 - **测试资产入库**:`test/unit`(535 用例)/ `test/e2e` / `vitest.config.ts` / pixel baselines 纳入版本控制。
 - **CI perf job**:修正引用不存在的 `perf:bench` / `perf:report` script,改调 `bench:renderer`。
 - **engines**:`>=20` 与 `.nvmrc` / CHANGELOG 对齐。

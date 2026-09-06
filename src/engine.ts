@@ -38,6 +38,7 @@ import {
   drawClassic,
   drawAvalanche,
   drawRipple,
+  drawZeabur,
   applyTargetBitmapPhase,
   updateTargetBitmapPhaseGlobal,
 } from './engine/draw-helpers';
@@ -313,6 +314,34 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     });
     void upgradeRenderer();
   }
+  // ============ 1.5 数据海背景(0.8.0+)· 垫在雨画布底下 ============
+  const bgOpt = options.background;
+  if (bgOpt === 'sea' || (bgOpt && typeof bgOpt === 'object' && bgOpt.type === 'sea')) {
+    const cfg = typeof bgOpt === 'object' ? bgOpt : {};
+    // 动态 import(主包不内联 WebGL 代码; sea 模块自身零依赖)
+    void (async () => {
+      try {
+        const { createSeaBackground } = await import('./sea-background');
+        if (state.isDestroyed) return;
+        const host: HTMLElement = state.wrapper ?? state.container ?? document.body;
+        state.__sea = createSeaBackground({
+          container: host,
+          theme: (cfg as { theme?: 'dark' | 'light' }).theme ?? 'dark',
+          speed: (cfg as { speed?: number }).speed ?? 1.3,
+          opacity: (cfg as { opacity?: number }).opacity ?? 1,
+          colorWave: (cfg as { colorWave?: boolean }).colorWave ?? true,
+          zIndex: 0,
+        });
+        // 雨画布层级抬到海面之上(wrapper 内 canvas 是唯一子节点, sea 插到它前面)
+        host.insertBefore(state.__sea.canvas, host.firstChild);
+      } catch (err) {
+        console.warn(
+          '[matrix-rain] sea background init failed:',
+          err instanceof Error ? err.message : err
+        );
+      }
+    })();
+  }
   renderer.setCharset(state.charset);
   // 同步 resize(DPR 缩放)
   renderer.resize(state.a, state.o, state.n);
@@ -346,7 +375,11 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
     }
     state.ef = userOverride !== undefined ? userOverride : adaptiveSize;
     state.r = Math.ceil(state.a / state.ef);
-    state.i = Math.ceil(state.o / state.ef);
+    // 0.8.0+ rowPitch:行数按实际行距(ef×rowPitch)算,压缩行距时画满全高。
+    // rowPitch === 1.1(默认)保持原公式 ceil(o/ef),既有像素行为 100% 不变。
+    const pitch = state.cfg.rowPitch;
+    state.i =
+      pitch === 1.1 ? Math.ceil(state.o / state.ef) : Math.ceil(state.o / (state.ef * pitch));
 
     state.b = [];
     for (let s = 0; s < state.i; s++) {
@@ -847,6 +880,8 @@ export function matrixRain(options: MatrixRainOptions = {}): MatrixRainInstance 
         drawAvalanche(state);
       } else if (state.variant === 'ripple') {
         drawRipple(state);
+      } else if (state.variant === 'zeabur') {
+        drawZeabur(state);
       }
       if (__perfOn) {
         performance.mark('mr:cells-end');

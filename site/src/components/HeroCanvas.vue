@@ -8,7 +8,7 @@
           >的背景
         </h1>
         <p class="hero-sub">
-          Canvas 2D 渲染 · 5 主题 4 变体 · Web Component · SSR 友好 · 29 KB gzip
+          Canvas 2D 渲染 · 6 主题 5 变体 · Web Component · SSR 友好 · 29 KB gzip
         </p>
         <div class="hero-ctas">
           <router-link to="/playground" class="btn btn-primary">立即试用 →</router-link>

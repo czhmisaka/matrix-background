@@ -2,7 +2,7 @@
 
 > **czhmisaka 出品 · 数字矩阵背景 · 终端感 + 温度感**
 >
-> 黑客帝国式数字雨 + 5 层暗色动态背景,5 主题 4 变体,**全参数可调**。
+> 黑客帝国式数字雨 + 5 层暗色动态背景,6 主题 5 变体,**全参数可调**。
 > 零依赖,Canvas 2D + rAF,首屏 4KB JS。
 
 [![npm version](https://img.shields.io/npm/v/@xietuier/matrix-rain.svg)](https://www.npmjs.com/package/@xietuier/matrix-rain)
@@ -19,8 +19,8 @@
 
 ## ✨ 特性
 
-- 🎨 **5 套主题预设**:`silicon-valley`(默认) / `matrix-green` / `lava-red` / `cyber-blue` / `pure-mono`
-- 🎬 **4 种变体**:`classic`(经典残影) / `avalanche`(雪崩下落) / `ripple`(涟漪扩散) / `ascii`(ASCII 符号)
+- 🎨 **6 套主题预设**:`silicon-valley`(默认) / `matrix-green` / `lava-red` / `cyber-blue` / `pure-mono` / `zeabur`(数据海·暗紫+暖橙)
+- 🎬 **5 种变体**:`classic`(经典残影) / `avalanche`(雪崩下落) / `ripple`(涟漪扩散) / `ascii`(ASCII 符号) / `zeabur`(数据海·流场明暗)
 - 🎛️ **全参数可调**:字体大小、残影、字符集、色板、光心、漂移、闪烁、爆闪……**每一个魔法数字都暴露**
 - 🌈 **HSL 连续调色板**:色板由 HSL 公式实时算,亮度 256+ 颗粒度平滑渐变
 - 🖼️ **文字/图片目标位图**:用户输入文字或上传图片,所有数字快速变换后呈现灰度轮廓
@@ -379,7 +379,7 @@ export default function MatrixBg() {
 | 字段           | 类型                                          | 默认               | 说明                                                                                   |
 | -------------- | --------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------- |
 | `theme`        | `ThemeName`                                   | `'silicon-valley'` | 主题预设 · `silicon-valley` / `matrix-green` / `lava-red` / `cyber-blue` / `pure-mono` |
-| `variant`      | `VariantName`                                 | `'classic'`        | 变体 · `classic` / `avalanche` / `ripple` / `ascii`                                    |
+| `variant`      | `VariantName`                                 | `'classic'`        | 变体 · `classic` / `avalanche` / `ripple` / `ascii` / `zeabur`                         |
 | `fontSize`     | `number`                                      | `14`               | 字符宽(px)                                                                             |
 | `charGap`      | `number`                                      | `0`                | 字符间距(CSS px)· 对称应用 x/y · `1`/`2` 让字到字更紧,负值重叠 · 范围 `[-10, 20]`      |
 | `charset`      | `string`                                      | `'0123456789'`     | 字符集                                                                                 |
@@ -685,6 +685,7 @@ rain.getRenderScale(); // 读取 effective 数值
 | `ascii`     | ✅ 完整(同 `classic`) | 同上                                                |
 | `avalanche` | ⚠️ 仅横向             | 头亮 trail 按行对齐,子格只在列方向生效;纵向密度不变 |
 | `ripple`    | ✅ 完整               | 横向 + 纵向都锐化                                   |
+| `zeabur`    | ✅ 完整               | 数据海流场:亮度由 3 八度域扭曲流场驱动,极慢极静     |
 
 ### 与 `textToBitmap` / `imageToBitmap` 协同
 

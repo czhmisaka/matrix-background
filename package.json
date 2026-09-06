@@ -1,7 +1,7 @@
 {
   "name": "@xietuier/matrix-rain",
   "version": "0.7.0",
-  "description": "czhmisaka 出品 · 数字矩阵背景 · 终端感 + 温度感 · 5 主题 4 变体 · 全参数可调",
+  "description": "czhmisaka 出品 · 数字矩阵背景 · 终端感 + 温度感 · 6 主题 5 变体 · 全参数可调",
   "keywords": [
     "matrix-rain",
     "matrix",
@@ -52,6 +52,11 @@
       "types": "./dist/element.d.ts",
       "import": "./dist/element.js",
       "require": "./dist/element.cjs"
+    },
+    "./sea": {
+      "types": "./dist/sea-background.d.ts",
+      "import": "./dist/sea-background.js",
+      "require": "./dist/sea-background.cjs"
     },
     "./script": "./dist/index.iife.js",
     "./iife": "./dist/index.iife.js",

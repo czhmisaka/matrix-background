@@ -103,6 +103,15 @@ export const createSetters = (
     }
     if (state.ro) state.ro.disconnect();
     state.canvas.removeEventListener('click', hooks.onCanvasClick);
+    // 0.8.0+ 数据海背景随实例销毁(wrapper.remove 已删 DOM, 这里停 rAF)
+    if (state.__sea) {
+      try {
+        state.__sea.destroy();
+      } catch {
+        /* 幂等 */
+      }
+      state.__sea = null;
+    }
     if (state.wrapper) state.wrapper.remove();
     // 0.4.0+ 销毁 renderer(幂等)
     state.renderer.destroy();

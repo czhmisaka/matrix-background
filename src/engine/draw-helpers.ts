@@ -481,7 +481,7 @@ export const drawClassic = (state: MatrixRainState): void => {
   const { ox, oy } = computeTargetOrigin(state);
 
   for (let s = 0; s < state.i; s++) {
-    const y = s * state.ef * 1.1 + state.ef * 0.55 + state.cfg.charGap;
+    const y = s * state.ef * state.cfg.rowPitch + state.ef * 0.55 + state.cfg.charGap;
     for (let h = 0; h < state.r; h++) {
       if (localBoost && isParentInBitmapRegion(state, h, s, ox, oy)) {
         // === 子格路径 ===
@@ -719,7 +719,7 @@ const drawSubCellClassic = (
           hh,
           ss,
           subEf,
-          ss * subEf * 1.1 + subEf * 0.55 + state.cfg.charGap,
+          ss * subEf * state.cfg.rowPitch + subEf * 0.55 + state.cfg.charGap,
           l,
           totalHue,
           result.ch
@@ -755,7 +755,7 @@ const drawSubCellClassic = (
     hh,
     ss,
     subEf,
-    ss * subEf * 1.1 + subEf * 0.55 + state.cfg.charGap,
+    ss * subEf * state.cfg.rowPitch + subEf * 0.55 + state.cfg.charGap,
     l,
     totalHue,
     c.ch
@@ -766,7 +766,7 @@ const drawSubCellClassic = (
  * 子格版 drawInner(0.3.0+)
  * - 不写 c.warmth(warmth 阻尼用父粒度,子格继承)
  * - 不写 c.bright / c.ch(父已算好,子格只读)
- * - fillText 坐标: (hh * subEf + subEf/2, ss * subEf * 1.1 + subEf * 0.55 + state.cfg.charGap)
+ * - fillText 坐标: (hh * subEf + subEf/2, ss * subEf * state.cfg.rowPitch + subEf * 0.55 + state.cfg.charGap)
  *   → 沿用 classic 的 1.1 行高 + 0.55 中心偏置公式
  * - 颜色/blend:走第三层 LUT 路径(同 drawFillBlended)
  * - colorOverride:子格用子格坐标 (hh, ss) + 父 cell 状态
@@ -856,7 +856,7 @@ const drawInnerSub = (
  *
  * 0.3.0+ renderScale:
  * - 头亮 trail 按行对齐 · 子格只在列方向生效(横向更锐,纵向密度不变)
- * - 子格 y 用 c.yPos! * subEf * 1.1 + state.cfg.charGap(共享父 y,整行子格在同一水平线)
+ * - 子格 y 用 c.yPos! * subEf * state.cfg.rowPitch + state.cfg.charGap(共享父 y,整行子格在同一水平线)
  */
 export const drawAvalanche = (state: MatrixRainState): void => {
   const totalHue = state.dynamicHue + state.dynamicColorHue;
@@ -951,14 +951,14 @@ const drawParentCellAvalanche = (
     c.ch = Math.floor(Math.random() * state.charset.length);
   if (l < 0.02) return;
 
-  const y = c.yPos! * state.ef * 1.1 + state.cfg.charGap;
+  const y = c.yPos! * state.ef * state.cfg.rowPitch + state.cfg.charGap;
   drawInner(state, c, h, s, y, l, M, p, totalHue);
 };
 
 /**
  * Avalanche 子格绘制(0.3.0+)
  * - 父 cell 状态已由 computeParentCellStateAvalanche 算好
- * - 子格 y = c.yPos! * subEf * 1.1 + state.cfg.charGap(共享父 y,整行子格同水平线)
+ * - 子格 y = c.yPos! * subEf * state.cfg.rowPitch + state.cfg.charGap(共享父 y,整行子格同水平线)
  */
 const drawSubCellAvalanche = (
   state: MatrixRainState,
@@ -974,12 +974,12 @@ const drawSubCellAvalanche = (
     const result = state.hooks.applyTargetBitmapPhase(c, hh, _ss, l, undefined, true);
     if (result) {
       l = result.l;
-      const y = c.yPos! * subEf * 1.1 + state.cfg.charGap;
+      const y = c.yPos! * subEf * state.cfg.rowPitch + state.cfg.charGap;
       drawInnerSub(state, c, hh, _ss, subEf, y, l, totalHue, result.ch);
       return;
     }
   }
-  const y = c.yPos! * subEf * 1.1 + state.cfg.charGap;
+  const y = c.yPos! * subEf * state.cfg.rowPitch + state.cfg.charGap;
   drawInnerSub(state, c, hh, _ss, subEf, y, l, totalHue, c.ch);
 };
 
@@ -987,7 +987,7 @@ const drawSubCellAvalanche = (
  * Ripple 变体:简化 phase + sin(phase) * 0.5 + 简单 flicker
  * 行为 100% 等价于原 drawRipple · 走共享 drawInner 路径
  *
- * 0.3.0+ renderScale:与 classic 共享同一子格 y 公式 (s * subEf * 1.1 + subEf * 0.55)
+ * 0.3.0+ renderScale:与 classic 共享同一子格 y 公式 (s * subEf * state.cfg.rowPitch + subEf * 0.55)
  * → 直接复用 drawSubCellClassic(走 noise-converge 子格路径)
  */
 export const drawRipple = (state: MatrixRainState): void => {
@@ -1012,7 +1012,7 @@ export const drawRipple = (state: MatrixRainState): void => {
   const { ox, oy } = computeTargetOrigin(state);
 
   for (let s = 0; s < state.i; s++) {
-    const y = s * state.ef * 1.1 + state.ef * 0.55 + state.cfg.charGap;
+    const y = s * state.ef * state.cfg.rowPitch + state.ef * 0.55 + state.cfg.charGap;
     for (let h = 0; h < state.r; h++) {
       if (localBoost && isParentInBitmapRegion(state, h, s, ox, oy)) {
         // === 子格路径 · 复用 classic 子格 helper(同 y 公式)===
@@ -1079,4 +1079,133 @@ const drawParentCellRipple = (
   if (l < 0.02) return;
 
   drawInner(state, c, h, s, y, l, M, p, totalHue);
+};
+
+// ==================== Zeabur 变体(0.8.0 · 数据海) ====================
+
+/**
+ * Zeabur 变体状态计算:域扭曲流场亮度
+ *
+ * 逆向自 zeabur.com Hero 背景的 FlowingGradient shader(见 docs/study-zeabur-hero-animation.md):
+ * - 3 八度 sin/cos 流场 n ∈ [-1, 1](频率按 cell 坐标标定,分辨率无关)
+ * - smoothstep(0.3, 0.7, n*0.5+0.5) → "数据海"带状明暗
+ * - 时间项走独立流速(0.4/0.35/0.55),整体被 flickerSpeed 缩放
+ * - sparkProbability 尊重用户配置(保留微弱星光;纯净风格可设 0)
+ */
+const computeParentCellStateZeabur = (
+  state: MatrixRainState,
+  c: Cell,
+  h: number,
+  s: number,
+  t1: number,
+  t2: number,
+  t3: number
+): void => {
+  // phase 兼容链路(userFuncs.phaseFunc / themeTransition lerp 都依赖 phase 存在)
+  c.phase +=
+    (state.effectiveVp.phaseStep + Math.random() * state.effectiveVp.phaseJitter) *
+    (state.cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT) *
+    state.lastDt *
+    60;
+  const x = h * 0.18;
+  const y = s * 0.15;
+  const n =
+    0.45 * Math.sin(x * 2.1 + y * 1.8 + t1) +
+    0.35 * Math.cos(x * 2.9 - y * 3.3 + t2) +
+    0.2 * Math.sin(x * 4.1 + y * 5.5 - t3);
+  let u = n * 0.5 + 0.5;
+  // smoothstep(0.3, 0.7, u)
+  u = Math.max(0, Math.min(1, (u - 0.3) / 0.4));
+  let l = u * u * (3 - 2 * u);
+  if (Math.random() < state.cfg.sparkProbability) l = 1;
+  c.bright = l;
+};
+
+/**
+ * Zeabur 父格 1x 绘制 · 结构同 ripple(共享 targetBitmap / flicker / charset 链路)
+ */
+const drawParentCellZeabur = (
+  state: MatrixRainState,
+  c: Cell,
+  h: number,
+  s: number,
+  y: number,
+  M: number,
+  p: number,
+  totalHue: number,
+  t1: number,
+  t2: number,
+  t3: number
+): void => {
+  computeParentCellStateZeabur(state, c, h, s, t1, t2, t3);
+  let l = c.bright;
+
+  // 噪声→收敛模式
+  let skipCharset = false;
+  if (state.targetBitmap && state.targetActive && state.targetPhase === 'noise-converge') {
+    const result = state.hooks.applyTargetBitmapPhase(c, h, s, l);
+    if (result) {
+      l = result.l;
+      c.ch = result.ch;
+      skipCharset = result.skipCharset;
+    }
+  }
+
+  if (!skipCharset && Math.random() < state.effectiveVp.chUpdateProb)
+    c.ch = Math.floor(Math.random() * state.charset.length);
+  if (l < 0.02) return;
+
+  drawInner(state, c, h, s, y, l, M, p, totalHue);
+};
+
+/**
+ * Zeabur 变体:数据海流场
+ * - brightnessCurve / flickerCurve 用户函数不生效(亮度由流场完全接管;charsetFunc 走共享 flicker 链路)
+ * - 子格路径复用 classic helper(同 y 公式)
+ */
+export const drawZeabur = (state: MatrixRainState): void => {
+  const totalHue = state.dynamicHue + state.dynamicColorHue;
+  state.__frameCtx.f = state.f;
+  state.__frameCtx.t = state.wallTime;
+  state.hooks.updateTargetBitmapPhaseGlobal();
+
+  const flowT = state.wallTime * (state.cfg.flickerSpeed ?? FLICKER_SPEED_DEFAULT);
+  const t1 = flowT * 0.4;
+  const t2 = flowT * 0.35;
+  const t3 = flowT * 0.55;
+
+  const localBoost = shouldLocalBoost(state);
+  const eff = subCellCount(state);
+  const subEf = localBoost ? state.ef / eff : state.ef;
+  if (localBoost) {
+    state.renderer.setFontSize(subEf);
+  }
+  const M =
+    state.r * state.lightCenter.x +
+    Math.cos(state.wallTime * state.driftSpeed.x * 60) * state.r * 0.2;
+  const p =
+    state.i * state.lightCenter.y +
+    Math.sin(state.wallTime * state.driftSpeed.y * 60) * state.i * 0.2;
+  const { ox, oy } = computeTargetOrigin(state);
+
+  for (let s = 0; s < state.i; s++) {
+    const y = s * state.ef * state.cfg.rowPitch + state.ef * 0.55 + state.cfg.charGap;
+    for (let h = 0; h < state.r; h++) {
+      if (localBoost && isParentInBitmapRegion(state, h, s, ox, oy)) {
+        // === 子格路径 · 复用 classic 子格 helper(同 y 公式)===
+        computeParentCellStateZeabur(state, state.b[s][h], h, s, t1, t2, t3);
+        const c = state.b[s][h];
+        for (let ss = 0; ss < eff; ss++) {
+          for (let hh = 0; hh < eff; hh++) {
+            const ghh = h * eff + hh;
+            const gss = s * eff + ss;
+            drawSubCellClassic(state, c, ghh, gss, eff, subEf, totalHue);
+          }
+        }
+      } else {
+        // === 1x 路径 ===
+        drawParentCellZeabur(state, state.b[s][h], h, s, y, M, p, totalHue, t1, t2, t3);
+      }
+    }
+  }
 };

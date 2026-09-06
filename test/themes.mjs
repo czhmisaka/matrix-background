@@ -132,7 +132,14 @@ function test(name, fn) {
 }
 
 // 5 主题全集(必须等于 themes 字典真实 keys,避免以后误删/误增)
-const ALL_THEMES = ['silicon-valley', 'matrix-green', 'lava-red', 'cyber-blue', 'pure-mono'];
+const ALL_THEMES = [
+  'silicon-valley',
+  'matrix-green',
+  'lava-red',
+  'cyber-blue',
+  'pure-mono',
+  'zeabur',
+];
 
 console.log('🧪 themes.mjs · 5 主题结构 + 切换行为 + 冷暖色相断言');
 console.log('─'.repeat(60));

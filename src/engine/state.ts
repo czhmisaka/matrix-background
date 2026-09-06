@@ -128,6 +128,7 @@ export type LockOrder =
 const DEFAULTS = {
   fontSize: 6,
   charGap: 0,
+  rowPitch: 1.1,
   trailAlpha: 0.18,
   maxDPR: 2,
   warmthRadius: 0.6,
@@ -147,6 +148,13 @@ const clampCharGap = (n: unknown): number => {
   const v = Number(n);
   if (!Number.isFinite(v)) return 0;
   return Math.max(-10, Math.min(20, v));
+};
+
+/** 行距系数 · clamp [0.2, 3](过小字符完全重叠,过大失去矩阵感)*/
+const clampRowPitch = (n: unknown): number => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 1.1;
+  return Math.max(0.2, Math.min(3, v));
 };
 
 const FLICKER_SPEED_DEFAULT = 1;
@@ -232,6 +240,8 @@ export interface MatrixRainState {
   cfg: {
     fontSize: number;
     charGap: number;
+    /** 行距系数(0.8.0+)· 行 pitch = ef × rowPitch, 默认 1.1 */
+    rowPitch: number;
     trailAlpha: number;
     maxDPR: number;
     warmthRadius: number;
@@ -307,6 +317,12 @@ export interface MatrixRainState {
   resizeTimer: number | null;
   /** ResizeObserver 实例(canvas 尺寸变化监听) */
   ro: ResizeObserver | null;
+  /** 0.8.0+ 数据海背景句柄(background:'sea' 时创建, destroy 时销毁) */
+  __sea: {
+    canvas: HTMLCanvasElement;
+    destroy: () => void;
+    setTheme: (t: 'dark' | 'light') => void;
+  } | null;
 
   // ============ 主题(可写)============
   coldPalette: Palette;
@@ -543,6 +559,7 @@ export const createMatrixRainState = (
   const cfg = {
     fontSize: options.fontSize ?? DEFAULTS.fontSize,
     charGap: clampCharGap(options.charGap ?? DEFAULTS.charGap),
+    rowPitch: clampRowPitch(options.rowPitch ?? DEFAULTS.rowPitch),
     trailAlpha: options.trailAlpha ?? DEFAULTS.trailAlpha,
     maxDPR: options.maxDPR ?? DEFAULTS.maxDPR,
     warmthRadius: options.warmthRadius ?? DEFAULTS.warmthRadius,
@@ -781,6 +798,7 @@ export const createMatrixRainState = (
     rafId: null,
     resizeTimer: null,
     ro: null,
+    __sea: null,
 
     // theme
     coldPalette,

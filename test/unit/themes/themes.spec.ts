@@ -13,17 +13,18 @@
 import { describe, it, expect } from 'vitest'
 import { themes, matrixRain, type ThemeName } from '../../../src'
 
-// 5 主题全集(必须等于 themes 字典真实 keys,避免以后误删/误增)
+// 6 主题全集(必须等于 themes 字典真实 keys,避免以后误删/误增)
 const ALL_THEMES: ThemeName[] = [
   'silicon-valley',
   'matrix-green',
   'lava-red',
   'cyber-blue',
   'pure-mono',
+  'zeabur',
 ]
 
 // 4 变体全集(types/index.d.ts: VariantName)
-const ALL_VARIANTS = ['classic', 'avalanche', 'ripple', 'ascii'] as const
+const ALL_VARIANTS = ['classic', 'avalanche', 'ripple', 'ascii', 'zeabur'] as const
 
 const HS = (h: number) => Math.min(360, Math.max(0, h))
 
@@ -151,7 +152,7 @@ describe('themes: chromatic separation', () => {
   })
 })
 
-describe('themes: 4 变体 × 5 主题 = 20 组合构造不抛错', () => {
+describe('themes: 5 变体 × 6 主题 = 30 组合构造不抛错', () => {
   // 20 组笛卡尔积 · 每组 matrixRain() 成功
   for (const variant of ALL_VARIANTS) {
     for (const theme of ALL_THEMES) {

@@ -14,8 +14,19 @@ console.log('  - matrixRain:', typeof matrixRain);
 console.log('  - themes keys:', Object.keys(themes));
 
 // 主题对象应为 5 个内置主题
-const expectedThemes = ['silicon-valley', 'matrix-green', 'lava-red', 'cyber-blue', 'pure-mono'];
-assert.equal(Object.keys(themes).length, expectedThemes.length, `应有 ${expectedThemes.length} 个主题`);
+const expectedThemes = [
+  'silicon-valley',
+  'matrix-green',
+  'lava-red',
+  'cyber-blue',
+  'pure-mono',
+  'zeabur',
+];
+assert.equal(
+  Object.keys(themes).length,
+  expectedThemes.length,
+  `应有 ${expectedThemes.length} 个主题`
+);
 for (const name of expectedThemes) {
   assert.ok(themes[name], `主题 ${name} 应该存在`);
   const t = themes[name]();
@@ -29,7 +40,15 @@ for (const name of expectedThemes) {
   assert.equal(typeof t.warm.lMin, 'number', `${name}.warm.lMin 应该是 number`);
   assert.equal(typeof t.warm.lMax, 'number', `${name}.warm.lMax 应该是 number`);
   // ThemeParams 7 字段
-  for (const f of ['brightness', 'chroma', 'hueShift', 'saturationShift', 'lightnessShift', 'invertHue', 'contrast']) {
+  for (const f of [
+    'brightness',
+    'chroma',
+    'hueShift',
+    'saturationShift',
+    'lightnessShift',
+    'invertHue',
+    'contrast',
+  ]) {
     assert.equal(typeof t[f], 'number', `${name}.${f} 应该是 number`);
   }
 }

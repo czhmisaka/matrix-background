@@ -5,7 +5,7 @@
         <span class="tag">Tutorial</span>
         <h1>从 0 到生产环境</h1>
         <p class="lead">
-          12 个章节覆盖安装、5 分钟上手、5 主题 × 4 变体预览、3 框架集成 (React / Vue /
+          12 个章节覆盖安装、5 分钟上手、6 主题 × 5 变体预览、3 框架集成 (React / Vue /
           Next.js)、CDN 兜底、API 完整参考、内置 Playground。
         </p>
       </header>
@@ -39,15 +39,18 @@
         <article v-if="active === 'intro'">
           <h2>数字矩阵背景<br /><em class="grad">终端感 × 温度感</em></h2>
           <p>
-            Matrix 风格的数字雨看上去浪漫,实现起来却满是工程权衡。@xietuier/matrix-rain 把 5 主题 4
+            Matrix 风格的数字雨看上去浪漫,实现起来却满是工程权衡。@xietuier/matrix-rain 把 6 主题 5
             变体的 Canvas 2D 渲染打包成一个零依赖的小库 — 29 KB gzip,5 行代码即可启动。
           </p>
           <h3>核心特性</h3>
           <ul>
             <li>
-              <b>5 主题预设</b> — 硅谷冷 / 矩阵绿 / 熔岩红 / 赛博蓝 / 纯单色,每个都可冷暖双板拼色
+              <b>6 主题预设</b> — 硅谷冷 / 矩阵绿 / 熔岩红 / 赛博蓝 / 纯单色 /
+              数据海,每个都可冷暖双板拼色
             </li>
-            <li><b>4 变体形态</b> — classic / avalanche / ripple / ascii,字符运动模式各不同</li>
+            <li>
+              <b>5 变体形态</b> — classic / avalanche / ripple / ascii / zeabur,字符运动模式各不同
+            </li>
             <li>
               <b>Web Component</b> — <code>&lt;matrix-rain&gt;</code> 标签即可挂载,Vue/React
               都能识别

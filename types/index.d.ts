@@ -35,10 +35,10 @@ export interface HSLPalette {
 export type Palette = HSLPalette;
 
 /** 预设主题名 */
-export type ThemeName = 'silicon-valley' | 'matrix-green' | 'lava-red' | 'cyber-blue' | 'pure-mono';
+export type ThemeName = 'silicon-valley' | 'matrix-green' | 'lava-red' | 'cyber-blue' | 'pure-mono' | 'zeabur';
 
 /** 内置变体名 */
-export type VariantName = 'avalanche' | 'ripple' | 'ascii' | 'classic';
+export type VariantName = 'avalanche' | 'ripple' | 'ascii' | 'classic' | 'zeabur';
 
 /**
  * 过渡曲线(0.4.0+)
@@ -228,6 +228,13 @@ export interface MatrixRainOptions {
 
   /** 残影 alpha(0-1),默认 0.18。越小拖尾越长 */
   trailAlpha?: number;
+
+  /**
+   * 行距系数(0.8.0+)· 行 pitch = fontSize × rowPitch · 默认 1.1(原版行为)
+   * - 范围 [0.2, 3] · 越界自动 clamp
+   * - < 1 时行间紧密重叠(如 0.4 = 密集数据海质感)
+   */
+  rowPitch?: number;
 
   /** DPR 缩放上限,默认 2。性能优先可设 1 */
   maxDPR?: number;
@@ -468,6 +475,24 @@ export interface MatrixRainOptions {
 
   /** 变体(改主循环行为) */
   variant?: VariantName;
+
+  /**
+   * 数据海背景(0.8.0+)· 逆向自 zeabur.com Hero 的 5 层 WebGL shader
+   * - 'sea' 或 { type:'sea', ... } : 在雨画布底下垫数据海(色带/字符点阵/放射光)
+   * - 亮暗主题用 background.theme(默认 'dark'); 主题切换(亮紫/暗紫)用实例 setTheme 时自动同步
+   * - 无 WebGL2 静默降级为无背景
+   */
+  background?: 'sea' | {
+    type: 'sea';
+    /** 'dark' 暗紫 | 'light' 暖橙 · 默认 'dark' */
+    theme?: 'dark' | 'light';
+    /** 流速 · 默认 1.3 */
+    speed?: number;
+    /** 不透明度 0-1 · 默认 1 */
+    opacity?: number;
+    /** 潮谷/潮峰颜色随时间波动 · 默认 true */
+    colorWave?: boolean;
+  };
 
   /** 自定义画布(默认自动创建) */
   canvas?: HTMLCanvasElement;

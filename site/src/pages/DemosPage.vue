@@ -3,7 +3,7 @@
     <div class="container">
       <header class="page-header">
         <span class="tag">Demos</span>
-        <h1>5 主题 · 4 变体 · 真实场景</h1>
+        <h1>6 主题 · 5 变体 · 真实场景</h1>
         <p class="lead">
           每个 demo 都跑真实 matrix-rain 实例。改参数、触发事件、读状态机 — 全部可在浏览器里直接玩。
         </p>

@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zeabur Hero 背景逆向 Demo · matrix-rain 学习笔记</title>
+<style>
+  :root {
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "IBM Plex Sans", -apple-system, "PingFang SC", sans-serif;
+    background: #18181b;
+    color: #fafafa;
+    transition: background 1.2s var(--ease), color 1.2s var(--ease);
+  }
+  body.light { background: #f9f7f6; color: #0a0a0a; }
+
+  /* ============ Section 1: Zeabur Hero 复刻 ============ */
+  .hero {
+    position: relative;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 8vw;
+    overflow: hidden;
+  }
+  .hero-bg {
+    position: absolute; inset: 0; z-index: 0;
+    opacity: 0.9;
+    transition: opacity 1.2s var(--ease);
+  }
+  .hero-bg canvas { width: 100%; height: 100%; display: block; }
+  .scrim {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    transition: background 1.2s var(--ease);
+  }
+  .scrim.dark  { background: linear-gradient(to right, rgba(24,24,27,0.45) 0%, rgba(24,24,27,0.2) 50%, transparent 80%); }
+  .scrim.light { background: linear-gradient(to right, rgba(249,247,246,0.8) 0%, rgba(249,247,246,0.4) 50%, transparent 80%); }
+  .hero-content { position: relative; z-index: 2; max-width: 720px; }
+  .hero-content h1 {
+    font-size: clamp(2rem, 5vw, 4rem);
+    font-weight: 500; letter-spacing: -0.02em; line-height: 1.15;
+    margin-bottom: 1rem;
+  }
+  .hero-content p { font-size: clamp(0.9rem, 1.4vw, 1.1rem); opacity: 0.75; line-height: 1.7; }
+  .hero-content .tag {
+    display: inline-block; font-family: ui-monospace, monospace; font-size: 0.72rem;
+    border: 1px solid #7d36ec; color: #a469ff; padding: 3px 10px; border-radius: 3px;
+    margin-bottom: 1.4rem; letter-spacing: 0.08em;
+    transition: border-color 1.2s var(--ease), color 1.2s var(--ease);
+  }
+  body.light .hero-content .tag { border-color: #fe4400; color: #fe4400; }
+
+  /* 控制面板 */
+  .panel {
+    position: fixed; top: 16px; right: 16px; z-index: 10;
+    background: rgba(24,24,27,0.82); backdrop-filter: blur(12px);
+    border: 1px solid rgba(125,54,236,0.35); border-radius: 6px;
+    padding: 14px 16px; font-size: 12px; min-width: 210px;
+    color: #d4d4d8; transition: border-color 1.2s var(--ease);
+  }
+  body.light .panel { background: rgba(249,247,246,0.85); border-color: rgba(254,68,0,0.35); color: #3f3f46; }
+  .panel h3 { font-size: 11px; letter-spacing: 0.1em; opacity: 0.6; margin-bottom: 10px; text-transform: uppercase; }
+  .panel label { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; user-select: none; }
+  .panel input[type=color] { width: 34px; height: 20px; border: none; background: none; padding: 0; cursor: pointer; }
+  .panel .val { min-width: 34px; text-align: right; }
+  .panel label:hover { color: #fff; }
+  body.light .panel label:hover { color: #000; }
+  .panel input[type=checkbox] { accent-color: #7d36ec; }
+  body.light .panel input[type=checkbox] { accent-color: #fe4400; }
+  .panel .btn {
+    width: 100%; margin-top: 10px; padding: 7px 0; cursor: pointer;
+    background: #7d36ec; color: #fff; border: none; border-radius: 4px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+    transition: background 1.2s var(--ease);
+  }
+  body.light .panel .btn { background: #fe4400; }
+  .panel .speed { margin-top: 10px; }
+  .panel .speed input { width: 100%; accent-color: #7d36ec; }
+  .panel .val { font-family: ui-monospace, monospace; opacity: 0.7; }
+
+  /* ============ Section 2: matrix-rain zeabur 主题 ============ */
+  .section2 { padding: 80px 8vw 40px; }
+  .section2 h2 { font-size: 1.6rem; font-weight: 500; margin-bottom: 6px; }
+  .section2 .sub { opacity: 0.65; font-size: 0.9rem; margin-bottom: 24px; }
+  .rain-wrap {
+    position: relative; height: 420px; border: 1px solid rgba(125,54,236,0.3);
+    border-radius: 6px; overflow: hidden; background: #101013;
+    transition: border-color 1.2s var(--ease);
+  }
+  .rain-wrap .matrix-rain-wrapper { z-index: 2 !important; opacity: 0.75; }
+  .rain-wrap canvas.sea-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
+  body.light .rain-wrap { border-color: rgba(254,68,0,0.3); }
+  .rain-wrap.light-sea { background: #f9f7f6; }
+  .rain-wrap .sea-fade { position: absolute; inset: 0; z-index: 1; pointer-events: none; transition: background 1.2s var(--ease); }
+  .rain-head {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 14px; font-family: ui-monospace, monospace; font-size: 12px;
+  }
+  .rain-head button {
+    padding: 6px 14px; cursor: pointer; border-radius: 4px; font-size: 12px;
+    background: transparent; border: 1px solid #52525b; color: inherit;
+    transition: all .25s;
+  }
+  .rain-head button.active { background: #7d36ec; border-color: #7d36ec; color: #fff; }
+  body.light .rain-head button.active { background: #fe4400; border-color: #fe4400; }
+  .note { margin-top: 18px; font-size: 12px; opacity: 0.55; line-height: 1.8; font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+
+<section class="hero" id="hero">
+  <div class="hero-bg"><canvas id="gl"></canvas></div>
+  <div class="scrim dark" id="scrim"></div>
+  <div id="heroRain" style="position:absolute; inset:0; z-index:2; pointer-events:none; overflow:hidden; opacity:0"></div>
+  <div class="hero-content" style="z-index:3">
+    <span class="tag">REVERSE ENGINEERED · 5-LAYER SHADER</span>
+    <h1>Zeabur Hero 背景动画<br>逆向复刻 Demo</h1>
+    <p>three.js WebGPU → 单文件 WebGL2 复刻。Grid 网格 · Ascii 字符点阵 · FlowingGradient 数据海 · Godrays 放射光 · SineWave 波浪线。右侧面板可逐层开关、调速度、切明暗主题（复刻 1.2s 淡入过渡）。</p>
+  </div>
+</section>
+
+<div class="panel">
+  <h3>图层开关</h3>
+  <label><input type="checkbox" id="l-grid" checked> Grid 网格</label>
+  <label><input type="checkbox" id="l-ascii" checked> Ascii 字符点阵</label>
+  <label><input type="checkbox" id="l-grad" checked> FlowingGradient 数据海</label>
+  <label><input type="checkbox" id="l-rays" checked> Godrays 放射光</label>
+  <label><input type="checkbox" id="l-wave" checked> SineWave 波浪线</label>
+  <div class="speed">
+    <h3>速度 <span class="val" id="speedVal">1.0×</span></h3>
+    <input type="range" id="speed" min="0" max="3" step="0.1" value="1">
+  </div>
+  <button class="btn" id="themeBtn">☀ 切换亮色主题</button>
+</div>
+
+<div class="panel" id="tunePanel" style="top:auto; bottom:16px; max-height:70vh; overflow:auto;">
+  <h3>色带</h3>
+  <label>潮谷 <input type="color" id="p-colorA" value="#0d0215"></label>
+  <label>潮峰 <input type="color" id="p-colorB" value="#d18cff"></label>
+  <label>频率 b1 <input type="range" id="p-freq1" min="0.2" max="4" step="0.05" value="4"><span class="val" id="v-freq1">4</span></label>
+  <label>频率 b2 <input type="range" id="p-freq2" min="0.2" max="4" step="0.05" value="4"><span class="val" id="v-freq2">4</span></label>
+  <label>流速 <input type="range" id="p-flow" min="0" max="1.5" step="0.01" value="1.3"><span class="val" id="v-flow">1.30</span></label>
+  <label>对比幅度 <input type="range" id="p-amp" min="0.3" max="0.95" step="0.01" value="0.67"><span class="val" id="v-amp">0.67</span></label>
+  <label>呼吸 <input type="range" id="p-pulse" min="0" max="0.3" step="0.005" value="0.3"><span class="val" id="v-pulse">0.30</span></label>
+  <label>旋转强度 <input type="range" id="p-rot" min="0" max="3" step="0.05" value="1.0"><span class="val" id="v-rot">1.0</span></label>
+  <h3>字符点阵</h3>
+  <label>密度(cols) <input type="range" id="p-acols" min="20" max="200" step="2" value="52"><span class="val" id="v-acols">52</span></label>
+  <label>透明度 <input type="range" id="p-aalpha" min="0" max="1" step="0.01" value="0.97"><span class="val" id="v-aalpha">0.97</span></label>
+  <h3>数字雨(全屏)</h3>
+  <label>字号 <input type="range" id="p-rfs" min="8" max="48" step="1" value="16"><span class="val" id="v-rfs">16</span></label>
+  <label>字距 <input type="range" id="p-rgap" min="-10" max="20" step="1" value="4"><span class="val" id="v-rgap">4</span></label>
+  <label>行距系数 <input type="range" id="p-rpitch" min="0.2" max="2" step="0.05" value="0.75"><span class="val" id="v-rpitch">0.75</span></label>
+  <label>拖尾 <input type="range" id="p-rtrail" min="0.05" max="0.9" step="0.01" value="0.4"><span class="val" id="v-rtrail">0.40</span></label>
+  <label>亮度 <input type="range" id="p-rbright" min="0.5" max="2.5" step="0.05" value="1.1"><span class="val" id="v-rbright">1.10</span></label>
+  <label>整体透明度 <input type="range" id="p-ropacity" min="0" max="1" step="0.01" value="0"><span class="val" id="v-ropacity">0.45</span></label>
+  <label>闪烁速度 <input type="range" id="p-rflick" min="0" max="2" step="0.05" value="0.35"><span class="val" id="v-rflick">0.35</span></label>
+</div>
+
+<section class="section2">
+  <h2>同一品牌双色 · @xietuier/matrix-rain 新增 <code>zeabur</code> 主题</h2>
+  <div class="sub">本次学习直接落地的成果：暖橙 #fe4400（亮）/ 暗紫 #7d36ec（暗）冷暖双板，可与其他主题拼色</div>
+  <div class="rain-head">
+    <span style="opacity:.6">变体:</span>
+    <button id="v-zeabur" class="active">zeabur 数据海</button>
+    <button id="v-classic">classic 经典</button>
+    <span style="opacity:.6; margin-left:12px">背景:</span>
+    <button id="seaToggle" class="active">数据海 开</button>
+    <span style="opacity:.6; margin-left:12px">海面状态:</span>
+    <button id="seaMode" class="active">🌙 暗色海(紫)</button>
+    <span style="opacity:.6; margin-left:12px">主题:</span>
+    <span id="themeSwitcher" style="display:contents"></span>
+  </div>
+  <div class="rain-wrap" id="rainBox"><div class="sea-fade" id="seaFade" style="background: transparent"></div></div>
+  <p class="note">
+    学习来源: zeabur.com 官方设计复盘《让落地页重新落地》 + 运行时 hook shaderSource 截获的 GLSL<br>
+    证据与完整分析见项目 docs/study-zeabur-hero-animation.md · docs/study-zeabur/*.glsl
+  </p>
+</section>
+
+<script type="module">
+import { matrixRain, createSeaBackground } from "./dist/index.js";
+window.matrixRain = matrixRain;
+window.createSeaBackground = createSeaBackground;
+window.__mrLoaded = true;
+</script>
+<script>
+/* ================= Zeabur Hero 5 层 shader (WebGL2 复刻) ================= */
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl2', { antialias: true, alpha: false });
+if (!gl) document.getElementById('hero').style.background = '#241c34';
+
+const VS = '#version 300 es\n' +
+  'const vec2 P[4] = vec2[4](vec2(-1,-1),vec2(1,-1),vec2(-1,1),vec2(1,1));' +
+  'void main(){ vec2 p = P[gl_VertexID]; gl_Position = vec4(p,0.,1.); }';
+
+const FS = '#version 300 es\n' +
+'precision highp float;' +
+'out vec4 fragColor;' +
+'uniform vec2 uRes;' +
+'uniform float uTime;' +
+'uniform sampler2D uAtlas;' +
+'uniform vec3 uBase;' +
+'uniform vec3 uColorA;' +
+'uniform vec3 uColorB;' +
+'uniform vec3 uRayColor;' +
+'uniform vec3 uGridColor;' +
+'uniform vec3 uCharColor;' +
+'uniform float uLayers;' + // bit: 1 grid, 2 ascii, 4 grad, 8 rays, 16 wave
+'uniform float uSpeed;' +
+'uniform float uFreq1;' +
+'uniform float uFreq2;' +
+'uniform float uFlow;' +
+'uniform float uAmp;' +
+'uniform float uPulse;' +
+'uniform float uRot;' +
+'uniform float uAsciiCols;' +
+'uniform float uAsciiAlpha;' +
+
+'float hash21(vec2 p){ p = fract(p*vec2(233.34,851.73)); p += dot(p,p+23.45); return fract(p.x*p.y); }' +
+'float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); vec2 u=f*f*(3.-2.*f);' +
+'  return mix(mix(hash21(i),hash21(i+vec2(1,0)),u.x), mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),u.x), u.y); }' +
+
+/* 3 八度域扭曲 (与截获 GLSL 同构) */
+'vec2 warp(vec2 uv, float detail, float t){' +
+'  vec2 p = uv;' +
+'  p.x += sin(uv.y*detail*1.7 + t*0.8)*0.12 + cos(uv.x*detail*0.9 - t*0.5)*0.05;' +
+'  p.y += cos(uv.x*detail*1.3 - t*0.6)*0.12 + sin(uv.y*detail*1.1 + t*0.7)*0.05;' +
+'  float d2 = detail*2.1;' +
+'  p.x += cos(p.y*d2*2.7 - t*0.45)*0.07 + sin(p.x*d2*1.9 + t*0.6)*0.04;' +
+'  p.y += sin(p.x*d2*2.3 + t*0.65)*0.07 + cos(p.y*d2*1.6 - t*0.4)*0.04;' +
+'  float d3 = detail*3.7;' +
+'  p.x += (sin(p.y*d3*1.8 + t*0.85)*0.04 + cos(p.x*d3*1.3 - t*0.55)*0.025) + sin((p.x+p.y)*d3*0.7 + t*0.9)*0.02;' +
+'  p.y += (cos(p.x*d3*1.6 - t*0.75)*0.04 + sin(p.y*d3*1.1 + t*0.5)*0.025) + cos((p.x+p.y)*d3*0.8 - t*0.95)*0.02;' +
+'  return p; }' +
+
+/* 数据海: 扭曲后取 noise, smoothstep 阈值混 A/B, 呼吸明暗 */
+'float fbm2(vec2 p){ return vnoise(p)*0.6 + vnoise(p*2.13 + 17.7)*0.4; }' +
+/* 数据海: 忠实移植原版 FlowingGradient — 噪声角旋转(silk swirl) + 轻柔正弦扰动 + 宽频柔带 */
+'vec4 seaColor(vec2 uv, float t, vec3 cA, vec3 cB, float distortion, float seed){' +
+'  vec2 e = uv - 0.5;' +
+'  float aspect = uRes.x/uRes.y;' +
+'  float a1 = fbm2(e*0.9 + vec2(t*0.035, -t*0.022) + seed) - 0.5;' +
+'  float ang = a1 * 12.566371 * distortion * uRot;' +
+'  float ca = cos(ang), sa = sin(ang);' +
+'  vec2 c0 = vec2(e.x, e.y/aspect);' +
+'  vec2 p = vec2(c0.x*ca - c0.y*sa, (c0.x*sa + c0.y*ca)*aspect);' +
+'  p.x += sin(p.y*5.0 + t*0.15)/50.0*distortion*2.0;' +
+'  p.y += sin(p.x*7.5 + t*0.15)/25.0*distortion*2.0;' +
+'  float b1 = 0.5 + 0.5*sin(p.y*uFreq1 + p.x*uFreq1*0.4 + t*uFlow);' +
+'  float b2 = 0.5 + 0.5*sin(p.x*uFreq2 - p.y*uFreq2*0.8 - t*uFlow*0.73 + 2.1);' +
+'  float m = smoothstep(1.0-uAmp, uAmp, 0.5 + uAmp*(b1-0.5) + uAmp*1.27*(b2-0.5));' +
+'  /* 三段色相漂移: 深黑紫 → 饱和紫 → 亮紫白, 变化幅度拉满 */' +
+'  vec3 cMid = vec3(0.36, 0.13, 0.85);' +
+'  vec3 col = m < 0.5 ? mix(cA, cMid, m*2.0) : mix(cMid, cB, (m-0.5)*2.0);' +
+'  col *= 1.0 + uPulse*sin(t*1.4 + b1*6.0);' +
+'  return vec4(col, m); }' +
+
+/* Godrays: 极坐标 4 尺度 value-noise 相乘 */
+'float rayOct(vec2 cell, float pw){ return pow(vnoise(cell), pw); }' +
+'float godrays(vec2 uv, float t, float density, float intensity, float spotty, out vec2 sc){' +
+'  sc = uv - vec2(0.72, 0.78); sc.x *= (uRes.x/uRes.y);' +
+'  float ang = atan(sc.y, sc.x);' +
+'  float r = length(sc);' +
+'  float ta = t*0.2;' +
+'  float pw = 4.0 - 3.0*clamp(intensity,0.,1.);' +
+'  float fade = smoothstep(-0.15, 0.15, sc.x);' +
+'  float f1 = 30.0*density;' +
+'  float o1 = rayOct(vec2(ang*f1,        r*1.0 - ta*3.0), pw);' +
+'  float o2 = rayOct(vec2(ang*f1,        r*0.5*(1.0+6.5*abs(spotty)) - ta*2.0), pw);' +
+'  float f3 = f1*4.5;' +
+'  float o3 = rayOct(vec2(ang*f3,        r*1.4 - ta*2.5), pw);' +
+'  float o4 = rayOct(vec2(ang*f3*3.5,    r*0.7*(1.0+6.5*abs(spotty)) - ta*1.8), pw);' +
+'  return clamp(o1*o2 + o3*o4*0.7, 0., 1.) * fade; }' +
+
+'float lum(vec3 c){ return dot(c, vec3(0.299,0.587,0.114)); }' +
+
+'void main(){' +
+'  vec2 frag = gl_FragCoord.xy;' +
+'  vec2 uv = frag / uRes;' +
+'  float aspect = uRes.x/uRes.y;' +
+'  float L = uLayers;' +
+'  vec3 col = uBase;' +
+
+  /* Grid: 细网格线 */
+'  if (L >= 1.0) { float gsz = 42.0;' +
+'    vec2 gp = fract(uv*vec2(gsz*aspect, gsz));' +
+'    vec2 gd = min(gp, 1.0-gp);' +
+'    float line = 1.0 - smoothstep(0.0, 0.06, min(gd.x, gd.y));' +
+'    col = mix(col, uGridColor, line*0.03); }' +
+
+  /* FlowingGradient 数据海 */
+'  vec4 sea = vec4(uBase, 0.5);' +
+'  if (L >= 4.0) {' +
+'    sea = seaColor(uv, uTime, uColorA, uColorB, 0.5, 0.17);' +
+'    /* 色带与 ascii 合层: 字符在时海面压暗让位, 字符不在时全亮海面 */' +
+'    vec3 seaRGB = (L >= 2.0) ? mix(uBase*0.3, sea.rgb, 0.25 + 0.75*sea.a) : sea.rgb;' +
+'    col = seaRGB; }' +
+
+  /* Godrays 放射光 */
+'  if (L >= 8.0) {' +
+'    vec2 sc2;' +
+'    float rays = godrays(uv, uTime, 0.55, 0.66, 0.35, sc2);' +
+'    float distFade = 1.0 - smoothstep(0.0, 1.2, length(sc2));' +
+'    col = mix(col, uRayColor, rays*0.28*distFade + distFade*0.16); }' +
+
+  /* Ascii 字符点阵: 按数据海亮度从 atlas 选字符 */
+'  if (L >= 2.0) {' +
+'    float cols = uAsciiCols;' +
+'    vec2 nc = vec2(cols*aspect, cols);' +
+'    vec2 cid = floor(uv*nc);' +
+'    vec2 cuc = fract(uv*nc);' +
+'    vec2 cc = (cid + 0.5)/nc;' +
+'    /* ★ 合层核心: 字符颜色 = 该格的色带色(亮度决定选哪个字符) */' +
+'    vec3 cellSea;' +
+'    if (L >= 4.0) { cellSea = seaColor(cc, uTime, uColorA, uColorB, 0.5, 0.17).rgb; }' +
+'    else { cellSea = mix(uBase, uCharColor, 0.25 + 0.5*hash21(cid)); }' +
+'    float srcLum = lum(cellSea);' +
+'    float bright = smoothstep(0.03, 0.45, srcLum);' +
+'    float idxF = (1.0 - pow(clamp(srcLum,0.,1.), 1.1)) * 63.0;' +
+'    float ci = clamp(floor(idxF), 0.0, 63.0);' +
+'    float ccol = mod(ci, 16.0);' +
+'    float crow = floor(ci/16.0);' +
+'    vec2 pad = clamp(cuc, 0.12, 0.88) - cuc;' +
+'    vec2 auv = vec2((ccol + cuc.x + pad.x*sign(cuc.x-0.5))/16.0,' +
+'                    1.0 - (crow + 1.0 - (cuc.y + pad.y*sign(cuc.y-0.5)))/4.0);' +
+'    float ch = texture(uAtlas, auv).a;' +
+'    float tw = sin(uTime*1.6 + hash21(cid)*6.283)*0.5 + 0.5;' +
+'    float a = ch * bright * (0.55 + 0.45*tw) * uAsciiAlpha;' +
+'    col = mix(col, cellSea * 1.35, a); }' +
+
+  /* SineWave 波浪线 */
+'  if (L >= 16.0) {' +
+'    float wy = 0.30 + 0.06*sin(uv.x*3.0*6.28318 + uTime*0.5);' +
+'    float d = abs(uv.y - wy);' +
+'    float wl = 1.0 - smoothstep(0.0012, 0.0035, d);' +
+'    col = mix(col, uCharColor*1.3, wl*0.6); }' +
+
+'  fragColor = vec4(col, 1.0);' +
+'}';
+
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const U = {};
+['uRes','uTime','uAtlas','uBase','uColorA','uColorB','uRayColor','uGridColor','uCharColor','uLayers','uSpeed','uFreq1','uFreq2','uFlow','uAmp','uPulse','uRot','uAsciiCols','uAsciiAlpha'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+
+/* 字符 atlas: 16x4 = 64 字符 */
+function makeAtlas(){
+  const chars = '01<>[]{}#$%*+=-:;.^~\/|ABCDEFXYZ';
+  const cols = 16, rows = 4, cell = 48;
+  const cv = document.createElement('canvas');
+  cv.width = cols*cell; cv.height = rows*cell;
+  const c = cv.getContext('2d', { willReadFrequently: false });
+  c.fillStyle = '#fff';
+  c.font = '600 32px ui-monospace, Menlo, monospace';
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  for (let i = 0; i < 64; i++) {
+    const ch = chars[i % chars.length];
+    c.fillText(ch, (i%cols+0.5)*cell, (Math.floor(i/cols)+0.5)*cell);
+  }
+  return cv;
+}
+const atlas = makeAtlas();
+const tex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, tex);
+gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.uniform1i(U.uAtlas, 0);
+
+function resize(){
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = Math.max(1, Math.round(w*dpr));
+  canvas.height = Math.max(1, Math.round(h*dpr));
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+addEventListener('resize', resize); resize();
+
+/* 主题配色 (来自 zeabur CSS vars) */
+const THEMES = {
+  dark:  { base:[0.094,0.094,0.106], colorA:[0.02,0.008,0.06], colorB:[0.82,0.55,1.0], ray:[0.42,0.25,0.72], grid:[0.20,0.17,0.26], char:[0.72,0.48,1.0] },
+  light: { base:[0.976,0.968,0.965], colorA:[1.0,0.85,0.78],  colorB:[0.996,0.27,0.0],  ray:[1.0,0.55,0.3],  grid:[0.92,0.85,0.82], char:[0.85,0.32,0.05] }
+};
+let cur = JSON.parse(JSON.stringify(THEMES.dark));
+let target = 'dark';
+const keys = ['base','colorA','colorB','ray','grid','char'];
+let tweenStart = 0;
+function setTheme(name){
+  target = name;
+  tweenStart = performance.now();
+  document.body.classList.toggle('light', name === 'light');
+  document.getElementById('scrim').className = 'scrim ' + name;
+  document.getElementById('themeBtn').textContent = name === 'dark' ? '☀ 切换亮色主题' : '🌙 切换暗色主题';
+}
+const easeOut = t => 1 - Math.pow(1 - t, 4); /* 近似 cubic-bezier(0.16,1,0.3,1) */
+
+/* 图层 flags */
+function layerFlags(){
+  let f = 0;
+  if (document.getElementById('l-grid').checked) f |= 1;
+  if (document.getElementById('l-ascii').checked) f |= 2;
+  if (document.getElementById('l-grad').checked) f |= 4;
+  if (document.getElementById('l-rays').checked) f |= 8;
+  if (document.getElementById('l-wave').checked) f |= 16;
+  return f;
+}
+['l-grid','l-ascii','l-grad','l-rays','l-wave'].forEach(id =>
+  document.getElementById(id).addEventListener('change', () => {}));
+
+let speed = 1;
+document.getElementById('speed').addEventListener('input', e => {
+  speed = parseFloat(e.target.value);
+  document.getElementById('speedVal').textContent = speed.toFixed(1) + '×';
+});
+document.getElementById('themeBtn').addEventListener('click', () =>
+  setTheme(target === 'dark' ? 'light' : 'dark'));
+
+/* 主循环 */
+let t = 0, last = performance.now();
+function frame(now){
+  const dt = Math.min((now - last)/1000, 0.05);
+  last = now;
+  t += dt * speed;
+  /* 主题颜色 1.2s 缓动 */
+  const k = Math.min((now - tweenStart)/1200, 1);
+  const e = easeOut(k);
+  const T = THEMES[target];
+  for (const key of keys) for (let i = 0; i < 3; i++)
+    cur[key][i] = cur[key][i] + (T[key][i] - cur[key][i]) * e;
+
+  gl.uniform2f(U.uRes, canvas.width, canvas.height);
+  gl.uniform1f(U.uTime, t);
+  gl.uniform3fv(U.uBase, cur.base);
+  gl.uniform3fv(U.uColorA, cur.colorA);
+  gl.uniform3fv(U.uColorB, cur.colorB);
+  gl.uniform3fv(U.uRayColor, cur.ray);
+  gl.uniform3fv(U.uGridColor, cur.grid);
+  gl.uniform3fv(U.uCharColor, cur.char);
+  gl.uniform1f(U.uLayers, layerFlags());
+  const SP = window.__shaderParams || {};
+  gl.uniform1f(U.uFreq1, SP.freq1 != null ? SP.freq1 : 1.0);
+  gl.uniform1f(U.uFreq2, SP.freq2 != null ? SP.freq2 : 0.7);
+  gl.uniform1f(U.uFlow, SP.flow != null ? SP.flow : 0.3);
+  gl.uniform1f(U.uAmp, SP.amp != null ? SP.amp : 0.7);
+  gl.uniform1f(U.uPulse, SP.pulse != null ? SP.pulse : 0.09);
+  gl.uniform1f(U.uRot, SP.rot != null ? SP.rot : 1.0);
+  gl.uniform1f(U.uAsciiCols, SP.asciiCols != null ? SP.asciiCols : 90);
+  gl.uniform1f(U.uAsciiAlpha, SP.asciiAlpha != null ? SP.asciiAlpha : 0.3);
+  /* ★ 潮谷/潮峰颜色随时间缓慢波动(色相 ±22° + 亮度 ±12%, 周期约 37s/23s, 双真噪声叠加) */
+  const drift = (seed, t, amp) => {
+    const v = 0.5 + 0.5 * Math.sin(t * 0.17 + seed * 12.9) * 0.72 + 0.28 * Math.sin(t * 0.41 + seed * 78.2);
+    return (v - 0.5) * 2 * amp;
+  };
+  const hueShift = drift(1, t, 22);      // 色相漂移(度)
+  const lumA = 1 + drift(2, t, 0.12);    // 潮谷亮度
+  const lumB = 1 + drift(3, t, 0.12);    // 潮峰亮度
+  const tAB = window.__tunedAB ? window.__tunedAB() : [null, null];
+  // 以"基准色"(面板色或默认紫)做 HSL 漂移
+  function shiftHSL(rgb, dH, dL) {
+    let r = rgb[0], g = rgb[1], b = rgb[2];
+    const mx = Math.max(r,g,b), mn = Math.min(r,g,b), l = (mx+mn)/2;
+    let h = 0, s = 0;
+    if (mx !== mn) {
+      const dd = mx - mn;
+      s = l > 0.5 ? dd/(2-mx-mn) : dd/(mx+mn);
+      h = mx===r ? ((g-b)/dd + (g<b?6:0)) : mx===g ? (b-r)/dd + 2 : (r-g)/dd + 4;
+      h *= 60;
+    }
+    h = (h + dH + 360) % 360;
+    const s2 = Math.min(1, s * 1.06);
+    const l2 = Math.max(0, Math.min(1, l * dL));
+    // HSL → RGB
+    const c = (1 - Math.abs(2*l2 - 1)) * s2;
+    const hp = h / 60, x = c * (1 - Math.abs(hp % 2 - 1));
+    let r2=0,g2=0,b2=0;
+    if (hp<1){r2=c;g2=x;} else if (hp<2){r2=x;g2=c;} else if (hp<3){g2=c;b2=x;}
+    else if (hp<4){g2=c;b2=x;} else if (hp<5){r2=x;b2=c;} else {r2=c;b2=x;}
+    const m2 = l2 - c/2;
+    return [r2+m2, g2+m2, b2+m2];
+  }
+  const baseA = tAB[0] || cur.colorA;
+  const baseB = tAB[1] || cur.colorB;
+  gl.uniform3fv(U.uColorA, shiftHSL(baseA, hueShift, lumA));
+  gl.uniform3fv(U.uColorB, shiftHSL(baseB, hueShift * 0.6, lumB));
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ================= Section 2: matrix-rain zeabur 主题 ================= */
+const THEME_LIST = ['zeabur', 'silicon-valley', 'matrix-green', 'lava-red', 'cyber-blue', 'pure-mono'];
+const sw = document.getElementById('themeSwitcher');
+THEME_LIST.forEach(name => {
+  const b = document.createElement('button');
+  b.textContent = name;
+  b.dataset.theme = name;
+  if (name === 'zeabur') b.classList.add('active');
+  b.addEventListener('click', () => {
+    sw.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    if (window.__rain) window.__rain.setTheme(name);
+  });
+  sw.appendChild(b);
+});
+let curVariant = 'zeabur';
+let sea = null;
+function ensureSea() {
+  if (sea || !window.createSeaBackground) return;
+  sea = window.createSeaBackground({ container: document.getElementById('rainBox'), theme: 'dark', speed: 0.6, opacity: 1 });
+}
+function initRain(){
+  if (window.__rain) { try { window.__rain.destroy(); } catch(e) {} }
+  ensureSea();
+  // ★ 首屏全屏数字矩阵:与数据海同尺寸(铺满 100svh)
+  if (!window.__heroRain && window.matrixRain) {
+    // ★ JS 版数据海色带(与 hero shader 同公式) — 雨字颜色跟随色带流动
+    const seaT = { t: 0, last: performance.now() };
+    (function seaTick(now) {
+      const dt = Math.min((now - seaT.last) / 1000, 0.05);
+      seaT.last = now;
+      seaT.t += dt * (window.__shaderParams ? window.__shaderParams.flow : 0.3);
+      requestAnimationFrame(seaTick);
+    })(performance.now());
+    // 与 GLSL 同构: 噪声角旋转 + 宽频带(用 2 次 value noise 近似 fbm2)
+    function vhash(x, y) {
+      let h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+      return h - Math.floor(h);
+    }
+    function vnoise(x, y) {
+      const xi = Math.floor(x), yi = Math.floor(y);
+      const xf = x - xi, yf = y - yi;
+      const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+      const a = vhash(xi, yi), b = vhash(xi + 1, yi), c = vhash(xi, yi + 1), d2 = vhash(xi + 1, yi + 1);
+      return a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d2 * u * v;
+    }
+    function fbm2(x, y) { return vnoise(x, y) * 0.6 + vnoise(x * 2.13 + 17.7, y * 2.13 + 9.3) * 0.4; }
+    function seaColorAt(u, v, t) {
+      const e = { x: u - 0.5, y: v - 0.5 };
+      const a1 = fbm2(e.x * 0.9 + t * 0.035, e.y * 0.9 - t * 0.022 + 0.17) - 0.5;
+      const ang = a1 * 12.566371 * 0.5;
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+      let px = e.x * ca - e.y * sa;
+      let py = (e.x * sa + e.y * ca);
+      px += Math.sin(py * 5.0 + t * 0.15) / 50.0;
+      py += Math.sin(px * 7.5 + t * 0.15) / 25.0;
+      const SPf = window.__shaderParams || { freq1: 1, freq2: 0.7 };
+      const b1 = 0.5 + 0.5 * Math.sin(py * SPf.freq1 + px * SPf.freq1 * 0.4 + t * 0.3);
+      const b2 = 0.5 + 0.5 * Math.sin(px * SPf.freq2 - py * SPf.freq2 * 0.8 - t * 0.22 + 2.1);
+      let m = (0.5 + 0.38 * (b1 - 0.5) + 0.5 * (b2 - 0.5));
+      m = Math.max(0, Math.min(1, (m - 0.12) / 0.76));
+      const s = m * m * (3 - 2 * m);
+      // 三段色相漂移(与 shader 同步): 深黑紫 → 饱和紫 → 亮紫白
+      const A = [0.02, 0.008, 0.06], M = [0.36, 0.13, 0.85], B = [0.82, 0.55, 1.0];
+      const mix3 = s < 0.5
+        ? [A[0] + (M[0] - A[0]) * s * 2, A[1] + (M[1] - A[1]) * s * 2, A[2] + (M[2] - A[2]) * s * 2]
+        : [M[0] + (B[0] - M[0]) * (s - 0.5) * 2, M[1] + (B[1] - M[1]) * (s - 0.5) * 2, M[2] + (B[2] - M[2]) * (s - 0.5) * 2];
+      return [Math.round(mix3[0] * 255), Math.round(mix3[1] * 255), Math.round(mix3[2] * 255)];
+    }
+    // ★ 雨字颜色 hook(全局, 面板重建时引用)
+    window.__heroRainColorHook = (lIdx, col, row) => {
+      const el = document.getElementById('heroRain');
+      const cols = Math.ceil(el.clientWidth / 20);
+      const rows = Math.ceil(el.clientHeight / 12);
+      return seaColorAt(col / cols, row / rows, seaT.t);
+    };
+    window.__heroRain = window.matrixRain({
+      container: document.getElementById('heroRain'),
+      theme: 'zeabur',
+      variant: 'zeabur',
+      fontSize: 16,
+      charGap: 4,
+      rowPitch: 0.75,
+      trailAlpha: 0.4,
+      flickerSpeed: 0.35,
+      sparkProbability: 0.001,
+      colorOverrides: window.__heroRainColorHook
+    });
+  }
+  window.__rain = window.matrixRain({
+    container: document.getElementById('rainBox'),
+    theme: document.querySelector('#themeSwitcher button.active')?.dataset.theme || 'zeabur',
+    fontSize: 16,
+    charGap: 4,
+    rowPitch: 0.75,
+    themeParams: { brightness: 1.25 },
+    variant: curVariant,
+    trailAlpha: 0.4,
+    flickerSpeed: curVariant === 'zeabur' ? 0.35 : 0.6,
+    sparkProbability: curVariant === 'zeabur' ? 0.001 : undefined
+  });
+  window.__demoReady = true;
+}
+document.getElementById('v-zeabur').addEventListener('click', () => {
+  curVariant = 'zeabur';
+  document.getElementById('v-zeabur').classList.add('active');
+  document.getElementById('v-classic').classList.remove('active');
+  initRain();
+});
+document.getElementById('v-classic').addEventListener('click', () => {
+  curVariant = 'classic';
+  document.getElementById('v-classic').classList.add('active');
+  document.getElementById('v-zeabur').classList.remove('active');
+  initRain();
+});
+let seaMode = 'dark';
+document.getElementById('seaMode').addEventListener('click', () => {
+  seaMode = seaMode === 'dark' ? 'light' : 'dark';
+  const btn = document.getElementById('seaMode');
+  btn.textContent = seaMode === 'dark' ? '🌙 暗色海(紫)' : '☀ 亮色海(暖橙)';
+  btn.classList.toggle('active', true);
+  document.getElementById('rainBox').classList.toggle('light-sea', seaMode === 'light');
+  if (sea) sea.setTheme(seaMode);
+  document.getElementById('seaFade').style.background =
+    seaMode === 'light' ? 'linear-gradient(to right, rgba(249,247,246,0.55) 0%, rgba(249,247,246,0.25) 50%, transparent 80%)' : 'transparent';
+});
+/* ================= 参数面板逻辑 ================= */
+// 色带颜色(colorA/colorB 直接改 uniform, 绕过主题 tween)
+function hexToRgb01(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+}
+let tunedA = null, tunedB = null;
+document.getElementById('p-colorA').addEventListener('input', e => {
+  tunedA = hexToRgb01(e.target.value);
+  document.getElementById('tunePanel').querySelector('h3').textContent = '色带(自定义)';
+});
+document.getElementById('p-colorB').addEventListener('input', e => { tunedB = hexToRgb01(e.target.value); });
+// 每个 slider → uniform/雨
+function bind(id, fn, fmt) {
+  const el = document.getElementById(id);
+  const vEl = document.getElementById('v-' + id.slice(2));
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    if (vEl) vEl.textContent = fmt ? fmt(v) : v;
+    fn(v);
+  });
+}
+const shaderParams = { freq1: 4, freq2: 4, flow: 1.3, amp: 0.67, pulse: 0.3, rot: 1.0, asciiCols: 52, asciiAlpha: 0.97 };
+bind('p-freq1', v => shaderParams.freq1 = v);
+bind('p-freq2', v => shaderParams.freq2 = v);
+bind('p-flow', v => shaderParams.flow = v);
+bind('p-amp', v => shaderParams.amp = v);
+bind('p-pulse', v => shaderParams.pulse = v);
+bind('p-rot', v => shaderParams.rot = v);
+bind('p-acols', v => shaderParams.asciiCols = v);
+bind('p-aalpha', v => shaderParams.asciiAlpha = v);
+// 每帧把面板值喂给 shader(在主循环 frame 里做, 见下方 hook)
+window.__shaderParams = shaderParams;
+window.__tunedAB = () => [tunedA, tunedB];
+
+// 数字雨热更新
+function recreateHeroRain() {
+  if (window.__heroRain) { try { window.__heroRain.destroy(); } catch(e) {} }
+  window.__heroRain = window.matrixRain({
+    container: document.getElementById('heroRain'),
+    theme: 'zeabur',
+    variant: 'zeabur',
+    fontSize: parseFloat(document.getElementById('p-rfs').value),
+    charGap: parseFloat(document.getElementById('p-rgap').value),
+    rowPitch: parseFloat(document.getElementById('p-rpitch').value),
+    themeParams: { brightness: parseFloat(document.getElementById('p-rbright').value) },
+    trailAlpha: parseFloat(document.getElementById('p-rtrail').value),
+    flickerSpeed: parseFloat(document.getElementById('p-rflick').value),
+    sparkProbability: 0.001,
+    colorOverrides: window.__heroRainColorHook
+  });
+  document.getElementById('heroRain').style.opacity = document.getElementById('p-ropacity').value;
+}
+['p-rfs','p-rgap','p-rpitch','p-rtrail','p-rbright','p-rflick'].forEach(id =>
+  document.getElementById(id).addEventListener('change', recreateHeroRain));
+document.getElementById('p-ropacity').addEventListener('input', e => {
+  document.getElementById('heroRain').style.opacity = e.target.value;
+});
+
+document.getElementById('seaToggle').addEventListener('click', () => {
+  const btn = document.getElementById('seaToggle');
+  if (sea) { sea.destroy(); sea = null; btn.textContent = '数据海 关'; btn.classList.remove('active'); }
+  else { ensureSea(); btn.textContent = '数据海 开'; btn.classList.add('active'); }
+});
+(function waitMR(n){ if (window.matrixRain) initRain(); else if (n < 100) setTimeout(() => waitMR(n+1), 50); })(0);
+</script>
+</body>
+</html>

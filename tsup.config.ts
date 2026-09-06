@@ -64,5 +64,18 @@ export default [
     splitting: false,
     treeshake: true,
     outExtension: outExt
+  }),
+  // 数据海背景(0.8.0+):独立零依赖 WebGL2 模块,垫在 matrix-rain 底下
+  defineConfig({
+    entry: { 'sea-background': 'src/sea-background.ts' },
+    format: ['esm', 'cjs', 'iife', 'umd'],
+    globalName: 'MatrixRainSea',
+    dts: true,
+    sourcemap: false,
+    minify: false,
+    target: 'es2020',
+    splitting: false,
+    treeshake: true,
+    outExtension: outExt
   })
 ];
